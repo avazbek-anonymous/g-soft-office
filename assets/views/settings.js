@@ -10,8 +10,13 @@ const DICTS = [
   { key:"cities",   labelKey:"cities" },
   { key:"sources",  labelKey:"sources" },
   { key:"services", labelKey:"services" },
-  { key: "spheres", labelKey: "spheres" }
+  { key:"spheres",  labelKey:"spheres" },
 ];
+
+// icons
+const I_EDIT = "✏️";
+const I_TRASH = "🗑️";
+const I_RESTORE = "↺";
 
 export async function renderSettings(view) {
   view.innerHTML = `
@@ -46,7 +51,7 @@ export async function renderSettings(view) {
       .set-panel{display:none}
       .set-panel.active{display:block}
 
-      .set-grid{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px}
+      .set-grid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; align-items:stretch}
       .set-card{border:1px solid rgba(255,255,255,.10); border-radius:16px; overflow:hidden}
       body[data-theme="light"] .set-card{border-color: rgba(0,0,0,.10)}
       .set-card .h{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; background:rgba(255,255,255,.02)}
@@ -58,17 +63,21 @@ export async function renderSettings(view) {
       .badge.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
       .badge.off{background:rgba(148,163,184,.10)}
 
-      .list{display:grid; gap:8px; margin-top:10px}
       .row2{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
       .right{margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 
-      .tablewrap{margin-top:12px; overflow:auto; border-radius:14px; border:1px solid rgba(255,255,255,.10)}
-      body[data-theme="light"] .tablewrap{border-color: rgba(0,0,0,.10)}
-      table.tbl{width:100%; border-collapse:collapse; min-width:680px}
-      .tbl th,.tbl td{padding:12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
-      body[data-theme="light"] .tbl th, body[data-theme="light"] .tbl td{border-bottom-color: rgba(0,0,0,.08)}
-      .tbl thead th{font-size:12px; opacity:.75; position:sticky; top:0; background:rgba(10,14,25,.85); backdrop-filter: blur(10px)}
-      body[data-theme="light"] .tbl thead th{background:rgba(255,255,255,.85)}
+      /* Icon buttons */
+      .btn.icon{
+        width:36px; height:36px;
+        padding:0;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:12px;
+      }
+      .btn.icon .ico{font-size:16px; line-height:1}
+      .btn.icon.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.12)}
+      body[data-theme="light"] .btn.icon.danger{background: rgba(239,68,68,.10)}
 
       /* Modal */
       .mb{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
@@ -118,6 +127,27 @@ function renderDictTab(host) {
     </div>
 
     <style>
+      /* each dict card becomes a column with internal scroll */
+      .dict-card{
+        display:flex;
+        flex-direction:column;
+        height: clamp(380px, calc(100vh - 260px), 760px);
+        min-height: 340px;
+      }
+      .dict-body{
+        flex:1;
+        overflow:hidden;
+      }
+      .dict-scroll{
+        height:100%;
+        overflow:auto;
+        padding-right:6px;
+      }
+
+      .dict-scroll::-webkit-scrollbar{width:10px}
+      .dict-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12); border-radius:999px}
+      body[data-theme="light"] .dict-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12)}
+
       .dict-list{display:grid; gap:8px; margin-top:12px}
       .dict-row{
         display:flex; align-items:center; gap:10px;
@@ -136,7 +166,6 @@ function renderDictTab(host) {
       .dict-actions{display:flex; gap:8px; flex-wrap:wrap}
       .dict-empty{padding:10px; border:1px dashed rgba(255,255,255,.12); border-radius:14px; opacity:.75}
       body[data-theme="light"] .dict-empty{border-color: rgba(0,0,0,.12)}
-      .dict-footer{display:flex; justify-content:flex-end; margin-top:10px}
     </style>
   `;
 
@@ -187,7 +216,7 @@ function dictCardHtml(dictKey, labelKey) {
   const activeCount = items.filter(x => x.active !== 0).length;
 
   return `
-    <div class="set-card">
+    <div class="set-card dict-card">
       <div class="h">
         <div>
           <b>${t(labelKey)}</b>
@@ -199,127 +228,46 @@ function dictCardHtml(dictKey, labelKey) {
         </div>
       </div>
 
-      <div class="b">
-        <div class="dict-list">
-          ${
-            items.length
-              ? items.map(x => `
-                  <div class="dict-row ${x.active === 0 ? "off" : ""}">
-                    <div>
-                      <div class="dict-name">${esc(x.name)}</div>
-                      <div class="muted" style="font-size:12px">ID: ${esc(x.id)}</div>
-                    </div>
-                    <div class="dict-sp"></div>
-                    <div class="dict-actions">
-                      <button class="btn" data-act="edit" data-dict="${dictKey}" data-id="${x.id}">
-                        ${t("edit")}
-                      </button>
-                      <button class="btn ${x.active === 0 ? "" : "danger"}"
-                              data-act="toggle" data-dict="${dictKey}" data-id="${x.id}">
-                        ${x.active === 0 ? (t("restore") || "Enable") : (t("delete") || "Disable")}
-                      </button>
-                    </div>
-                  </div>
-                `).join("")
-              : `<div class="dict-empty">${t("notFound")}</div>`
-          }
+      <div class="b dict-body">
+        <div class="dict-scroll">
+          <div class="dict-list">
+            ${
+              items.length
+                ? items.map(x => {
+                    const isOff = x.active === 0;
+                    const toggleTitle = isOff ? (t("restore") || "Enable") : (t("delete") || "Disable");
+                    return `
+                      <div class="dict-row ${isOff ? "off" : ""}">
+                        <div>
+                          <div class="dict-name">${esc(x.name)}</div>
+                          <div class="muted" style="font-size:12px">ID: ${esc(x.id)}</div>
+                        </div>
+                        <div class="dict-sp"></div>
+                        <div class="dict-actions">
+                          <button class="btn icon" data-act="edit" data-dict="${dictKey}" data-id="${x.id}" title="${esc(t("edit") || "Edit")}">
+                            <span class="ico">${I_EDIT}</span>
+                          </button>
+                          <button class="btn icon ${isOff ? "" : "danger"}"
+                                  data-act="toggle" data-dict="${dictKey}" data-id="${x.id}"
+                                  title="${esc(toggleTitle)}">
+                            <span class="ico">${isOff ? I_RESTORE : I_TRASH}</span>
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                  }).join("")
+                : `<div class="dict-empty">${t("notFound")}</div>`
+            }
+          </div>
         </div>
       </div>
     </div>
   `;
 }
 
-
-function openDictManager(dictKey) {
-  const host = $("#modalHost");
-  const title = t(dictKey);
-
-  const items = (state.dict[dictKey] || []).slice().sort((a,b) => (b.active||0) - (a.active||0) || String(a.name).localeCompare(String(b.name)));
-
-  host.innerHTML = `
-    <div class="mb">
-      <div class="m">
-        <div class="mh">
-          <b>${title}</b>
-          <div class="right">
-            <div class="field" style="min-width:260px">
-              <input class="input" id="mSearch" placeholder="${t("search")}..." />
-            </div>
-            <button class="btn primary" id="mAdd">＋ ${t("add")}</button>
-            <button class="btn" id="mClose">✕</button>
-          </div>
-        </div>
-        <div class="mbo">
-          <div class="tablewrap">
-            <table class="tbl">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>${t("name")}</th>
-                  <th>${t("active")}</th>
-                  <th>${t("actions")}</th>
-                </tr>
-              </thead>
-              <tbody id="mBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const close = () => host.innerHTML = "";
-  $("#mClose").onclick = close;
-  host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
-
-  $("#mAdd").onclick = () => openDictAdd(dictKey, () => openDictManager(dictKey));
-
-  const render = (q="") => {
-    const qq = q.trim().toLowerCase();
-    const filtered = !qq ? items : items.filter(x => String(x.name||"").toLowerCase().includes(qq));
-    $("#mBody").innerHTML = filtered.map(row => `
-      <tr style="${row.active === 0 ? "opacity:.55" : ""}">
-        <td>${esc(row.id)}</td>
-        <td>${esc(row.name)}</td>
-        <td>${row.active === 0 ? `<span class="badge off">${t("inactive")}</span>` : `<span class="badge on">${t("active")}</span>`}</td>
-        <td>
-          <div class="row2">
-            <button class="btn" data-act="edit" data-id="${row.id}">${t("edit")}</button>
-            <button class="btn" data-act="toggle" data-id="${row.id}">
-              ${row.active === 0 ? t("restore") || "Enable" : t("cancel") || "Disable"}
-            </button>
-          </div>
-        </td>
-      </tr>
-    `).join("") || `<tr><td colspan="4" class="muted" style="padding:12px">${t("notFound")}</td></tr>`;
-  };
-
-  $("#mSearch").oninput = (e) => render(e.target.value);
-  render("");
-
-  host.querySelector(".tablewrap").onclick = async (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const item = items.find(x => Number(x.id) === id);
-    if (!item) return;
-
-    if (btn.dataset.act === "edit") {
-      openDictEdit(dictKey, item, () => openDictManager(dictKey));
-      return;
-    }
-
-    if (btn.dataset.act === "toggle") {
-      // soft-disable via active flag
-      const nextActive = item.active === 0 ? 1 : 0;
-      await apiFetch(`/dict/${dictKey}/${id}`, { method:"PATCH", body:{ active: nextActive } });
-      await preloadDict(true);
-      toast(t("saved"));
-      openDictManager(dictKey);
-    }
-  };
-}
-
+/* =========================
+   Add/Edit modals
+========================= */
 function openDictAdd(dictKey, onDone) {
   openNameModal({
     title: `${t("newItem")} — ${t(dictKey)}`,
@@ -346,12 +294,10 @@ function openDictEdit(dictKey, item, onDone) {
   });
 }
 
-
 /* =========================
    UI tab
 ========================= */
 function renderUiTab(host) {
-  // Personal only in MVP (global can be added if ты хочешь — скажешь)
   host.innerHTML = `
     <div class="set-card">
       <div class="h">
@@ -467,15 +413,17 @@ function openNameModal({ title, defaultValue, onSave }) {
 async function preloadDict(force=false) {
   if (state.cacheReady && !force) return;
 
-  const [cities, sources, services] = await Promise.all([
+  const [cities, sources, services, spheres] = await Promise.all([
     apiFetch("/dict/cities",   { silent:true }).catch(() => ({items:[]})),
     apiFetch("/dict/sources",  { silent:true }).catch(() => ({items:[]})),
     apiFetch("/dict/services", { silent:true }).catch(() => ({items:[]})),
+    apiFetch("/dict/spheres",  { silent:true }).catch(() => ({items:[]})),
   ]);
 
   state.dict.cities   = cities.items || [];
   state.dict.sources  = sources.items || [];
   state.dict.services = services.items || [];
+  state.dict.spheres  = spheres.items || [];
   state.cacheReady = true;
 }
 
