@@ -14,8 +14,8 @@ const DICTS = [
 ];
 
 // icons
-const I_EDIT = "✏️";
-const I_TRASH = "🗑️";
+const I_EDIT = "<img src=\"/assets/icons/edit.svg\" alt=\"\" />";
+const I_TRASH = "<img src=\"/assets/icons/delete.svg\" alt=\"\" />";
 const I_RESTORE = "↺";
 
 export async function renderSettings(view) {

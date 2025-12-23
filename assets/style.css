@@ -567,3 +567,10 @@ body[data-theme="light"] details.u-dd .u-dd-body{ border-top-color: rgba(0,0,0,.
 .auth-head .row {
   justify-content: flex-end;
 }
+.nav-ico{
+  width:18px;
+  height:18px;
+  display:inline-block;
+  margin-right:10px;
+  opacity:.9;
+}

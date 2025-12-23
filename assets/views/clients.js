@@ -46,6 +46,7 @@ export async function renderClients(view) {
           <button class="btn" id="btnClear">${t("clear")}</button>
         </div>
 
+        <!-- scroll only here -->
         <div class="clx-tablewrap" id="wrap"></div>
       </div>
     </div>
@@ -56,6 +57,17 @@ export async function renderClients(view) {
       .clx-top{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
       .clx-search{margin-left:auto; min-width:280px; max-width:380px}
       @media(max-width:920px){ .clx-search{min-width:160px} }
+
+      .btn.icon .ico img{
+      width:16px;
+      height:16px;
+      display:block;
+      opacity:.95;
+      }
+      .btn.icon.danger .ico img{
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+      }
+
 
       .clx-filters{
         margin-top:10px;
@@ -74,20 +86,56 @@ export async function renderClients(view) {
       }
       .clx-sp{flex:1}
 
-      .clx-tablewrap{margin-top:12px; overflow:auto; border-radius:14px; border:1px solid rgba(255,255,255,.10)}
+      /* ✅ scroll ONLY for list */
+      .clx-tablewrap{
+        margin-top:12px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.10);
+        overflow:auto;
+        max-height: calc(100vh - 320px); /* adjust if needed */
+      }
+      @media(max-width:920px){
+        .clx-tablewrap{max-height: calc(100vh - 280px);}
+      }
       body[data-theme="light"] .clx-tablewrap{border-color: rgba(0,0,0,.10)}
+
+      .clx-tablewrap::-webkit-scrollbar{height:10px;width:10px}
+      .clx-tablewrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12); border-radius:999px}
+      body[data-theme="light"] .clx-tablewrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12)}
 
       table.clx-t{width:100%; border-collapse:collapse; min-width:1180px}
       .clx-t th,.clx-t td{padding:12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
       body[data-theme="light"] .clx-t th, body[data-theme="light"] .clx-t td{border-bottom-color: rgba(0,0,0,.08)}
-      .clx-t thead th{font-size:12px; opacity:.75; position:sticky; top:0; background:rgba(10,14,25,.85); backdrop-filter: blur(10px)}
+
+      .clx-t thead th{
+        font-size:12px;
+        opacity:.75;
+        position:sticky;
+        top:0;
+        z-index:2;
+        background:rgba(10,14,25,.85);
+        backdrop-filter: blur(10px);
+      }
       body[data-theme="light"] .clx-t thead th{background:rgba(255,255,255,.85)}
-      .clx-actions{display:flex; gap:8px; flex-wrap:wrap}
+
+      .clx-actions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
 
       .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12); opacity:.85}
       body[data-theme="light"] .badge{border-color: rgba(0,0,0,.12)}
-      .badge.off{background:rgba(148,163,184,.10)}
       .badge.del{background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.35)}
+
+      /* ✅ icon buttons like in settings */
+      .btn.icon{
+        width:36px; height:36px;
+        padding:0;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:12px;
+      }
+      .btn.icon .ico{font-size:16px; line-height:1}
+      .btn.icon.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.12)}
+      body[data-theme="light"] .btn.icon.danger{background: rgba(239,68,68,.10)}
 
       /* Modal */
       .mb{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
@@ -99,9 +147,9 @@ export async function renderClients(view) {
       .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
       @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
       textarea.input{min-height:90px; resize:vertical}
+
       .link{color:inherit; text-decoration:none}
       .link:hover{text-decoration:underline}
-
     </style>
   `;
 
@@ -215,7 +263,6 @@ function tableHtml(items) {
     <table class="clx-t">
       <thead>
         <tr>
-          <!--th>${t("clientCode")}</th-->
           <th>${t("companyName")}</th>
           <th>${t("fullName")}</th>
           <th>${t("phone1")}</th>
@@ -225,7 +272,7 @@ function tableHtml(items) {
           <th>${t("sphere")}</th>
           <th>${t("comment")}</th>
           <th>${t("createdAt")}</th>
-          <th>${t("actions")}</th>
+          <th style="text-align:right">${t("actions")}</th>
         </tr>
       </thead>
       <tbody>
@@ -233,11 +280,12 @@ function tableHtml(items) {
           const del = Number(c.is_deleted) === 1;
           return `
             <tr style="${del ? "opacity:.55" : ""}">
-              <!--td>${esc(c.code || "")}</td-->
               <td>
-              <a class="link" href="#/clients/${c.id}">
-              <b>${esc(c.company_name || "")}</b>
-              </a>${del ? `<span class="badge del">${t("deleted")}</span>` : ""}</td>
+                <a class="link" href="#/clients/${c.id}">
+                  <b>${esc(c.company_name || "")}</b>
+                </a>
+                ${del ? ` <span class="badge del">${t("deleted")}</span>` : ""}
+              </td>
               <td>${esc(c.full_name || "")}</td>
               <td>${esc(c.phone1 || "")}</td>
               <td>${esc(c.phone2 || "")}</td>
@@ -248,8 +296,14 @@ function tableHtml(items) {
               <td>${formatTs(c.created_at)}</td>
               <td>
                 <div class="clx-actions">
-                  <button class="btn" data-act="edit" data-id="${c.id}">${t("edit")}</button>
-                  ${del ? "" : `<button class="btn danger" data-act="del" data-id="${c.id}">${t("delete")}</button>`}
+                  <button class="btn icon" data-act="edit" data-id="${c.id}" title="${esc(t("edit"))}">
+                    <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
+                  </button>
+                  ${del ? "" : `
+                    <button class="btn icon danger" data-act="del" data-id="${c.id}" title="${esc(t("delete"))}">
+                      <span class="ico"><img src="/assets/icons/delete.svg" alt="" /></span>
+                    </button>
+                  `}
                 </div>
               </td>
             </tr>
@@ -447,7 +501,7 @@ function fillSelect(sel, arr) {
 /* =========================
    Helpers
 ========================= */
-function debounce(fn, ms=250) { let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+function debounce(fn, ms=250) { let tt=null; return (...a)=>{ clearTimeout(tt); tt=setTimeout(()=>fn(...a), ms); }; }
 function esc(v){ return String(v ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
 function formatTs(ts){
   const n = Number(ts);

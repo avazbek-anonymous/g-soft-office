@@ -38,10 +38,17 @@ export function buildNav(container) {
     const a = document.createElement("a");
     a.href = r.hash;
     a.className = "nav-item" + (current === r.hash ? " active" : "");
-    a.innerHTML = `<span class="ic">${r.icon || ""}</span><span>${t(r.key)}</span>`;
+
+    // ✅ SVG icons from /assets/icons/
+    const iconHtml = r.icon
+      ? `<img class="nav-ico" src="/assets/icons/${r.icon}.svg" alt="" />`
+      : `<span class="nav-ico nav-ico-empty"></span>`;
+
+    a.innerHTML = `${iconHtml}<span>${t(r.key)}</span>`;
     container.appendChild(a);
   }
 }
+
 
 export function setPageTitle() {
   const r = getRouteByHash();
