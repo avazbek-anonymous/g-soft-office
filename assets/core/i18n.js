@@ -112,6 +112,7 @@ export const T = {
     confirmDeleteClient: "Удалить клиента (в архив)?",
     deleted: "Удалён",
 
+    spheres: "Сферы деятельности"
 
   },
 
@@ -218,7 +219,7 @@ export const T = {
     confirmDeleteClient: "Mijozni arxivga o‘tkazasizmi?",
     deleted: "O‘chirilgan",
 
-
+    spheres: "Faoliyat sohalari"
   },
 
   en: {
@@ -322,7 +323,7 @@ export const T = {
     confirmDeleteClient: "Archive this client?",
     deleted: "Deleted",
 
-
+    spheres: "Business spheres"
   }
 };
 

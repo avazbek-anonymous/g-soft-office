@@ -2,6 +2,8 @@ import { ROUTES, DEFAULT_ROUTE } from "../config.js";
 import { state } from "./state.js";
 import { t } from "./i18n.js";
 
+
+
 const $ = (sel, el=document) => el.querySelector(sel);
 
 export function getRouteKey() {

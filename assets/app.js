@@ -14,6 +14,8 @@ import { renderCourses } from "./views/courses.js";
 import { renderClients } from "./views/clients.js";
 import { renderSettings } from "./views/settings.js";
 import { renderUsers } from "./views/users.js";
+import { renderClientView } from "./views/client_view.js";
+
 
 const $ = (sel, el=document) => el.querySelector(sel);
 
@@ -130,6 +132,7 @@ async function render() {
     case "clients":  return renderClients(view);
     case "settings": return renderSettings(view);
     case "users":    return renderUsers(view);
+    case "client_view": return renderClientView(view);
     default:
       view.innerHTML = `<div class="card"><div class="hd"><b>${t("notFound")}</b></div></div>`;
   }

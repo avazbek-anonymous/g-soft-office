@@ -9,7 +9,8 @@ const $ = (sel, el=document) => el.querySelector(sel);
 const DICTS = [
   { key:"cities",   labelKey:"cities" },
   { key:"sources",  labelKey:"sources" },
-  { key:"services", labelKey:"services" }
+  { key:"services", labelKey:"services" },
+  { key: "spheres", labelKey: "spheres" }
 ];
 
 export async function renderSettings(view) {
