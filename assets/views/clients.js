@@ -59,13 +59,14 @@ export async function renderClients(view) {
       @media(max-width:920px){ .clx-search{min-width:160px} }
 
       .btn.icon .ico img{
-      width:16px;
-      height:16px;
+      width:20px;
+      height:20px;
       display:block;
       opacity:.95;
+      filter: invert(1);
       }
       .btn.icon.danger .ico img{
-      filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0)) invert(1);
       }
 
 
@@ -118,7 +119,7 @@ export async function renderClients(view) {
       }
       body[data-theme="light"] .clx-t thead th{background:rgba(255,255,255,.85)}
 
-      .clx-actions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+      .clx-actions{display:contents; gap:8px; flex-wrap:wrap; justify-content:flex-end}
 
       .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12); opacity:.85}
       body[data-theme="light"] .badge{border-color: rgba(0,0,0,.12)}

@@ -166,6 +166,16 @@ function renderDictTab(host) {
       .dict-actions{display:flex; gap:8px; flex-wrap:wrap}
       .dict-empty{padding:10px; border:1px dashed rgba(255,255,255,.12); border-radius:14px; opacity:.75}
       body[data-theme="light"] .dict-empty{border-color: rgba(0,0,0,.12)}
+      .btn.icon .ico img{
+      width:20px;
+      height:20px;
+      display:block;
+      opacity:.95;
+      filter: invert(1);
+      }
+      .btn.icon.danger .ico img{
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0)) invert(1);
+      }
     </style>
   `;
 
