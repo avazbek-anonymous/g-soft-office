@@ -1,4 +1,6 @@
-import { state } from "./state.js";
+import {
+  state
+} from "./state.js";
 
 export const T = {
   ru: {
@@ -56,6 +58,32 @@ export const T = {
 
     // pages notes (можешь потом убрать)
     soon: "Скоро будет готово",
+
+    rolesTab: "Роли и доступ",
+    usersTab: "Пользователи",
+    includeDeleted: "Показывать удалённых",
+    active: "Активен",
+    inactive: "Неактивен",
+    createdAt: "Создан",
+    roleCode: "Код роли",
+    roleName: "Название роли",
+    systemRole: "Системная",
+    customRole: "Пользовательская",
+    createUser: "Создать пользователя",
+    editUser: "Редактировать пользователя",
+    createRole: "Создать роль",
+    saveVisibility: "Сохранить доступ",
+    visibilitySaved: "Доступ сохранён",
+    roleCreated: "Роль создана",
+    userCreated: "Пользователь создан",
+    userUpdated: "Пользователь обновлён",
+    passwordNew: "Новый пароль",
+    passwordHint: "Минимум 6 символов",
+    confirmDeleteUser: "Удалить пользователя?",
+    confirmDeleteRole: "Удалить роль нельзя (в MVP).",
+    yes: "Да",
+    no: "Нет",
+
   },
 
   uz: {
@@ -107,6 +135,32 @@ export const T = {
     addUser: "Foydalanuvchi qo‘shish",
 
     soon: "Tez orada tayyor bo‘ladi",
+
+    rolesTab: "Rollar va ruxsat",
+    usersTab: "Foydalanuvchilar",
+    includeDeleted: "O‘chirilganlarni ko‘rsatish",
+    active: "Faol",
+    inactive: "Nofaol",
+    createdAt: "Yaratilgan",
+    roleCode: "Rol kodi",
+    roleName: "Rol nomi",
+    systemRole: "Tizim roli",
+    customRole: "Maxsus rol",
+    createUser: "Foydalanuvchi yaratish",
+    editUser: "Foydalanuvchini tahrirlash",
+    createRole: "Rol yaratish",
+    saveVisibility: "Ruxsatni saqlash",
+    visibilitySaved: "Ruxsat saqlandi",
+    roleCreated: "Rol yaratildi",
+    userCreated: "Foydalanuvchi yaratildi",
+    userUpdated: "Foydalanuvchi yangilandi",
+    passwordNew: "Yangi parol",
+    passwordHint: "Kamida 6 ta belgi",
+    confirmDeleteUser: "Foydalanuvchini o‘chirasizmi?",
+    confirmDeleteRole: "Rolni o‘chirish MVPda yo‘q.",
+    yes: "Ha",
+    no: "Yo‘q",
+
   },
 
   en: {
@@ -158,6 +212,32 @@ export const T = {
     addUser: "Add user",
 
     soon: "Coming soon",
+
+    rolesTab: "Roles & Access",
+    usersTab: "Users",
+    includeDeleted: "Show deleted",
+    active: "Active",
+    inactive: "Inactive",
+    createdAt: "Created",
+    roleCode: "Role code",
+    roleName: "Role name",
+    systemRole: "System",
+    customRole: "Custom",
+    createUser: "Create user",
+    editUser: "Edit user",
+    createRole: "Create role",
+    saveVisibility: "Save access",
+    visibilitySaved: "Access saved",
+    roleCreated: "Role created",
+    userCreated: "User created",
+    userUpdated: "User updated",
+    passwordNew: "New password",
+    passwordHint: "Minimum 6 characters",
+    confirmDeleteUser: "Delete this user?",
+    confirmDeleteRole: "Role deletion is not in MVP.",
+    yes: "Yes",
+    no: "No",
+
   }
 };
 
@@ -171,7 +251,7 @@ export function setLang(lang) {
 }
 
 export function cycleLang(order) {
-  const list = order || ["ru","uz","en"];
+  const list = order || ["ru", "uz", "en"];
   const i = list.indexOf(state.ui.lang);
   state.ui.lang = list[(i + 1) % list.length];
   return state.ui.lang;
