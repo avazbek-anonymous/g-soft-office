@@ -24,7 +24,7 @@ export async function renderClients(view) {
           </div>
         </div>
 
-        <div class="clx-filters">
+        <!--div class="clx-filters">
           <div class="muted" style="font-size:12px">${t("filters")}</div>
 
           <div class="field">
@@ -44,7 +44,7 @@ export async function renderClients(view) {
           <div class="clx-sp"></div>
 
           <button class="btn" id="btnClear">${t("clear")}</button>
-        </div>
+        </div-->
 
         <!-- scroll only here -->
         <div class="clx-tablewrap" id="wrap"></div>
