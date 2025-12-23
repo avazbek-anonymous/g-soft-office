@@ -322,7 +322,14 @@ function openClientModal({ mode, client, onSaved }) {
           <div class="grid2" style="margin-top:10px">
             <div class="field">
               <div class="label">${t("sphere")}</div>
-              <input class="input" id="mSphere" value="${esc(client?.sphere || "")}" />
+              <select class="input" id="mSphere">
+                <option value="">—</option>
+                ${(state.dict.spheres || [])
+                  .filter(x => x.active !== 0)
+                  .sort((a,b) => String(a.name).localeCompare(String(b.name)))
+                  .map(x => `<option value="${esc(x.name)}">${esc(x.name)}</option>`)
+                  .join("")}
+              </select>
             </div>
 
             <div class="field">
@@ -348,6 +355,7 @@ function openClientModal({ mode, client, onSaved }) {
 
   $("#mCity").value = client?.city_id ?? "";
   $("#mSource").value = client?.source_id ?? "";
+  $("#mSphere").value = client?.sphere ?? "";
 
   $("#mSave").onclick = async () => {
     const company_name = $("#mCompany").value.trim();
@@ -360,7 +368,7 @@ function openClientModal({ mode, client, onSaved }) {
       phone2: $("#mP2").value.trim() || null,
       city_id: $("#mCity").value ? Number($("#mCity").value) : null,
       source_id: $("#mSource").value ? Number($("#mSource").value) : null,
-      sphere: $("#mSphere").value.trim() || null,
+      sphere: ($("#mSphere").value || "").trim() || null,
       comment: $("#mComment").value.trim() || null,
     };
 
@@ -411,15 +419,19 @@ async function preloadDictClients() {
   state.dict = state.dict || {};
   const needCities = !Array.isArray(state.dict.cities);
   const needSources = !Array.isArray(state.dict.sources);
-  if (!needCities && !needSources) return;
+  const needSpheres = !Array.isArray(state.dict.spheres);
 
-  const [cities, sources] = await Promise.all([
-    apiFetch("/dict/cities", { silent:true }).catch(() => ({ items: [] })),
-    apiFetch("/dict/sources", { silent:true }).catch(() => ({ items: [] })),
+  if (!needCities && !needSources && !needSpheres) return;
+
+  const [cities, sources, spheres] = await Promise.all([
+    apiFetch("/dict/cities",   { silent:true }).catch(() => ({ items: [] })),
+    apiFetch("/dict/sources",  { silent:true }).catch(() => ({ items: [] })),
+    apiFetch("/dict/spheres",  { silent:true }).catch(() => ({ items: [] })),
   ]);
 
   state.dict.cities = cities.items || [];
   state.dict.sources = sources.items || [];
+  state.dict.spheres = spheres.items || [];
 }
 
 function fillSelect(sel, arr) {
