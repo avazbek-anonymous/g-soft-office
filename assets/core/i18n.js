@@ -83,6 +83,15 @@ export const T = {
     confirmDeleteRole: "Удалить роль нельзя (в MVP).",
     yes: "Да",
     no: "Нет",
+    showDeleted: "Показать удалённых",
+    hideDeleted: "Скрыть удалённых",
+    collapseAll: "Свернуть всё",
+    expand: "Развернуть",
+    collapse: "Свернуть",
+    modulesEnabled: "Включено модулей",
+    selectAll: "Включить всё",
+    selectNone: "Выключить всё",
+    unsaved: "Есть изменения",
 
   },
 
@@ -160,6 +169,15 @@ export const T = {
     confirmDeleteRole: "Rolni o‘chirish MVPda yo‘q.",
     yes: "Ha",
     no: "Yo‘q",
+    showDeleted: "O‘chirilganlarni ko‘rsatish",
+    hideDeleted: "O‘chirilganlarni yashirish",
+    collapseAll: "Hammasini yig‘ish",
+    expand: "Ochish",
+    collapse: "Yig‘ish",
+    modulesEnabled: "Yoqilgan modullar",
+    selectAll: "Hammasini yoqish",
+    selectNone: "Hammasini o‘chirish",
+    unsaved: "O‘zgarish bor",
 
   },
 
@@ -237,6 +255,15 @@ export const T = {
     confirmDeleteRole: "Role deletion is not in MVP.",
     yes: "Yes",
     no: "No",
+    showDeleted: "Show deleted",
+    hideDeleted: "Hide deleted",
+    collapseAll: "Collapse all",
+    expand: "Expand",
+    collapse: "Collapse",
+    modulesEnabled: "Enabled modules",
+    selectAll: "Enable all",
+    selectNone: "Disable all",
+    unsaved: "Unsaved changes",
 
   }
 };

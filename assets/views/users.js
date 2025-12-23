@@ -8,201 +8,303 @@ const MODULES = ["main","tasks","projects","courses","clients","settings","users
 
 export async function renderUsers(view) {
   view.innerHTML = `
-    <div class="card">
+    <div class="card uadm">
       <div class="hd">
         <b>${t("users")}</b>
         <span class="muted">${t("adminOnly")}</span>
       </div>
       <div class="bd">
-        <div class="tabs">
-          <button class="tab" data-tab="users">${t("usersTab")}</button>
-          <button class="tab" data-tab="roles">${t("rolesTab")}</button>
+
+        <div class="uadm-tabs">
+          <button class="uadm-tab" data-tab="users">${t("usersTab")}</button>
+          <button class="uadm-tab" data-tab="roles">${t("rolesTab")}</button>
+          <div class="uadm-spacer"></div>
+          <div class="field uadm-search">
+            <input class="input" id="uadmSearch" placeholder="${t("search")}..." />
+          </div>
         </div>
 
-        <div id="tabUsers" class="tabpanel"></div>
-        <div id="tabRoles" class="tabpanel"></div>
+        <div id="tabUsers" class="uadm-panel"></div>
+        <div id="tabRoles" class="uadm-panel"></div>
       </div>
     </div>
 
     <div id="modalHost"></div>
 
     <style>
-      .tabs{display:flex; gap:8px; margin:8px 0 14px}
-      .tab{border:1px solid rgba(255,255,255,.12); background:transparent; padding:8px 10px; border-radius:10px; cursor:pointer}
-      body[data-theme="light"] .tab{border-color: rgba(0,0,0,.12)}
-      .tab.active{background:rgba(34,197,94,.12); border-color: rgba(34,197,94,.45)}
-      .tabpanel{display:none}
-      .tabpanel.active{display:block}
-      .pill{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12)}
-      body[data-theme="light"] .pill{border-color: rgba(0,0,0,.12)}
-      .grid2{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
-      .grid3{display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px}
-      @media (max-width: 900px){ .grid2,.grid3{grid-template-columns:1fr} }
-      .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
-      .modal{width:min(920px, calc(100vw - 24px)); background:var(--bg, #0b1020); border:1px solid rgba(255,255,255,.12); border-radius:16px; overflow:hidden}
-      body[data-theme="light"] .modal{background:#fff; border-color: rgba(0,0,0,.12)}
-      .modal-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08)}
-      body[data-theme="light"] .modal-head{border-bottom-color: rgba(0,0,0,.08)}
-      .modal-body{padding:14px}
-      .checkgrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-top:10px}
-      .check{display:flex; gap:10px; align-items:center; padding:10px; border:1px solid rgba(255,255,255,.10); border-radius:12px}
-      body[data-theme="light"] .check{border-color: rgba(0,0,0,.10)}
+      .uadm-tabs{display:flex; gap:8px; align-items:center; margin:6px 0 14px}
+      .uadm-tab{border:1px solid rgba(255,255,255,.12); background:transparent; padding:8px 12px; border-radius:12px; cursor:pointer}
+      body[data-theme="light"] .uadm-tab{border-color: rgba(0,0,0,.12)}
+      .uadm-tab.active{background:rgba(34,197,94,.12); border-color: rgba(34,197,94,.45)}
+      .uadm-spacer{flex:1}
+      .uadm-search{min-width:260px; max-width:360px}
+      @media (max-width: 920px){ .uadm-search{min-width:160px} }
+
+      .uadm-panel{display:none}
+      .uadm-panel.active{display:block}
+
+      .uadm-toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+      .uadm-toolbar .field{min-width:240px}
+
+      .uadm-tablewrap{margin-top:12px; overflow:auto; border-radius:14px; border:1px solid rgba(255,255,255,.10)}
+      body[data-theme="light"] .uadm-tablewrap{border-color: rgba(0,0,0,.10)}
+      .uadm-table{width:100%; border-collapse:collapse; min-width:760px}
+      .uadm-table th, .uadm-table td{padding:12px 12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
+      body[data-theme="light"] .uadm-table th, body[data-theme="light"] .uadm-table td{border-bottom-color: rgba(0,0,0,.08)}
+      .uadm-table thead th{font-size:12px; opacity:.75; position:sticky; top:0; background:rgba(10,14,25,.85); backdrop-filter: blur(10px)}
+      body[data-theme="light"] .uadm-table thead th{background:rgba(255,255,255,.85)}
+      .uadm-actions{display:flex; gap:8px; flex-wrap:wrap}
+      .uadm-muted{opacity:.6}
+      .uadm-badge{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12)}
+      body[data-theme="light"] .uadm-badge{border-color: rgba(0,0,0,.12)}
+      .uadm-badge.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
+      .uadm-badge.off{background:rgba(148,163,184,.10)}
+      .uadm-toggle{border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:8px 12px; background:transparent; cursor:pointer}
+      body[data-theme="light"] .uadm-toggle{border-color: rgba(0,0,0,.12)}
+      .uadm-toggle.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
+
+      /* Roles list (accordion) */
+      .rolelist{display:grid; gap:12px; margin-top:12px}
+      .rolecard{border:1px solid rgba(255,255,255,.10); border-radius:16px; overflow:hidden}
+      body[data-theme="light"] .rolecard{border-color: rgba(0,0,0,.10)}
+      .rolehead{display:flex; gap:10px; align-items:center; padding:12px 14px; background:rgba(255,255,255,.02)}
+      body[data-theme="light"] .rolehead{background:rgba(0,0,0,.02)}
+      .rolehead b{font-size:14px}
+      .rolehead .meta{font-size:12px; opacity:.7}
+      .rolehead .grow{flex:1}
+      .rolehead .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+      .roledetails{display:none; padding:12px 14px; border-top:1px solid rgba(255,255,255,.08)}
+      body[data-theme="light"] .roledetails{border-top-color: rgba(0,0,0,.08)}
+      .rolecard.open .roledetails{display:block}
+
+      .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+      .chip{border:1px solid rgba(255,255,255,.12); background:transparent; border-radius:999px; padding:8px 12px; cursor:pointer; font-size:13px}
+      body[data-theme="light"] .chip{border-color: rgba(0,0,0,.12)}
+      .chip.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
+      .chip.off{background:rgba(148,163,184,.10)}
+      .roletools{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px}
+      .roletools .sp{flex:1}
+
+      /* Modal */
+      .mb{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
+      .m{width:min(760px, calc(100vw - 24px)); background:var(--bg, #0b1020); border:1px solid rgba(255,255,255,.12); border-radius:16px; overflow:hidden}
+      body[data-theme="light"] .m{background:#fff; border-color: rgba(0,0,0,.12)}
+      .mh{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08)}
+      body[data-theme="light"] .mh{border-bottom-color: rgba(0,0,0,.08)}
+      .mbo{padding:14px}
+      .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+      @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
     </style>
   `;
 
-  const tabUsersEl = $("#tabUsers", view);
-  const tabRolesEl = $("#tabRoles", view);
+  const tabUsers = $("#tabUsers", view);
+  const tabRoles = $("#tabRoles", view);
+  const search = $("#uadmSearch", view);
 
-  // state
-  let roles = [];
-  let users = [];
+  let roles = await loadRoles();
+  let users = await loadUsers(false, "");
 
+  // tabs
   const setTab = (tab) => {
-    view.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-    tabUsersEl.classList.toggle("active", tab === "users");
-    tabRolesEl.classList.toggle("active", tab === "roles");
-    localStorage.setItem("admin_users_tab", tab);
+    view.querySelectorAll(".uadm-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    tabUsers.classList.toggle("active", tab === "users");
+    tabRoles.classList.toggle("active", tab === "roles");
+    localStorage.setItem("uadm_tab", tab);
+    // re-render active with current search
+    const q = search.value.trim();
+    if (tab === "users") renderUsersTab(tabUsers, users, roles, q);
+    else renderRolesTab(tabRoles, roles, q);
   };
 
-  view.querySelectorAll(".tab").forEach(btn => {
-    btn.onclick = () => setTab(btn.dataset.tab);
-  });
+  view.querySelectorAll(".uadm-tab").forEach(btn => btn.onclick = () => setTab(btn.dataset.tab));
+  setTab(localStorage.getItem("uadm_tab") || "users");
 
-  // initial tab
-  setTab(localStorage.getItem("admin_users_tab") || "users");
+  // global search affects current tab
+  search.oninput = debounce(() => {
+    const tab = localStorage.getItem("uadm_tab") || "users";
+    const q = search.value.trim();
+    if (tab === "users") renderUsersTab(tabUsers, users, roles, q);
+    else renderRolesTab(tabRoles, roles, q);
+  }, 200);
 
-  // load data
-  roles = await loadRoles();
-  users = await loadUsers(false, "");
+  /* ========= Actions (Users tab) ========= */
+  tabUsers.addEventListener("click", async (e) => {
+    const act = e.target.closest("[data-uact]")?.dataset.uact;
+    if (!act) return;
 
-  // render tabs
-  renderUsersTab(tabUsersEl, {
-    roles,
-    getUsers: () => users,
-    reloadUsers: async (includeDeleted, q) => {
-      users = await loadUsers(includeDeleted, q);
-      renderUsersTab(tabUsersEl, { roles, getUsers: () => users, reloadUsers: arguments.callee });
-    },
-    onRoleChanged: async () => { roles = await loadRoles(); renderRolesTab(tabRolesEl, roles); },
-  });
-
-  renderRolesTab(tabRolesEl, roles);
-}
-
-/* =========================
-   Users tab
-========================= */
-function renderUsersTab(host, ctx) {
-  const roles = ctx.roles;
-
-  host.innerHTML = `
-    <div class="row" style="gap:10px; align-items:center;">
-      <button class="btn primary" id="btnUserAdd">＋ ${t("createUser")}</button>
-      <button class="btn" id="btnUsersReload">⟲ ${t("reload")}</button>
-
-      <label class="pill" style="cursor:pointer;">
-        <input type="checkbox" id="chkDeleted" style="margin:0 6px 0 0" />
-        ${t("includeDeleted")}
-      </label>
-
-      <div class="field" style="margin-left:auto; min-width:240px">
-        <input class="input" id="uSearch" placeholder="${t("search")}..." />
-      </div>
-    </div>
-
-    <div id="usersTable" style="margin-top:12px"></div>
-  `;
-
-  const users = ctx.getUsers();
-  const table = $("#usersTable", host);
-  table.innerHTML = usersTableHtml(users, roles);
-
-  $("#btnUsersReload", host).onclick = async () => {
-    const includeDeleted = $("#chkDeleted", host).checked;
-    const q = $("#uSearch", host).value.trim();
-    await ctx.reloadUsers(includeDeleted, q);
-  };
-
-  $("#uSearch", host).oninput = debounce(async (e) => {
-    const includeDeleted = $("#chkDeleted", host).checked;
-    const q = e.target.value.trim();
-    await ctx.reloadUsers(includeDeleted, q);
-  }, 250);
-
-  $("#chkDeleted", host).onchange = async () => {
-    const includeDeleted = $("#chkDeleted", host).checked;
-    const q = $("#uSearch", host).value.trim();
-    await ctx.reloadUsers(includeDeleted, q);
-  };
-
-  $("#btnUserAdd", host).onclick = () => openUserModal({
-    mode: "create",
-    roles,
-    onSaved: async () => {
-      toast(t("userCreated"));
-      const includeDeleted = $("#chkDeleted", host).checked;
-      const q = $("#uSearch", host).value.trim();
-      await ctx.reloadUsers(includeDeleted, q);
+    if (act === "reload") {
+      const includeDeleted = tabUsers.dataset.deleted === "1";
+      users = await loadUsers(includeDeleted, search.value.trim());
+      renderUsersTab(tabUsers, users, roles, search.value.trim());
+      return;
     }
-  });
 
-  // actions from table (event delegation)
-  table.onclick = (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const act = btn.dataset.act;
-    const id = Number(btn.dataset.id);
+    if (act === "toggleDeleted") {
+      const now = tabUsers.dataset.deleted === "1";
+      tabUsers.dataset.deleted = now ? "0" : "1";
+      users = await loadUsers(!now, search.value.trim());
+      renderUsersTab(tabUsers, users, roles, search.value.trim());
+      return;
+    }
+
+    if (act === "create") {
+      openUserModal({
+        roles,
+        mode: "create",
+        onSaved: async () => {
+          users = await loadUsers(tabUsers.dataset.deleted === "1", search.value.trim());
+          toast(t("userCreated"));
+          renderUsersTab(tabUsers, users, roles, search.value.trim());
+        }
+      });
+      return;
+    }
+
+    const id = Number(e.target.closest("[data-id]")?.dataset.id);
+    if (!id) return;
     const user = users.find(u => Number(u.id) === id);
     if (!user) return;
 
     if (act === "edit") {
       openUserModal({
-        mode: "edit",
-        roles,
-        user,
+        roles, mode:"edit", user,
         onSaved: async () => {
+          users = await loadUsers(tabUsers.dataset.deleted === "1", search.value.trim());
           toast(t("userUpdated"));
-          const includeDeleted = $("#chkDeleted", host).checked;
-          const q = $("#uSearch", host).value.trim();
-          await ctx.reloadUsers(includeDeleted, q);
+          renderUsersTab(tabUsers, users, roles, search.value.trim());
         }
       });
     }
 
     if (act === "reset") {
-      openResetPasswordModal({
+      openResetModal({
         user,
-        onSaved: async () => {
-          toast(t("saved"));
-        }
+        onSaved: async () => toast(t("saved"))
       });
     }
 
     if (act === "delete") {
       confirmModal({
         title: t("confirmDeleteUser"),
-        text: `${escapeHtml(user.ism || "")} (${escapeHtml(user.login || "")})`,
+        text: `${user.ism} (${user.login})`,
         okText: t("yes"),
         cancelText: t("no"),
         onOk: async () => {
-          await apiFetch(`/users/${user.id}/delete`, { method: "POST" });
+          await apiFetch(`/users/${user.id}/delete`, { method:"POST" });
+          users = await loadUsers(tabUsers.dataset.deleted === "1", search.value.trim());
           toast(t("saved"));
-          const includeDeleted = $("#chkDeleted", host).checked;
-          const q = $("#uSearch", host).value.trim();
-          await ctx.reloadUsers(includeDeleted, q);
+          renderUsersTab(tabUsers, users, roles, search.value.trim());
         }
       });
     }
-  };
+  });
+
+  /* ========= Actions (Roles tab) ========= */
+  tabRoles.addEventListener("click", async (e) => {
+    const act = e.target.closest("[data-ract]")?.dataset.ract;
+    if (!act) return;
+
+    if (act === "reload") {
+      roles = await loadRoles();
+      renderRolesTab(tabRoles, roles, search.value.trim());
+      toast(t("saved"));
+      return;
+    }
+
+    if (act === "collapseAll") {
+      tabRoles.querySelectorAll(".rolecard").forEach(c => c.classList.remove("open"));
+      return;
+    }
+
+    if (act === "createRole") {
+      openRoleModal({
+        onSaved: async () => {
+          roles = await loadRoles();
+          renderRolesTab(tabRoles, roles, search.value.trim());
+          toast(t("roleCreated"));
+        }
+      });
+      return;
+    }
+
+    // open/close card
+    if (act === "toggleOpen") {
+      const card = e.target.closest(".rolecard");
+      card.classList.toggle("open");
+      return;
+    }
+
+    // chip toggle
+    if (act === "chip") {
+      const chip = e.target.closest(".chip");
+      const code = chip.dataset.role;
+      const mod = chip.dataset.mod;
+      const on = chip.classList.contains("on");
+      setChip(chip, !on);
+      markRoleDirty(tabRoles, code, true);
+      updateRoleEnabledCount(tabRoles, code);
+      return;
+    }
+
+    // select all/none
+    if (act === "all" || act === "none") {
+      const code = e.target.closest("[data-role]")?.dataset.role;
+      if (!code) return;
+      const on = act === "all";
+      tabRoles.querySelectorAll(`.chip[data-role="${cssEscape(code)}"]`).forEach(ch => setChip(ch, on));
+      markRoleDirty(tabRoles, code, true);
+      updateRoleEnabledCount(tabRoles, code);
+      return;
+    }
+
+    // save role visibility
+    if (act === "save") {
+      const code = e.target.closest("[data-role]")?.dataset.role;
+      if (!code) return;
+
+      const visibility = {};
+      MODULES.forEach(mod => {
+        const ch = tabRoles.querySelector(`.chip[data-role="${cssEscape(code)}"][data-mod="${cssEscape(mod)}"]`);
+        visibility[mod] = ch?.classList.contains("on") ? true : false;
+      });
+
+      await apiFetch(`/roles/${code}/visibility`, { method:"PUT", body:{ visibility } });
+      markRoleDirty(tabRoles, code, false);
+      toast(t("visibilitySaved"));
+      return;
+    }
+  });
+
+  // initial renders
+  renderUsersTab(tabUsers, users, roles, "");
+  renderRolesTab(tabRoles, roles, "");
+}
+
+/* ===================== USERS UI ===================== */
+function renderUsersTab(host, users, roles, q) {
+  const includeDeleted = host.dataset.deleted === "1";
+  host.innerHTML = `
+    <div class="uadm-toolbar">
+      <button class="btn primary" data-uact="create">＋ ${t("createUser")}</button>
+      <button class="btn" data-uact="reload">⟲ ${t("reload")}</button>
+      <button class="uadm-toggle ${includeDeleted ? "on" : ""}" data-uact="toggleDeleted">
+        ${includeDeleted ? t("hideDeleted") : t("showDeleted")}
+      </button>
+    </div>
+
+    <div class="uadm-tablewrap">
+      ${usersTableHtml(filterUsers(users, q), roles)}
+    </div>
+  `;
 }
 
 function usersTableHtml(users, roles) {
-  if (!users?.length) return `<div class="muted">${t("notFound")}</div>`;
-
   const roleName = (code) => roles.find(r => r.code === code)?.name || code;
 
+  if (!users.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
+
   return `
-    <table class="table">
+    <table class="uadm-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -217,16 +319,23 @@ function usersTableHtml(users, roles) {
       <tbody>
         ${users.map(u => `
           <tr style="${u.is_deleted ? "opacity:.55" : ""}">
-            <td>${escapeHtml(u.id)}</td>
-            <td>${escapeHtml(u.login)}</td>
-            <td>${escapeHtml(u.ism)}</td>
-            <td>${escapeHtml(roleName(u.role))}</td>
-            <td>${u.active ? `<span class="pill">${t("active")}</span>` : `<span class="pill">${t("inactive")}</span>`}</td>
+            <td>${esc(u.id)}</td>
+            <td>${esc(u.login)}</td>
+            <td>${esc(u.ism)}</td>
+            <td>
+              <span class="uadm-badge">${esc(roleName(u.role))}</span>
+              <span class="uadm-muted">${esc(u.role)}</span>
+            </td>
+            <td>
+              ${u.active ? `<span class="uadm-badge on">${t("active")}</span>` : `<span class="uadm-badge off">${t("inactive")}</span>`}
+            </td>
             <td>${formatTs(u.created_at)}</td>
-            <td class="row" style="gap:6px">
-              <button class="btn" data-act="edit" data-id="${u.id}">${t("edit")}</button>
-              <button class="btn" data-act="reset" data-id="${u.id}">${t("resetPass")}</button>
-              <button class="btn danger" data-act="delete" data-id="${u.id}">${t("delete")}</button>
+            <td>
+              <div class="uadm-actions">
+                <button class="btn" data-uact="edit" data-id="${u.id}">${t("edit")}</button>
+                <button class="btn" data-uact="reset" data-id="${u.id}">${t("resetPass")}</button>
+                <button class="btn danger" data-uact="delete" data-id="${u.id}">${t("delete")}</button>
+              </div>
             </td>
           </tr>
         `).join("")}
@@ -235,138 +344,113 @@ function usersTableHtml(users, roles) {
   `;
 }
 
-/* =========================
-   Roles tab
-========================= */
-function renderRolesTab(host, roles) {
-  host.innerHTML = `
-    <div class="row" style="gap:10px; align-items:center;">
-      <button class="btn primary" id="btnRoleAdd">＋ ${t("createRole")}</button>
-      <button class="btn" id="btnRolesReload">⟲ ${t("reload")}</button>
+function filterUsers(users, q) {
+  const qq = (q || "").trim().toLowerCase();
+  if (!qq) return users;
+  return users.filter(u =>
+    String(u.ism||"").toLowerCase().includes(qq) ||
+    String(u.login||"").toLowerCase().includes(qq) ||
+    String(u.role||"").toLowerCase().includes(qq)
+  );
+}
 
-      <div class="field" style="margin-left:auto; min-width:240px">
-        <input class="input" id="rSearch" placeholder="${t("search")}..." />
-      </div>
+/* ===================== ROLES UI ===================== */
+function renderRolesTab(host, roles, q) {
+  const qq = (q || "").trim().toLowerCase();
+  const filtered = !qq ? roles : roles.filter(r =>
+    String(r.code||"").toLowerCase().includes(qq) ||
+    String(r.name||"").toLowerCase().includes(qq)
+  );
+
+  host.innerHTML = `
+    <div class="uadm-toolbar">
+      <button class="btn primary" data-ract="createRole">＋ ${t("createRole")}</button>
+      <button class="btn" data-ract="reload">⟲ ${t("reload")}</button>
+      <button class="btn" data-ract="collapseAll">▾ ${t("collapseAll")}</button>
     </div>
 
-    <div id="rolesList" style="margin-top:12px; display:grid; gap:12px"></div>
+    <div class="rolelist">
+      ${filtered.length ? filtered.map(roleCardHtml).join("") : `<div class="muted">${t("notFound")}</div>`}
+    </div>
   `;
 
-  const list = $("#rolesList", host);
-  const renderList = (q="") => {
-    const qq = q.trim().toLowerCase();
-    const filtered = roles.filter(r =>
-      String(r.code||"").toLowerCase().includes(qq) ||
-      String(r.name||"").toLowerCase().includes(qq)
-    );
-    list.innerHTML = filtered.length
-      ? filtered.map(r => roleCardHtml(r)).join("")
-      : `<div class="muted">${t("notFound")}</div>`;
-  };
-
-  $("#rSearch", host).oninput = (e) => renderList(e.target.value);
-  renderList("");
-
-  $("#btnRolesReload", host).onclick = async () => {
-    const fresh = await loadRoles();
-    renderRolesTab(host, fresh);
-    toast(t("saved"));
-  };
-
-  $("#btnRoleAdd", host).onclick = () => openRoleModal({
-    mode: "create",
-    onSaved: async () => {
-      toast(t("roleCreated"));
-      const fresh = await loadRoles();
-      renderRolesTab(host, fresh);
-    }
-  });
-
-  // delegation: checkbox change + save
-  list.onchange = (e) => {
-    const chk = e.target.closest("input[data-role][data-mod]");
-    if (!chk) return;
-
-    const code = chk.dataset.role;
-    const mod = chk.dataset.mod;
-
-    // mark dirty
-    const saveBtn = list.querySelector(`button[data-save="${code}"]`);
-    if (saveBtn) saveBtn.dataset.dirty = "1";
-  };
-
-  list.onclick = async (e) => {
-    const btnSave = e.target.closest("button[data-save]");
-    if (btnSave) {
-      const code = btnSave.dataset.save;
-      const visibility = {};
-      for (const mod of MODULES) {
-        const chk = list.querySelector(`input[data-role="${code}"][data-mod="${mod}"]`);
-        visibility[mod] = !!chk?.checked;
-      }
-      await apiFetch(`/roles/${code}/visibility`, { method:"PUT", body: { visibility } });
-      btnSave.dataset.dirty = "0";
-      toast(t("visibilitySaved"));
-      return;
-    }
-  };
+  // after render update counts and dirty labels
+  filtered.forEach(r => updateRoleEnabledCount(host, r.code));
 }
 
 function roleCardHtml(role) {
-  const vis = role.visibility || {};
-  const sys = role.is_system ? `<span class="pill">${t("systemRole")}</span>` : `<span class="pill">${t("customRole")}</span>`;
+  const vis = normalizeVis(role.visibility || {});
+  const enabledCount = MODULES.filter(m => vis[m]).length;
+  const sysTag = role.is_system ? `<span class="uadm-badge">${t("systemRole")}</span>` : `<span class="uadm-badge">${t("customRole")}</span>`;
 
   return `
-    <div class="card">
-      <div class="hd">
-        <b>${escapeHtml(role.name || role.code)}</b>
-        <span class="muted">${escapeHtml(role.code)} · ${sys}</span>
+    <div class="rolecard" data-role="${esc(role.code)}">
+      <div class="rolehead">
+        <div>
+          <b>${esc(role.name || role.code)}</b>
+          <div class="meta">${esc(role.code)} · ${sysTag}</div>
+        </div>
+
+        <div class="grow"></div>
+
+        <span class="uadm-badge off" data-count="${esc(role.code)}">${t("modulesEnabled")}: ${enabledCount}/${MODULES.length}</span>
+        <span class="uadm-badge off" data-dirty="${esc(role.code)}" style="display:none">${t("unsaved")}</span>
+
+        <div class="right">
+          <button class="btn" data-ract="toggleOpen">▾ ${t("expand")}</button>
+          <button class="btn primary" data-ract="save" data-role="${esc(role.code)}">${t("saveVisibility")}</button>
+        </div>
       </div>
-      <div class="bd">
-        <div class="checkgrid">
+
+      <div class="roledetails">
+        <div class="chips">
           ${MODULES.map(mod => `
-            <label class="check">
-              <input type="checkbox"
-                     data-role="${escapeHtml(role.code)}"
-                     data-mod="${escapeHtml(mod)}"
-                     ${vis[mod] ? "checked" : ""} />
-              <span>${escapeHtml(t(mod))}</span>
-            </label>
+            <button class="chip ${vis[mod] ? "on" : "off"}"
+                    data-ract="chip"
+                    data-role="${esc(role.code)}"
+                    data-mod="${esc(mod)}"
+                    aria-pressed="${vis[mod] ? "true" : "false"}">
+              ${esc(t(mod))}
+            </button>
           `).join("")}
         </div>
 
-        <div class="row" style="justify-content:flex-end; margin-top:12px">
-          <button class="btn primary" data-save="${escapeHtml(role.code)}">${t("saveVisibility")}</button>
+        <div class="roletools">
+          <button class="btn" data-ract="all" data-role="${esc(role.code)}">${t("selectAll")}</button>
+          <button class="btn" data-ract="none" data-role="${esc(role.code)}">${t("selectNone")}</button>
+          <div class="sp"></div>
+          <span class="muted">${esc(role.code)}</span>
         </div>
       </div>
     </div>
   `;
 }
 
-/* =========================
-   Modals
-========================= */
+/* ===================== MODALS ===================== */
 function openUserModal({ mode, user, roles, onSaved }) {
   const isEdit = mode === "edit";
   const host = $("#modalHost");
-  const roleOptions = roles.map(r => `<option value="${escapeHtml(r.code)}">${escapeHtml(r.name)} (${escapeHtml(r.code)})</option>`).join("");
+
+  const roleOptions = roles
+    .map(r => `<option value="${esc(r.code)}">${esc(r.name)} (${esc(r.code)})</option>`)
+    .join("");
 
   host.innerHTML = `
-    <div class="modal-backdrop">
-      <div class="modal">
-        <div class="modal-head">
+    <div class="mb">
+      <div class="m">
+        <div class="mh">
           <b>${isEdit ? t("editUser") : t("createUser")}</b>
           <button class="btn" id="mClose">✕</button>
         </div>
-        <div class="modal-body">
+        <div class="mbo">
           <div class="grid2">
             <div class="field">
               <div class="label">${t("name")}</div>
-              <input class="input" id="mIsm" value="${escapeHtml(user?.ism || "")}" />
+              <input class="input" id="mIsm" value="${esc(user?.ism || "")}" />
             </div>
             <div class="field">
               <div class="label">${t("login")}</div>
-              <input class="input" id="mLogin" value="${escapeHtml(user?.login || "")}" />
+              <input class="input" id="mLogin" value="${esc(user?.login || "")}" />
             </div>
           </div>
 
@@ -375,10 +459,10 @@ function openUserModal({ mode, user, roles, onSaved }) {
               <div class="label">${t("role")}</div>
               <select class="input" id="mRole">${roleOptions}</select>
             </div>
-            <label class="check" style="margin-top:22px">
-              <input type="checkbox" id="mActive" ${user?.active === 0 ? "" : "checked"} />
-              <span>${t("active")}</span>
-            </label>
+            <div>
+              <div class="label">${t("active")}</div>
+              <button class="uadm-toggle ${user?.active === 0 ? "" : "on"}" id="mActive">${user?.active === 0 ? t("inactive") : t("active")}</button>
+            </div>
           </div>
 
           ${isEdit ? "" : `
@@ -388,7 +472,7 @@ function openUserModal({ mode, user, roles, onSaved }) {
             </div>
           `}
 
-          <div class="row" style="justify-content:flex-end; margin-top:14px">
+          <div class="uadm-toolbar" style="justify-content:flex-end; margin-top:14px">
             <button class="btn" id="mCancel">${t("cancel")}</button>
             <button class="btn primary" id="mSave">${t("save")}</button>
           </div>
@@ -400,31 +484,31 @@ function openUserModal({ mode, user, roles, onSaved }) {
   const close = () => host.innerHTML = "";
   $("#mClose").onclick = close;
   $("#mCancel").onclick = close;
-  host.querySelector(".modal-backdrop").onclick = (e) => { if (e.target.classList.contains("modal-backdrop")) close(); };
+  host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
 
   $("#mRole").value = user?.role || "fin";
+
+  let active = !(user?.active === 0);
+  $("#mActive").onclick = () => {
+    active = !active;
+    const btn = $("#mActive");
+    btn.classList.toggle("on", active);
+    btn.textContent = active ? t("active") : t("inactive");
+  };
 
   $("#mSave").onclick = async () => {
     const ism = $("#mIsm").value.trim();
     const login = $("#mLogin").value.trim();
     const role = $("#mRole").value;
-    const active = $("#mActive").checked;
 
-    if (!ism || !login) return toast(t("error"), "ism/login required", "err");
+    if (!ism || !login) return toast(t("error"), "name/login required", "err");
 
     if (!isEdit) {
       const password = $("#mPass").value;
       if (!password || password.length < 6) return toast(t("error"), t("passwordHint"), "err");
-
-      await apiFetch("/users", {
-        method:"POST",
-        body: { ism, login, password, role, active }
-      });
+      await apiFetch("/users", { method:"POST", body:{ ism, login, password, role, active } });
     } else {
-      await apiFetch(`/users/${user.id}`, {
-        method:"PATCH",
-        body: { ism, login, role, active }
-      });
+      await apiFetch(`/users/${user.id}`, { method:"PATCH", body:{ ism, login, role, active } });
     }
 
     close();
@@ -432,23 +516,21 @@ function openUserModal({ mode, user, roles, onSaved }) {
   };
 }
 
-function openResetPasswordModal({ user, onSaved }) {
+function openResetModal({ user, onSaved }) {
   const host = $("#modalHost");
-
   host.innerHTML = `
-    <div class="modal-backdrop">
-      <div class="modal">
-        <div class="modal-head">
-          <b>${t("resetPass")} — ${escapeHtml(user.login || "")}</b>
+    <div class="mb">
+      <div class="m" style="width:min(520px, calc(100vw - 24px))">
+        <div class="mh">
+          <b>${t("resetPass")} — ${esc(user.login || "")}</b>
           <button class="btn" id="pClose">✕</button>
         </div>
-        <div class="modal-body">
+        <div class="mbo">
           <div class="field">
             <div class="label">${t("passwordNew")}</div>
             <input class="input" id="pNew" type="password" placeholder="${t("passwordHint")}" />
           </div>
-
-          <div class="row" style="justify-content:flex-end; margin-top:14px">
+          <div class="uadm-toolbar" style="justify-content:flex-end; margin-top:14px">
             <button class="btn" id="pCancel">${t("cancel")}</button>
             <button class="btn primary" id="pSave">${t("save")}</button>
           </div>
@@ -456,11 +538,10 @@ function openResetPasswordModal({ user, onSaved }) {
       </div>
     </div>
   `;
-
   const close = () => host.innerHTML = "";
   $("#pClose").onclick = close;
   $("#pCancel").onclick = close;
-  host.querySelector(".modal-backdrop").onclick = (e) => { if (e.target.classList.contains("modal-backdrop")) close(); };
+  host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
 
   $("#pSave").onclick = async () => {
     const password = $("#pNew").value;
@@ -471,18 +552,20 @@ function openResetPasswordModal({ user, onSaved }) {
   };
 }
 
-function openRoleModal({ mode, onSaved }) {
-  const isCreate = mode === "create";
+function openRoleModal({ onSaved }) {
   const host = $("#modalHost");
+  // default vis: only main+tasks on
+  const vis = {};
+  MODULES.forEach(m => vis[m] = (m === "main" || m === "tasks"));
 
   host.innerHTML = `
-    <div class="modal-backdrop">
-      <div class="modal">
-        <div class="modal-head">
+    <div class="mb">
+      <div class="m">
+        <div class="mh">
           <b>${t("createRole")}</b>
           <button class="btn" id="rClose">✕</button>
         </div>
-        <div class="modal-body">
+        <div class="mbo">
           <div class="grid2">
             <div class="field">
               <div class="label">${t("roleCode")}</div>
@@ -494,17 +577,20 @@ function openRoleModal({ mode, onSaved }) {
             </div>
           </div>
 
-          <div class="h2" style="margin-top:12px">${t("rolesTab")}</div>
-          <div class="checkgrid">
+          <div class="chips" id="rChips">
             ${MODULES.map(mod => `
-              <label class="check">
-                <input type="checkbox" data-mod="${escapeHtml(mod)}" ${mod === "main" ? "checked" : ""} />
-                <span>${escapeHtml(t(mod))}</span>
-              </label>
+              <button class="chip ${vis[mod] ? "on" : "off"}"
+                      data-mod="${esc(mod)}"
+                      aria-pressed="${vis[mod] ? "true" : "false"}">
+                ${esc(t(mod))}
+              </button>
             `).join("")}
           </div>
 
-          <div class="row" style="justify-content:flex-end; margin-top:14px">
+          <div class="roletools">
+            <button class="btn" id="rAll">${t("selectAll")}</button>
+            <button class="btn" id="rNone">${t("selectNone")}</button>
+            <div class="sp"></div>
             <button class="btn" id="rCancel">${t("cancel")}</button>
             <button class="btn primary" id="rSave">${t("save")}</button>
           </div>
@@ -516,7 +602,18 @@ function openRoleModal({ mode, onSaved }) {
   const close = () => host.innerHTML = "";
   $("#rClose").onclick = close;
   $("#rCancel").onclick = close;
-  host.querySelector(".modal-backdrop").onclick = (e) => { if (e.target.classList.contains("modal-backdrop")) close(); };
+  host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
+
+  const chipsHost = $("#rChips");
+  chipsHost.onclick = (e) => {
+    const chip = e.target.closest("button[data-mod]");
+    if (!chip) return;
+    const on = chip.classList.contains("on");
+    setChip(chip, !on);
+  };
+
+  $("#rAll").onclick = () => chipsHost.querySelectorAll("button[data-mod]").forEach(ch => setChip(ch, true));
+  $("#rNone").onclick = () => chipsHost.querySelectorAll("button[data-mod]").forEach(ch => setChip(ch, false));
 
   $("#rSave").onclick = async () => {
     const code = $("#rCode").value.trim().toLowerCase();
@@ -524,11 +621,13 @@ function openRoleModal({ mode, onSaved }) {
     if (!code || !name) return toast(t("error"), "code/name required", "err");
 
     const visibility = {};
-    host.querySelectorAll("input[data-mod]").forEach(chk => {
-      visibility[chk.dataset.mod] = chk.checked;
+    chipsHost.querySelectorAll("button[data-mod]").forEach(ch => {
+      visibility[ch.dataset.mod] = ch.classList.contains("on");
     });
 
-    await apiFetch("/roles", { method:"POST", body:{ code, name, visibility } });
+    // safer compatibility: create role THEN set visibility
+    await apiFetch("/roles", { method:"POST", body:{ code, name } });
+    await apiFetch(`/roles/${code}/visibility`, { method:"PUT", body:{ visibility } });
 
     close();
     await onSaved?.();
@@ -538,17 +637,17 @@ function openRoleModal({ mode, onSaved }) {
 function confirmModal({ title, text, okText, cancelText, onOk }) {
   const host = $("#modalHost");
   host.innerHTML = `
-    <div class="modal-backdrop">
-      <div class="modal" style="width:min(560px, calc(100vw - 24px))">
-        <div class="modal-head">
-          <b>${escapeHtml(title)}</b>
+    <div class="mb">
+      <div class="m" style="width:min(520px, calc(100vw - 24px))">
+        <div class="mh">
+          <b>${esc(title)}</b>
           <button class="btn" id="cClose">✕</button>
         </div>
-        <div class="modal-body">
-          <div class="muted">${escapeHtml(text || "")}</div>
-          <div class="row" style="justify-content:flex-end; margin-top:14px">
-            <button class="btn" id="cCancel">${escapeHtml(cancelText || t("cancel"))}</button>
-            <button class="btn danger" id="cOk">${escapeHtml(okText || t("yes"))}</button>
+        <div class="mbo">
+          <div class="muted">${esc(text || "")}</div>
+          <div class="uadm-toolbar" style="justify-content:flex-end; margin-top:14px">
+            <button class="btn" id="cCancel">${esc(cancelText || t("cancel"))}</button>
+            <button class="btn danger" id="cOk">${esc(okText || t("yes"))}</button>
           </div>
         </div>
       </div>
@@ -557,27 +656,16 @@ function confirmModal({ title, text, okText, cancelText, onOk }) {
   const close = () => host.innerHTML = "";
   $("#cClose").onclick = close;
   $("#cCancel").onclick = close;
-  host.querySelector(".modal-backdrop").onclick = (e) => { if (e.target.classList.contains("modal-backdrop")) close(); };
+  host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
 
-  $("#cOk").onclick = async () => {
-    close();
-    await onOk?.();
-  };
+  $("#cOk").onclick = async () => { close(); await onOk?.(); };
 }
 
-/* =========================
-   API loaders
-========================= */
+/* ===================== API ===================== */
 async function loadRoles() {
   const data = await apiFetch("/roles", { loadingTitle:"Roles", loadingText:"Loading..." });
   const roles = data.roles || [];
-  // normalize vis
-  for (const r of roles) {
-    r.visibility = r.visibility || {};
-    for (const mod of MODULES) {
-      if (typeof r.visibility[mod] !== "boolean") r.visibility[mod] = !!r.visibility[mod];
-    }
-  }
+  roles.forEach(r => r.visibility = normalizeVis(r.visibility || {}));
   return roles;
 }
 
@@ -591,12 +679,32 @@ async function loadUsers(includeDeleted=false, q="") {
   return data.users || [];
 }
 
-/* =========================
-   Helpers
-========================= */
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+/* ===================== Helpers ===================== */
+function normalizeVis(vis) {
+  const out = {};
+  MODULES.forEach(m => out[m] = !!vis[m]);
+  return out;
+}
+
+function setChip(btn, on) {
+  btn.classList.toggle("on", on);
+  btn.classList.toggle("off", !on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function markRoleDirty(host, code, dirty) {
+  const badge = host.querySelector(`[data-dirty="${cssEscape(code)}"]`);
+  if (!badge) return;
+  badge.style.display = dirty ? "inline-flex" : "none";
+}
+
+function updateRoleEnabledCount(host, code) {
+  const countEl = host.querySelector(`[data-count="${cssEscape(code)}"]`);
+  if (!countEl) return;
+  const chips = host.querySelectorAll(`.chip[data-role="${cssEscape(code)}"]`);
+  let on = 0;
+  chips.forEach(ch => { if (ch.classList.contains("on")) on++; });
+  countEl.textContent = `${t("modulesEnabled")}: ${on}/${MODULES.length}`;
 }
 
 function formatTs(ts) {
@@ -608,8 +716,13 @@ function formatTs(ts) {
 
 function debounce(fn, ms=250) {
   let tmr = null;
-  return (...args) => {
-    clearTimeout(tmr);
-    tmr = setTimeout(() => fn(...args), ms);
-  };
+  return (...args) => { clearTimeout(tmr); tmr = setTimeout(() => fn(...args), ms); };
+}
+
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+}
+
+function cssEscape(v) {
+  return String(v ?? "").replace(/"/g, '\\"');
 }
