@@ -215,7 +215,7 @@ function tableHtml(items) {
     <table class="clx-t">
       <thead>
         <tr>
-          <th>${t("clientCode")}</th>
+          <!--th>${t("clientCode")}</th-->
           <th>${t("companyName")}</th>
           <th>${t("fullName")}</th>
           <th>${t("phone1")}</th>
@@ -233,8 +233,8 @@ function tableHtml(items) {
           const del = Number(c.is_deleted) === 1;
           return `
             <tr style="${del ? "opacity:.55" : ""}">
-              <td>${esc(c.code || "")}</td>
-              <td>
+              <!--td>${esc(c.code || "")}</td>
+              <td-->
               <a class="link" href="#/clients/${c.id}">
               <b>${esc(c.company_name || "")}</b>
               </a>${del ? `<span class="badge del">${t("deleted")}</span>` : ""}</td>
