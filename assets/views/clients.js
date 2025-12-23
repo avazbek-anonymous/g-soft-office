@@ -99,6 +99,9 @@ export async function renderClients(view) {
       .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
       @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
       textarea.input{min-height:90px; resize:vertical}
+      .link{color:inherit; text-decoration:none}
+      .link:hover{text-decoration:underline}
+
     </style>
   `;
 
@@ -231,7 +234,10 @@ function tableHtml(items) {
           return `
             <tr style="${del ? "opacity:.55" : ""}">
               <td>${esc(c.code || "")}</td>
-              <td><b>${esc(c.company_name || "")}</b>${del ? ` <span class="badge del">${t("deleted")}</span>` : ""}</td>
+              <td>
+              <a class="link" href="#/clients/${c.id}">
+              <b>${esc(c.company_name || "")}</b>
+              </a>${del ? `<span class="badge del">${t("deleted")}</span>` : ""}</td>
               <td>${esc(c.full_name || "")}</td>
               <td>${esc(c.phone1 || "")}</td>
               <td>${esc(c.phone2 || "")}</td>
