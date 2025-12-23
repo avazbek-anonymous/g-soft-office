@@ -119,7 +119,7 @@ export async function renderClients(view) {
       }
       body[data-theme="light"] .clx-t thead th{background:rgba(255,255,255,.85)}
 
-      .clx-actions{display:flex; flex-wrap: nowrap; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+      .clx-actions{display:flex; flex-wrap: nowrap; gap:8px;}
 
       .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12); opacity:.85}
       body[data-theme="light"] .badge{border-color: rgba(0,0,0,.12)}
