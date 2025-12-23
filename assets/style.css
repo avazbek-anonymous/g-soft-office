@@ -564,3 +564,6 @@ details.u-dd > summary::after{
 details.u-dd[open] > summary::after{ content:"▴"; }
 details.u-dd .u-dd-body{ padding: 10px 12px; border-top:1px solid rgba(255,255,255,.08); }
 body[data-theme="light"] details.u-dd .u-dd-body{ border-top-color: rgba(0,0,0,.08); }
+.auth-head .row {
+  justify-content: flex-end;
+}
