@@ -324,7 +324,7 @@ function usersTableHtml(users, roles) {
             <td>${esc(u.ism)}</td>
             <td>
               <span class="uadm-badge">${esc(roleName(u.role))}</span>
-              <span class="uadm-muted">${esc(u.role)}</span>
+              <span class="uadm-muted" style="display:none">${esc(u.role)}</span>
             </td>
             <td>
               ${u.active ? `<span class="uadm-badge on">${t("active")}</span>` : `<span class="uadm-badge off">${t("inactive")}</span>`}
