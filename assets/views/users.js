@@ -34,7 +34,7 @@ export async function renderUsers(view) {
     <style>
       .uadm-tabs{display:flex; gap:8px; align-items:center; margin:6px 0 14px}
       .uadm-tab{border:1px solid rgba(255,255,255,.12); background:transparent; padding:8px 12px; border-radius:12px; cursor:pointer}
-      body[data-theme="light"] .uadm-tab{border-color: rgba(0,0,0,.12)}
+      body[data-theme="light"] .uadm-tab{border-color: rgba(0,0,0,.12); color: #000}
       .uadm-tab.active{background:rgba(34,197,94,.12); border-color: rgba(34,197,94,.45)}
       .uadm-spacer{flex:1}
       .uadm-search{min-width:260px; max-width:360px}
@@ -60,7 +60,7 @@ export async function renderUsers(view) {
       .uadm-badge.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
       .uadm-badge.off{background:rgba(148,163,184,.10)}
       .uadm-toggle{border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:8px 12px; background:transparent; cursor:pointer}
-      body[data-theme="light"] .uadm-toggle{border-color: rgba(0,0,0,.12)}
+      body[data-theme="light"] .uadm-toggle{border-color: rgba(0,0,0,.12); color: #000}
       .uadm-toggle.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
 
       /* Roles list (accordion) */
