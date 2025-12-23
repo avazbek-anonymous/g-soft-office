@@ -233,8 +233,8 @@ function tableHtml(items) {
           const del = Number(c.is_deleted) === 1;
           return `
             <tr style="${del ? "opacity:.55" : ""}">
-              <!--td>${esc(c.code || "")}</td>
-              <td-->
+              <!--td>${esc(c.code || "")}</td-->
+              <td>
               <a class="link" href="#/clients/${c.id}">
               <b>${esc(c.company_name || "")}</b>
               </a>${del ? `<span class="badge del">${t("deleted")}</span>` : ""}</td>
