@@ -3,173 +3,247 @@ import { t } from "../core/i18n.js";
 import { apiFetch } from "../core/api.js";
 import { toast } from "../ui/toast.js";
 
-const $ = (sel, el=document) => el.querySelector(sel);
+const $ = (sel, el = document) => el.querySelector(sel);
 
 export async function renderClients(view) {
   view.innerHTML = `
-    <div class="card cl">
+    <div class="card clx">
       <div class="hd">
         <b>${t("clientsBase")}</b>
         <span class="muted">${t("clients")}</span>
       </div>
       <div class="bd">
-        <div class="cl-top">
+
+        <div class="clx-top">
           <button class="btn primary" id="btnAdd">＋ ${t("newClient")}</button>
           <button class="btn" id="btnReload">⟲ ${t("reload")}</button>
+          <button class="btn" id="btnDeleted"></button>
 
-          <button class="btn" id="btnToggleActive"></button>
-
-          <div class="field cl-search">
+          <div class="field clx-search">
             <input class="input" id="q" placeholder="${t("search")}..." />
           </div>
         </div>
 
-        <div class="cl-tablewrap" id="tblWrap"></div>
+        <div class="clx-filters">
+          <div class="muted" style="font-size:12px">${t("filters")}</div>
+
+          <div class="field">
+            <div class="label">${t("city")}</div>
+            <select class="input" id="city">
+              <option value="">—</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div class="label">${t("source")}</div>
+            <select class="input" id="source">
+              <option value="">—</option>
+            </select>
+          </div>
+
+          <div class="clx-sp"></div>
+
+          <button class="btn" id="btnClear">${t("clear")}</button>
+        </div>
+
+        <div class="clx-tablewrap" id="wrap"></div>
       </div>
     </div>
 
     <div id="modalHost"></div>
 
     <style>
-      .cl-top{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-      .cl-search{margin-left:auto; min-width:280px; max-width:380px}
-      @media(max-width:920px){ .cl-search{min-width:160px} }
+      .clx-top{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+      .clx-search{margin-left:auto; min-width:280px; max-width:380px}
+      @media(max-width:920px){ .clx-search{min-width:160px} }
 
-      .cl-tablewrap{margin-top:12px; overflow:auto; border-radius:14px; border:1px solid rgba(255,255,255,.10)}
-      body[data-theme="light"] .cl-tablewrap{border-color: rgba(0,0,0,.10)}
-      table.cl-t{width:100%; border-collapse:collapse; min-width:980px}
-      .cl-t th,.cl-t td{padding:12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
-      body[data-theme="light"] .cl-t th, body[data-theme="light"] .cl-t td{border-bottom-color: rgba(0,0,0,.08)}
-      .cl-t thead th{font-size:12px; opacity:.75; position:sticky; top:0; background:rgba(10,14,25,.85); backdrop-filter: blur(10px)}
-      body[data-theme="light"] .cl-t thead th{background:rgba(255,255,255,.85)}
-      .cl-actions{display:flex; gap:8px; flex-wrap:wrap}
+      .clx-filters{
+        margin-top:10px;
+        display:flex;
+        gap:10px;
+        align-items:flex-end;
+        flex-wrap:wrap;
+        padding:10px;
+        border:1px solid rgba(255,255,255,.10);
+        border-radius:16px;
+        background:rgba(255,255,255,.02);
+      }
+      body[data-theme="light"] .clx-filters{
+        border-color: rgba(0,0,0,.10);
+        background: rgba(0,0,0,.02);
+      }
+      .clx-sp{flex:1}
+
+      .clx-tablewrap{margin-top:12px; overflow:auto; border-radius:14px; border:1px solid rgba(255,255,255,.10)}
+      body[data-theme="light"] .clx-tablewrap{border-color: rgba(0,0,0,.10)}
+
+      table.clx-t{width:100%; border-collapse:collapse; min-width:1180px}
+      .clx-t th,.clx-t td{padding:12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
+      body[data-theme="light"] .clx-t th, body[data-theme="light"] .clx-t td{border-bottom-color: rgba(0,0,0,.08)}
+      .clx-t thead th{font-size:12px; opacity:.75; position:sticky; top:0; background:rgba(10,14,25,.85); backdrop-filter: blur(10px)}
+      body[data-theme="light"] .clx-t thead th{background:rgba(255,255,255,.85)}
+      .clx-actions{display:flex; gap:8px; flex-wrap:wrap}
+
       .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12); opacity:.85}
       body[data-theme="light"] .badge{border-color: rgba(0,0,0,.12)}
-      .badge.on{background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35)}
       .badge.off{background:rgba(148,163,184,.10)}
+      .badge.del{background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.35)}
 
       /* Modal */
       .mb{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
-      .m{width:min(860px, calc(100vw - 24px)); background:var(--bg, #0b1020); border:1px solid rgba(255,255,255,.12); border-radius:16px; overflow:hidden}
+      .m{width:min(920px, calc(100vw - 24px)); background:var(--bg, #0b1020); border:1px solid rgba(255,255,255,.12); border-radius:16px; overflow:hidden}
       body[data-theme="light"] .m{background:#fff; border-color: rgba(0,0,0,.12)}
       .mh{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08)}
       body[data-theme="light"] .mh{border-bottom-color: rgba(0,0,0,.08)}
       .mbo{padding:14px}
       .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
       @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
+      textarea.input{min-height:90px; resize:vertical}
     </style>
   `;
 
-  await preloadDict();
-  let onlyActive = true;
+  await preloadDictClients();
 
-  const renderToggle = () => {
-    $("#btnToggleActive", view).textContent = onlyActive ? t("onlyActive") : t("showAll");
+  let includeDeleted = false;
+  let clientsCache = [];
+
+  const citySel = $("#city", view);
+  const sourceSel = $("#source", view);
+
+  // fill selects
+  fillSelect(citySel, state.dict.cities || []);
+  fillSelect(sourceSel, state.dict.sources || []);
+
+  const refreshDeletedBtn = () => {
+    $("#btnDeleted", view).textContent = includeDeleted ? t("hideDeleted") : t("showDeleted");
   };
 
   const loadAndRender = async () => {
     const q = $("#q", view).value.trim();
-    const data = await apiFetch(`/clients?q=${encodeURIComponent(q)}&only_active=${onlyActive ? "1" : "0"}`);
-    const items = data.items || data.clients || [];
-    $("#tblWrap", view).innerHTML = tableHtml(items);
+    const city_id = citySel.value || "";
+    const source_id = sourceSel.value || "";
+
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (includeDeleted) params.set("include_deleted", "1");
+    if (city_id) params.set("city_id", city_id);
+    if (source_id) params.set("source_id", source_id);
+
+    const data = await apiFetch(`/clients${params.toString() ? "?" + params.toString() : ""}`);
+    const list = data.clients || data.items || [];
+    clientsCache = list;
+    $("#wrap", view).innerHTML = tableHtml(list);
   };
 
+  // UI events
   $("#btnAdd", view).onclick = () => openClientModal({
-    mode:"create",
+    mode: "create",
     onSaved: async () => { toast(t("saved")); await loadAndRender(); }
   });
 
   $("#btnReload", view).onclick = loadAndRender;
 
-  $("#btnToggleActive", view).onclick = async () => {
-    onlyActive = !onlyActive;
-    renderToggle();
+  $("#btnDeleted", view).onclick = async () => {
+    includeDeleted = !includeDeleted;
+    refreshDeletedBtn();
+    await loadAndRender();
+  };
+
+  $("#btnClear", view).onclick = async () => {
+    $("#q", view).value = "";
+    citySel.value = "";
+    sourceSel.value = "";
     await loadAndRender();
   };
 
   $("#q", view).oninput = debounce(loadAndRender, 250);
+  citySel.onchange = loadAndRender;
+  sourceSel.onchange = loadAndRender;
 
   // table actions
-  $("#tblWrap", view).onclick = async (e) => {
+  $("#wrap", view).onclick = async (e) => {
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;
+
     const act = btn.dataset.act;
     const id = Number(btn.dataset.id);
-    const row = btn.closest("tr");
-    const itemJson = row?.dataset?.item;
-    const item = itemJson ? JSON.parse(itemJson) : null;
+    const c = clientsCache.find(x => Number(x.id) === id);
+    if (!c) return;
 
-    if (act === "edit" && item) {
+    if (act === "edit") {
       openClientModal({
         mode:"edit",
-        client:item,
+        client: c,
         onSaved: async () => { toast(t("saved")); await loadAndRender(); }
       });
+      return;
     }
 
-    if (act === "del" && item) {
+    if (act === "del") {
       confirmModal({
         title: t("confirmDeleteClient"),
-        text: item.name || "",
+        text: `${c.company_name || ""}`,
         okText: t("yes"),
         cancelText: t("no"),
         onOk: async () => {
-          // backend: try /clients/:id/delete; if not exists -> PATCH active=0
-          try {
-            await apiFetch(`/clients/${id}/delete`, { method:"POST" });
-          } catch {
-            await apiFetch(`/clients/${id}`, { method:"PATCH", body:{ active:false } });
-          }
+          await apiFetch(`/clients/${id}/delete`, { method:"POST" });
           toast(t("saved"));
           await loadAndRender();
         }
       });
+      return;
     }
   };
 
-  renderToggle();
+  refreshDeletedBtn();
   await loadAndRender();
 }
 
-/* ========= HTML ========= */
+/* =========================
+   Table
+========================= */
 function tableHtml(items) {
-  if (!items.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
+  if (!items?.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
 
-  const cityName = (id) => (state.dict.cities || []).find(x => Number(x.id) === Number(id))?.name || "";
-  const sourceName = (id) => (state.dict.sources || []).find(x => Number(x.id) === Number(id))?.name || "";
+  const cityName = (row) => row.city_name || (state.dict.cities || []).find(x => Number(x.id) === Number(row.city_id))?.name || "";
+  const sourceName = (row) => row.source_name || (state.dict.sources || []).find(x => Number(x.id) === Number(row.source_id))?.name || "";
 
   return `
-    <table class="cl-t">
+    <table class="clx-t">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>${t("clientName")}</th>
-          <th>${t("phone")}</th>
-          <th>${t("telegram")}</th>
+          <th>${t("clientCode")}</th>
+          <th>${t("companyName")}</th>
+          <th>${t("fullName")}</th>
+          <th>${t("phone1")}</th>
+          <th>${t("phone2")}</th>
           <th>${t("city")}</th>
           <th>${t("source")}</th>
-          <th>${t("notes")}</th>
-          <th>${t("active")}</th>
+          <th>${t("sphere")}</th>
+          <th>${t("comment")}</th>
+          <th>${t("createdAt")}</th>
           <th>${t("actions")}</th>
         </tr>
       </thead>
       <tbody>
         ${items.map(c => {
-          const active = c.active !== 0 && c.is_deleted !== 1;
+          const del = Number(c.is_deleted) === 1;
           return `
-            <tr data-item='${escapeAttrJson(c)}' style="${active ? "" : "opacity:.55"}">
-              <td>${esc(c.id)}</td>
-              <td><b>${esc(c.name || "")}</b></td>
-              <td>${esc(c.phone || "")}</td>
-              <td>${esc(c.telegram || "")}</td>
-              <td>${esc(cityName(c.city_id))}</td>
-              <td>${esc(sourceName(c.source_id))}</td>
-              <td class="muted">${esc((c.notes || "").slice(0, 60))}</td>
-              <td>${active ? `<span class="badge on">${t("active")}</span>` : `<span class="badge off">${t("inactive")}</span>`}</td>
+            <tr style="${del ? "opacity:.55" : ""}">
+              <td>${esc(c.code || "")}</td>
+              <td><b>${esc(c.company_name || "")}</b>${del ? ` <span class="badge del">${t("deleted")}</span>` : ""}</td>
+              <td>${esc(c.full_name || "")}</td>
+              <td>${esc(c.phone1 || "")}</td>
+              <td>${esc(c.phone2 || "")}</td>
+              <td>${esc(cityName(c))}</td>
+              <td>${esc(sourceName(c))}</td>
+              <td>${esc(c.sphere || "")}</td>
+              <td class="muted">${esc((c.comment || "").slice(0, 60))}</td>
+              <td>${formatTs(c.created_at)}</td>
               <td>
-                <div class="cl-actions">
+                <div class="clx-actions">
                   <button class="btn" data-act="edit" data-id="${c.id}">${t("edit")}</button>
-                  <button class="btn danger" data-act="del" data-id="${c.id}">${t("delete")}</button>
+                  ${del ? "" : `<button class="btn danger" data-act="del" data-id="${c.id}">${t("delete")}</button>`}
                 </div>
               </td>
             </tr>
@@ -180,7 +254,9 @@ function tableHtml(items) {
   `;
 }
 
-/* ========= Modal ========= */
+/* =========================
+   Modal
+========================= */
 function openClientModal({ mode, client, onSaved }) {
   const isEdit = mode === "edit";
   const host = $("#modalHost");
@@ -196,22 +272,30 @@ function openClientModal({ mode, client, onSaved }) {
           <button class="btn" id="mClose">✕</button>
         </div>
         <div class="mbo">
+
           <div class="grid2">
             <div class="field">
-              <div class="label">${t("clientName")}</div>
-              <input class="input" id="mName" value="${esc(client?.name || "")}" />
+              <div class="label">${t("companyName")}</div>
+              <input class="input" id="mCompany" value="${esc(client?.company_name || "")}" />
             </div>
             <div class="field">
-              <div class="label">${t("phone")}</div>
-              <input class="input" id="mPhone" value="${esc(client?.phone || "")}" />
+              <div class="label">${t("fullName")}</div>
+              <input class="input" id="mFull" value="${esc(client?.full_name || "")}" />
             </div>
           </div>
 
           <div class="grid2" style="margin-top:10px">
             <div class="field">
-              <div class="label">${t("telegram")}</div>
-              <input class="input" id="mTg" value="${esc(client?.telegram || "")}" />
+              <div class="label">${t("phone1")}</div>
+              <input class="input" id="mP1" value="${esc(client?.phone1 || "")}" />
             </div>
+            <div class="field">
+              <div class="label">${t("phone2")}</div>
+              <input class="input" id="mP2" value="${esc(client?.phone2 || "")}" />
+            </div>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
             <div class="field">
               <div class="label">${t("city")}</div>
               <select class="input" id="mCity">
@@ -219,9 +303,7 @@ function openClientModal({ mode, client, onSaved }) {
                 ${cities.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
               </select>
             </div>
-          </div>
 
-          <div class="grid2" style="margin-top:10px">
             <div class="field">
               <div class="label">${t("source")}</div>
               <select class="input" id="mSource">
@@ -229,9 +311,17 @@ function openClientModal({ mode, client, onSaved }) {
                 ${sources.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
               </select>
             </div>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
             <div class="field">
-              <div class="label">${t("notes")}</div>
-              <input class="input" id="mNotes" value="${esc(client?.notes || "")}" />
+              <div class="label">${t("sphere")}</div>
+              <input class="input" id="mSphere" value="${esc(client?.sphere || "")}" />
+            </div>
+
+            <div class="field">
+              <div class="label">${t("comment")}</div>
+              <textarea class="input" id="mComment">${esc(client?.comment || "")}</textarea>
             </div>
           </div>
 
@@ -239,6 +329,7 @@ function openClientModal({ mode, client, onSaved }) {
             <button class="btn" id="mCancel">${t("cancel")}</button>
             <button class="btn primary" id="mSave">${t("save")}</button>
           </div>
+
         </div>
       </div>
     </div>
@@ -249,21 +340,22 @@ function openClientModal({ mode, client, onSaved }) {
   $("#mCancel").onclick = close;
   host.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
 
-  // set defaults
   $("#mCity").value = client?.city_id ?? "";
   $("#mSource").value = client?.source_id ?? "";
 
   $("#mSave").onclick = async () => {
-    const name = $("#mName").value.trim();
-    if (!name) return toast(t("error"), "name required", "err");
+    const company_name = $("#mCompany").value.trim();
+    if (!company_name) return toast(t("error"), "company_name required", "err");
 
     const payload = {
-      name,
-      phone: $("#mPhone").value.trim(),
-      telegram: $("#mTg").value.trim(),
+      company_name,
+      full_name: $("#mFull").value.trim() || null,
+      phone1: $("#mP1").value.trim() || null,
+      phone2: $("#mP2").value.trim() || null,
       city_id: $("#mCity").value ? Number($("#mCity").value) : null,
       source_id: $("#mSource").value ? Number($("#mSource").value) : null,
-      notes: $("#mNotes").value.trim(),
+      sphere: $("#mSphere").value.trim() || null,
+      comment: $("#mComment").value.trim() || null,
     };
 
     if (!isEdit) {
@@ -277,7 +369,9 @@ function openClientModal({ mode, client, onSaved }) {
   };
 }
 
-/* ========= Confirm ========= */
+/* =========================
+   Confirm modal
+========================= */
 function confirmModal({ title, text, okText, cancelText, onOk }) {
   const host = $("#modalHost");
   host.innerHTML = `
@@ -304,19 +398,42 @@ function confirmModal({ title, text, okText, cancelText, onOk }) {
   $("#cOk").onclick = async () => { close(); await onOk?.(); };
 }
 
-/* ========= Dict preload ========= */
-async function preloadDict() {
-  if (state.dictReady) return;
+/* =========================
+   Dict preload
+========================= */
+async function preloadDictClients() {
+  state.dict = state.dict || {};
+  const needCities = !Array.isArray(state.dict.cities);
+  const needSources = !Array.isArray(state.dict.sources);
+  if (!needCities && !needSources) return;
+
   const [cities, sources] = await Promise.all([
-    apiFetch("/dict/cities", { silent:true }).catch(() => ({items:[]})),
-    apiFetch("/dict/sources", { silent:true }).catch(() => ({items:[]})),
+    apiFetch("/dict/cities", { silent:true }).catch(() => ({ items: [] })),
+    apiFetch("/dict/sources", { silent:true }).catch(() => ({ items: [] })),
   ]);
+
   state.dict.cities = cities.items || [];
   state.dict.sources = sources.items || [];
-  state.dictReady = true;
 }
 
-/* ========= Helpers ========= */
-function debounce(fn, ms=250) { let tmr=null; return (...a)=>{ clearTimeout(tmr); tmr=setTimeout(()=>fn(...a), ms); }; }
+function fillSelect(sel, arr) {
+  const options = arr
+    .slice()
+    .filter(x => x.active !== 0)
+    .sort((a,b) => String(a.name).localeCompare(String(b.name)))
+    .map(x => `<option value="${x.id}">${esc(x.name)}</option>`)
+    .join("");
+  sel.innerHTML = `<option value="">—</option>${options}`;
+}
+
+/* =========================
+   Helpers
+========================= */
+function debounce(fn, ms=250) { let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 function esc(v){ return String(v ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
-function escapeAttrJson(obj){ return esc(JSON.stringify(obj)); }
+function formatTs(ts){
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const d = new Date(n * 1000);
+  return new Intl.DateTimeFormat(undefined, { year:"numeric", month:"2-digit", day:"2-digit" }).format(d);
+}
