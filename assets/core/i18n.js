@@ -59,6 +59,7 @@ export const T = {
     // pages notes (можешь потом убрать)
     soon: "Скоро будет готово",
 
+    //roles & users
     rolesTab: "Роли и доступ",
     usersTab: "Пользователи",
     includeDeleted: "Показывать удалённых",
@@ -93,6 +94,22 @@ export const T = {
     selectNone: "Выключить всё",
     unsaved: "Есть изменения",
 
+    // clients
+    clientsBase: "Клиентская база",
+    newClient: "Новый клиент",
+    editClient: "Редактировать клиента",
+    clientName: "Название / ФИО",
+    phone: "Телефон",
+    telegram: "Telegram",
+    city: "Город",
+    source: "Источник",
+    notes: "Заметки",
+    all: "Все",
+    onlyActive: "Только активные",
+    showAll: "Показать всё",
+    hideInactive: "Скрыть неактивных",
+    confirmDeleteClient: "Отключить клиента?",
+
   },
 
   uz: {
@@ -103,7 +120,7 @@ export const T = {
     clients: "Mijozlar",
     settings: "Sozlamalar",
     users: "Foydalanuvchilar",
-
+    // common
     welcome: "Xush kelibsiz",
     logout: "Chiqish",
     loadingTitle: "Yuklanmoqda…",
@@ -120,12 +137,12 @@ export const T = {
     cancel: "Bekor qilish",
     close: "Yopish",
     search: "Qidirish",
-
+    // login
     loginTitle: "Tizimga kirish",
     login: "Login",
     password: "Parol",
     signIn: "Kirish",
-
+    // settings
     dictionaries: "Spravochniklar",
     uiSettings: "Interfeys",
     cities: "Shaharlar",
@@ -134,7 +151,7 @@ export const T = {
     open: "Ochish",
     newItem: "Yangi element",
     name: "Nomi",
-
+    // users
     adminOnly: "Faqat admin",
     role: "Rol",
     actions: "Amallar",
@@ -145,6 +162,7 @@ export const T = {
 
     soon: "Tez orada tayyor bo‘ladi",
 
+    // roles & users
     rolesTab: "Rollar va ruxsat",
     usersTab: "Foydalanuvchilar",
     includeDeleted: "O‘chirilganlarni ko‘rsatish",
@@ -179,6 +197,22 @@ export const T = {
     selectNone: "Hammasini o‘chirish",
     unsaved: "O‘zgarish bor",
 
+    // clients
+    clientsBase: "Mijozlar bazasi",
+    newClient: "Yangi mijoz",
+    editClient: "Mijozni tahrirlash",
+    clientName: "Nomi / F.I.Sh",
+    phone: "Telefon",
+    telegram: "Telegram",
+    city: "Shahar",
+    source: "Manba",
+    notes: "Izoh",
+    all: "Barchasi",
+    onlyActive: "Faqat faol",
+    showAll: "Hammasini ko‘rsatish",
+    hideInactive: "Nofaollarni yashirish",
+    confirmDeleteClient: "Mijozni o‘chirasizmi (o‘chirib qo‘yish)?",
+
   },
 
   en: {
@@ -189,7 +223,7 @@ export const T = {
     clients: "Clients",
     settings: "Settings",
     users: "Users",
-
+    // common
     welcome: "Welcome",
     logout: "Logout",
     loadingTitle: "Loading…",
@@ -206,12 +240,12 @@ export const T = {
     cancel: "Cancel",
     close: "Close",
     search: "Search",
-
+    // login
     loginTitle: "Sign in",
     login: "Login",
     password: "Password",
     signIn: "Sign in",
-
+    // settings
     dictionaries: "Dictionaries",
     uiSettings: "UI",
     cities: "Cities",
@@ -220,7 +254,7 @@ export const T = {
     open: "Open",
     newItem: "New item",
     name: "Name",
-
+    // users
     adminOnly: "Admin only",
     role: "Role",
     actions: "Actions",
@@ -230,7 +264,7 @@ export const T = {
     addUser: "Add user",
 
     soon: "Coming soon",
-
+    // roles & users
     rolesTab: "Roles & Access",
     usersTab: "Users",
     includeDeleted: "Show deleted",
@@ -264,6 +298,21 @@ export const T = {
     selectAll: "Enable all",
     selectNone: "Disable all",
     unsaved: "Unsaved changes",
+    // clients
+    clientsBase: "Client base",
+    newClient: "New client",
+    editClient: "Edit client",
+    clientName: "Company / Full name",
+    phone: "Phone",
+    telegram: "Telegram",
+    city: "City",
+    source: "Source",
+    notes: "Notes",
+    all: "All",
+    onlyActive: "Only active",
+    showAll: "Show all",
+    hideInactive: "Hide inactive",
+    confirmDeleteClient: "Disable this client?",
 
   }
 };
