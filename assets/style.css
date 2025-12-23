@@ -489,3 +489,78 @@
       .content{padding: 14px}
       .pill{display:none}
     }
+/* =========================
+   FIX: Select / Dropdowns
+   (paste at the very end of assets/style.css)
+========================= */
+
+/* Make selects look like inputs and be readable */
+select.input,
+.field select.input,
+select.input:focus {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+
+  width: 100%;
+  cursor: pointer;
+  padding-right: 42px; /* space for arrow */
+}
+
+/* Custom arrow */
+select.input{
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255,255,255,.75) 50%),
+    linear-gradient(135deg, rgba(255,255,255,.75) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 55%,
+    calc(100% - 12px) 55%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+body[data-theme="light"] select.input{
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(0,0,0,.65) 50%),
+    linear-gradient(135deg, rgba(0,0,0,.65) 50%, transparent 50%);
+}
+
+/* Better focus */
+select.input:focus{
+  outline: none !important;
+  border-color: rgba(34,197,94,.55) !important;
+  box-shadow: 0 0 0 4px rgba(34,197,94,.15) !important;
+}
+
+/* Options readable (browser support varies, but helps) */
+select.input option{
+  background: #0b1020;
+  color: #e5e7eb;
+}
+body[data-theme="light"] select.input option{
+  background: #ffffff;
+  color: #111827;
+}
+
+/* If your global CSS broke summary/details dropdowns too */
+details.u-dd { border:1px solid rgba(255,255,255,.10); border-radius:14px; overflow:hidden; }
+body[data-theme="light"] details.u-dd { border-color: rgba(0,0,0,.10); }
+details.u-dd > summary{
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background: rgba(255,255,255,.02);
+}
+body[data-theme="light"] details.u-dd > summary{ background: rgba(0,0,0,.02); }
+details.u-dd > summary::-webkit-details-marker{ display:none; }
+details.u-dd > summary::after{
+  content:"▾";
+  opacity:.75;
+  transform: translateY(-1px);
+}
+details.u-dd[open] > summary::after{ content:"▴"; }
+details.u-dd .u-dd-body{ padding: 10px 12px; border-top:1px solid rgba(255,255,255,.08); }
+body[data-theme="light"] details.u-dd .u-dd-body{ border-top-color: rgba(0,0,0,.08); }
