@@ -15,8 +15,8 @@ export async function renderClients(view) {
       <div class="bd">
 
         <div class="clx-top">
-          <button class="btn primary" id="btnAdd">＋ ${t("newClient")}</button>
-          <button class="btn" id="btnReload">⟲ ${t("reload")}</button>
+          <button class="btn primary" id="btnAdd">＋</button>
+          <button class="btn" id="btnReload">⟲</button>
           <button class="btn" id="btnDeleted"></button>
 
           <div class="field clx-search">

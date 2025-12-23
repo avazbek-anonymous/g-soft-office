@@ -230,10 +230,10 @@ function dictCardHtml(dictKey, labelKey) {
       <div class="h">
         <div>
           <b>${t(labelKey)}</b>
-          <div class="muted">${activeCount}/${items.length} active</div>
+          <div class="muted">${activeCount}/${items.length}</div>
         </div>
         <div class="right">
-          <button class="btn primary" data-add="${dictKey}">＋ ${t("add")}</button>
+          <button class="btn primary" data-add="${dictKey}">＋}</button>
           <span class="badge ${activeCount ? "on" : "off"}">${items.length}</span>
         </div>
       </div>
