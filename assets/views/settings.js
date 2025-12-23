@@ -234,7 +234,7 @@ function dictCardHtml(dictKey, labelKey) {
         </div>
         <div class="right">
           <button class="btn primary" data-add="${dictKey}">＋</button>
-          <span class="badge ${activeCount ? "on" : "off"}">${items.length}</span>
+          <span class="badge ${activeCount ? "on" : "off"}" style="display:none">${items.length}</span>
         </div>
       </div>
 
