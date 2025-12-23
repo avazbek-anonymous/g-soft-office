@@ -78,20 +78,30 @@ async function loadUiSettings() {
 async function preloadCache(force=false) {
   if (state.cacheReady && !force) return;
 
-  const [cities, sources, services] = await Promise.all([
+  const [cities, sources, services, spheres] = await Promise.all([
     apiFetch("/dict/cities",   { silent:true }).catch(() => ({ items: [] })),
     apiFetch("/dict/sources",  { silent:true }).catch(() => ({ items: [] })),
     apiFetch("/dict/services", { silent:true }).catch(() => ({ items: [] })),
+    apiFetch("/dict/spheres",  { silent:true }).catch(() => ({ items: [] })),
   ]);
 
   state.dict.cities = cities.items || [];
   state.dict.sources = sources.items || [];
   state.dict.services = services.items || [];
-  state.cacheReady = true;
+  state.dict.spheres = spheres.items || [];
 }
 
 async function render() {
-  const route = getRouteByHash();
+  let route = getRouteByHash();
+
+  // detail route: #/clients/123
+  const mClient = (location.hash || "").match(/^#\/clients\/(\d+)/);
+  if (mClient) {
+    const clientId = Number(mClient[1]);
+    if (route && route.key === "clients") route = { ...route, clientId };
+    else route = { key: "clients", clientId }; // fallback, если getRouteByHash не понял
+  }
+
 
   if (!state.user || !route || route.key === "login") {
     renderLogin(async () => {
@@ -129,11 +139,13 @@ async function render() {
     case "tasks":    return renderTasks(view);
     case "projects": return renderProjects(view);
     case "courses":  return renderCourses(view);
-    case "clients":  return renderClients(view);
     case "settings": return renderSettings(view);
     case "users":    return renderUsers(view);
-    case "client_view": return renderClientView(view);
+    case "clients": 
+    if (route.clientId) 
+      return renderClientView(view, { id: route.clientId });
+    return renderClients(view);
     default:
       view.innerHTML = `<div class="card"><div class="hd"><b>${t("notFound")}</b></div></div>`;
-  }
+    }
 }
