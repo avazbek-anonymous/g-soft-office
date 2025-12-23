@@ -113,33 +113,121 @@ export async function renderSettings(view) {
 function renderDictTab(host) {
   host.innerHTML = `
     <div class="set-grid">
-      ${DICTS.map(d => {
-        const arr = state.dict[d.key] || [];
-        const activeCount = arr.filter(x => x.active !== 0).length;
-        return `
-          <div class="set-card">
-            <div class="h">
-              <div>
-                <b>${t(d.labelKey)}</b>
-                <div class="muted">${activeCount}/${arr.length} active</div>
-              </div>
-              <span class="badge ${activeCount ? "on" : "off"}">${arr.length}</span>
-            </div>
-            <div class="b">
-              <div class="row2">
-                <button class="btn" data-open="${d.key}">${t("open")}</button>
-                <button class="btn primary" data-add="${d.key}">＋ ${t("add")}</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("")}
+      ${DICTS.map(d => dictCardHtml(d.key, d.labelKey)).join("")}
     </div>
+
+    <style>
+      .dict-list{display:grid; gap:8px; margin-top:12px}
+      .dict-row{
+        display:flex; align-items:center; gap:10px;
+        padding:10px 10px;
+        border:1px solid rgba(255,255,255,.10);
+        border-radius:14px;
+        background: rgba(255,255,255,.02);
+      }
+      body[data-theme="light"] .dict-row{
+        border-color: rgba(0,0,0,.10);
+        background: rgba(0,0,0,.02);
+      }
+      .dict-row.off{opacity:.55}
+      .dict-name{font-weight:600}
+      .dict-sp{flex:1}
+      .dict-actions{display:flex; gap:8px; flex-wrap:wrap}
+      .dict-empty{padding:10px; border:1px dashed rgba(255,255,255,.12); border-radius:14px; opacity:.75}
+      body[data-theme="light"] .dict-empty{border-color: rgba(0,0,0,.12)}
+      .dict-footer{display:flex; justify-content:flex-end; margin-top:10px}
+    </style>
   `;
 
-  host.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDictManager(b.dataset.open));
-  host.querySelectorAll("[data-add]").forEach(b => b.onclick = () => openDictAdd(b.dataset.add));
+  // add
+  host.querySelectorAll("[data-add]").forEach(btn => {
+    btn.onclick = () => openDictAdd(btn.dataset.add, async () => {
+      await preloadDict(true);
+      renderDictTab(host);
+    });
+  });
+
+  // actions (edit/toggle)
+  host.onclick = async (e) => {
+    const actBtn = e.target.closest("button[data-act]");
+    if (!actBtn) return;
+
+    const dictKey = actBtn.dataset.dict;
+    const id = Number(actBtn.dataset.id);
+    const act = actBtn.dataset.act;
+
+    const items = state.dict[dictKey] || [];
+    const item = items.find(x => Number(x.id) === id);
+    if (!item) return;
+
+    if (act === "edit") {
+      openDictEdit(dictKey, item, async () => {
+        await preloadDict(true);
+        renderDictTab(host);
+      });
+      return;
+    }
+
+    if (act === "toggle") {
+      const nextActive = item.active === 0 ? 1 : 0;
+      await apiFetch(`/dict/${dictKey}/${id}`, { method:"PATCH", body:{ active: nextActive } });
+      await preloadDict(true);
+      toast(t("saved"));
+      renderDictTab(host);
+      return;
+    }
+  };
 }
+
+function dictCardHtml(dictKey, labelKey) {
+  const items = (state.dict[dictKey] || []).slice()
+    .sort((a,b) => (b.active||0) - (a.active||0) || String(a.name).localeCompare(String(b.name)));
+
+  const activeCount = items.filter(x => x.active !== 0).length;
+
+  return `
+    <div class="set-card">
+      <div class="h">
+        <div>
+          <b>${t(labelKey)}</b>
+          <div class="muted">${activeCount}/${items.length} active</div>
+        </div>
+        <div class="right">
+          <button class="btn primary" data-add="${dictKey}">＋ ${t("add")}</button>
+          <span class="badge ${activeCount ? "on" : "off"}">${items.length}</span>
+        </div>
+      </div>
+
+      <div class="b">
+        <div class="dict-list">
+          ${
+            items.length
+              ? items.map(x => `
+                  <div class="dict-row ${x.active === 0 ? "off" : ""}">
+                    <div>
+                      <div class="dict-name">${esc(x.name)}</div>
+                      <div class="muted" style="font-size:12px">ID: ${esc(x.id)}</div>
+                    </div>
+                    <div class="dict-sp"></div>
+                    <div class="dict-actions">
+                      <button class="btn" data-act="edit" data-dict="${dictKey}" data-id="${x.id}">
+                        ${t("edit")}
+                      </button>
+                      <button class="btn ${x.active === 0 ? "" : "danger"}"
+                              data-act="toggle" data-dict="${dictKey}" data-id="${x.id}">
+                        ${x.active === 0 ? (t("restore") || "Enable") : (t("delete") || "Disable")}
+                      </button>
+                    </div>
+                  </div>
+                `).join("")
+              : `<div class="dict-empty">${t("notFound")}</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 
 function openDictManager(dictKey) {
   const host = $("#modalHost");
@@ -256,6 +344,7 @@ function openDictEdit(dictKey, item, onDone) {
     }
   });
 }
+
 
 /* =========================
    UI tab
