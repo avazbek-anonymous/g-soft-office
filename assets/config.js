@@ -1,5 +1,5 @@
 export const API_BASE = "https://api.ofis.gekto.uz";
-export const DEFAULT_ROUTE = "#/tasks"; // первая страница после логина
+export const DEFAULT_ROUTE = "#/main"; // первая страница после логина
 
 export const LANG_ORDER = ["ru", "uz", "en"];
 
