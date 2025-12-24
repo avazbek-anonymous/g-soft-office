@@ -193,7 +193,7 @@ export async function renderCourses(view) {
         <div id="tabHost"></div>
       </div>
     </div>
-
+<div id="modalHost"></div>
     
 
     <style>
@@ -402,7 +402,7 @@ async function renderLeadsTab(ctx, host) {
     </div>
 
     <div class="crs-tablewrap" id="wrap"></div>
-    <div id="modalHost"></div>
+
   `;
 
   const citySel = $("#city", host);
