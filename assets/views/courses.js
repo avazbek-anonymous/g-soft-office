@@ -17,115 +17,34 @@ const notify = (msg, type = "info") => {
     if (TOAST.showToast) return TOAST.showToast(msg, type);
     if (TOAST.default) return TOAST.default(msg, type);
   } catch {}
-  // fallback
   console[type === "error" ? "error" : "log"](msg);
 };
 
-const esc = (s) =>
-  String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-const fmtDate = (ts) => {
-  if (!ts) return "—";
-  // поддержим и секунды, и миллисекунды
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+  }[m]));
+}
+function debounce(fn, ms = 250) { let tt = null; return (...a) => { clearTimeout(tt); tt = setTimeout(() => fn(...a), ms); }; }
+function formatTs(ts) {
   const n = Number(ts);
-  const d = new Date(n > 2e12 ? n : n * 1000);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}.${mm}.${yy}`;
-};
-
-const iconEdit = () =>
-  `<img class="ico inv" src="/assets/icons/edit.svg" alt="edit">`;
-const iconTrash = () =>
-  `<img class="ico inv" src="/assets/icons/delete.svg" alt="delete">`;
-
-const LEAD_STATUS = [
-  { v: "new", label: () => tr("new", "New") },
-  { v: "contacted", label: () => tr("contacted", "Contacted") },
-  { v: "paid", label: () => tr("paid", "Paid") },
-  { v: "studying", label: () => tr("studying", "Studying") },
-  { v: "finished", label: () => tr("finished", "Finished") },
-  { v: "canceled", label: () => tr("canceled", "Canceled") },
-  { v: "lost", label: () => tr("lost", "Lost") },
-];
-
-const ENR_STATUS = [
-  { v: "planned", label: () => tr("planned", "Planned") },
-  { v: "paid", label: () => tr("paid", "Paid") },
-  { v: "studying", label: () => tr("studying", "Studying") },
-  { v: "finished", label: () => tr("finished", "Finished") },
-  { v: "canceled", label: () => tr("canceled", "Canceled") },
-];
-
-function selectOptions(items, { valueKey = "id", labelKey = "name", empty = true } = {}) {
-  const arr = Array.isArray(items) ? items : [];
-  return [
-    empty ? `<option value="">—</option>` : "",
-    ...arr.map((x) => `<option value="${esc(x[valueKey])}">${esc(x[labelKey])}</option>`),
-  ].join("");
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const d = new Date(n * 1000);
+  return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+function pick(dictArr, id, field = "name") {
+  const x = (dictArr || []).find((z) => Number(z.id) === Number(id));
+  return x ? x[field] : "";
 }
 
-async function ensureDict() {
-  if (!state.dict) state.dict = {};
-  const needCities = !Array.isArray(state.dict.cities);
-  const needSources = !Array.isArray(state.dict.sources);
-
-  const tasks = [];
-  if (needCities) tasks.push(apiFetch("/dict/cities", { silent: true }).catch(() => ({ items: [] })));
-  else tasks.push(Promise.resolve({ items: state.dict.cities }));
-
-  if (needSources) tasks.push(apiFetch("/dict/sources", { silent: true }).catch(() => ({ items: [] })));
-  else tasks.push(Promise.resolve({ items: state.dict.sources }));
-
-  const [cities, sources] = await Promise.all(tasks);
-  state.dict.cities = cities.items || state.dict.cities || [];
-  state.dict.sources = sources.items || state.dict.sources || [];
-}
-
-function openModal(html, { onClose } = {}) {
-  const wrap = document.createElement("div");
-  wrap.className = "modal";
-  wrap.innerHTML = `
-    <div class="modal-backdrop" data-act="close"></div>
-    <div class="modal-card">
-      ${html}
-    </div>
-  `;
-  document.body.appendChild(wrap);
-
-  const close = () => {
-    wrap.remove();
-    onClose?.();
-  };
-
-  wrap.addEventListener("click", (e) => {
-    const act = e.target?.dataset?.act;
-    if (act === "close") close();
-  });
-
-  // esc close
-  const onKey = (e) => {
-    if (e.key === "Escape") {
-      document.removeEventListener("keydown", onKey);
-      close();
-    }
-  };
-  document.addEventListener("keydown", onKey);
-
-  return { el: wrap, close };
-}
-
-async function apiFirst(paths, opts) {
-  let lastErr;
+/* =========================
+   API (с fallback’ами)
+========================= */
+async function apiFirst(paths, options = {}) {
+  let lastErr = null;
   for (const p of paths) {
     try {
-      return await apiFetch(p, opts);
+      return await apiFetch(p, options);
     } catch (e) {
       lastErr = e;
     }
@@ -133,11 +52,10 @@ async function apiFirst(paths, opts) {
   throw lastErr;
 }
 
-// --------- API wrappers (с fallback’ами) ----------
 const apiLeadsList = (params) => apiFirst(
   [
-    `/courses/leads?${params}`,
-    `/courses?${params}`, // fallback если у тебя так сделано
+    `/courses/leads${params ? "?" + params : ""}`,
+    `/courses${params ? "?" + params : ""}`,
   ],
   { silent: true }
 );
@@ -155,7 +73,7 @@ const apiLeadCreate = (body) => apiFirst(
     `/courses/leads`,
     `/courses`,
   ],
-  { method: "POST", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
+  { method: "POST", body }
 );
 
 const apiLeadUpdate = (id, body) => apiFirst(
@@ -163,7 +81,7 @@ const apiLeadUpdate = (id, body) => apiFirst(
     `/courses/leads/${id}`,
     `/courses/${id}`,
   ],
-  { method: "PATCH", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
+  { method: "PATCH", body }
 );
 
 const apiLeadDelete = (id) => apiFirst(
@@ -171,9 +89,43 @@ const apiLeadDelete = (id) => apiFirst(
     `/courses/leads/${id}/delete`,
     `/courses/${id}/delete`,
   ],
-  { method: "POST", body: {}, loadingTitle: tr("courses", "Courses"), loadingText: tr("deleting", "Deleting...") }
+  { method: "POST", body: {} }
 );
 
+// enrollments (если backend уже есть — заработает; если нет — просто покажет “скоро”)
+const apiEnrollList = (leadId) => apiFirst(
+  [
+    `/courses/leads/${leadId}/enrollments`,
+    `/courses/${leadId}/enrollments`,
+  ],
+  { silent: true }
+);
+
+const apiEnrollCreate = (leadId, body) => apiFirst(
+  [
+    `/courses/leads/${leadId}/enrollments`,
+    `/courses/${leadId}/enrollments`,
+  ],
+  { method: "POST", body }
+);
+
+const apiEnrollUpdate = (id, body) => apiFirst(
+  [
+    `/courses/enrollments/${id}`,
+    `/course_enrollments/${id}`,
+  ],
+  { method: "PATCH", body }
+);
+
+const apiEnrollDelete = (id) => apiFirst(
+  [
+    `/courses/enrollments/${id}/delete`,
+    `/course_enrollments/${id}/delete`,
+  ],
+  { method: "POST", body: {} }
+);
+
+// catalog (опционально)
 const apiCatalogList = () => apiFirst(
   [
     `/courses/catalog`,
@@ -187,7 +139,7 @@ const apiCatalogCreate = (body) => apiFirst(
     `/courses/catalog`,
     `/courses/courses`,
   ],
-  { method: "POST", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
+  { method: "POST", body }
 );
 
 const apiCatalogUpdate = (id, body) => apiFirst(
@@ -195,7 +147,7 @@ const apiCatalogUpdate = (id, body) => apiFirst(
     `/courses/catalog/${id}`,
     `/courses/courses/${id}`,
   ],
-  { method: "PATCH", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
+  { method: "PATCH", body }
 );
 
 const apiCatalogDelete = (id) => apiFirst(
@@ -203,769 +155,697 @@ const apiCatalogDelete = (id) => apiFirst(
     `/courses/catalog/${id}/delete`,
     `/courses/courses/${id}/delete`,
   ],
-  { method: "POST", body: {}, loadingTitle: tr("courses", "Courses"), loadingText: tr("deleting", "Deleting...") }
+  { method: "POST", body: {} }
 );
 
-const apiEnrollmentsList = (leadId) => apiFirst(
-  [
-    `/courses/leads/${leadId}/enrollments`,
-    `/courses/${leadId}/enrollments`,
-  ],
-  { silent: true }
-);
-
-const apiEnrollmentCreate = (leadId, body) => apiFirst(
-  [
-    `/courses/leads/${leadId}/enrollments`,
-    `/courses/${leadId}/enrollments`,
-  ],
-  { method: "POST", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
-);
-
-const apiEnrollmentUpdate = (enrId, body) => apiFirst(
-  [
-    `/courses/enrollments/${enrId}`,
-  ],
-  { method: "PATCH", body, loadingTitle: tr("courses", "Courses"), loadingText: tr("saving", "Saving...") }
-);
-
-const apiEnrollmentDelete = (enrId) => apiFirst(
-  [
-    `/courses/enrollments/${enrId}/delete`,
-  ],
-  { method: "POST", body: {}, loadingTitle: tr("courses", "Courses"), loadingText: tr("deleting", "Deleting...") }
-);
-
-const apiClientsSearch = (q) =>
-  apiFetch(`/clients?q=${encodeURIComponent(q)}`, { silent: true }).catch(() => ({ items: [] }));
-
-const apiClientCreate = (body) =>
-  apiFetch(`/clients`, { method: "POST", body, loadingTitle: tr("clients", "Clients"), loadingText: tr("saving", "Saving...") });
-
+/* =========================
+   Page
+========================= */
 export async function renderCourses(view) {
-  await ensureDict();
+  view.innerHTML = `
+    <div class="card crs">
+      <div class="hd">
+        <b>${t("courses")}</b>
+        <span class="muted">${tr("coursesLeads", "Leads")}</span>
+      </div>
+      <div class="bd">
+
+        <div class="crs-tabs">
+          <div class="seg" id="seg">
+            <button class="seg-btn active" data-tab="leads">${tr("leads", "Leads")}</button>
+            <button class="seg-btn" data-tab="catalog">${tr("catalog", "Catalog")}</button>
+          </div>
+        </div>
+
+        <div id="tabHost"></div>
+      </div>
+    </div>
+
+    <div id="modalHost"></div>
+
+    <style>
+      .crs-tabs{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
+      .seg{display:inline-flex; gap:6px; padding:6px; border-radius:14px; border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.02)}
+      body[data-theme="light"] .seg{border-color:rgba(0,0,0,.10); background:rgba(0,0,0,.02)}
+      .seg-btn{
+        border:1px solid transparent;
+        background:transparent;
+        color:inherit;
+        padding:8px 12px;
+        border-radius:12px;
+        cursor:pointer;
+        opacity:.85;
+        font-weight:600;
+        font-size:13px;
+      }
+      .seg-btn.active{
+        opacity:1;
+        border-color:rgba(34,197,94,.35);
+        background:rgba(34,197,94,.10);
+      }
+
+      .crs-top{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+      .crs-search{margin-left:auto; min-width:280px; max-width:420px}
+      @media(max-width:920px){ .crs-search{min-width:180px} }
+
+      .crs-filters{
+        margin-top:10px;
+        display:flex;
+        gap:10px;
+        align-items:flex-end;
+        flex-wrap:wrap;
+        padding:10px;
+        border:1px solid rgba(255,255,255,.10);
+        border-radius:16px;
+        background:rgba(255,255,255,.02);
+      }
+      body[data-theme="light"] .crs-filters{border-color:rgba(0,0,0,.10); background:rgba(0,0,0,.02)}
+      .crs-sp{flex:1}
+
+      /* ✅ scroll ONLY for list */
+      .crs-tablewrap{
+        margin-top:12px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.10);
+        overflow:auto;
+        max-height: calc(100vh - 320px);
+      }
+      @media(max-width:920px){ .crs-tablewrap{max-height: calc(100vh - 280px)} }
+      body[data-theme="light"] .crs-tablewrap{border-color:rgba(0,0,0,.10)}
+      .crs-tablewrap::-webkit-scrollbar{height:10px;width:10px}
+      .crs-tablewrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12); border-radius:999px}
+      body[data-theme="light"] .crs-tablewrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12)}
+
+      table.crs-t{width:100%; border-collapse:collapse; min-width:1180px}
+      .crs-t th,.crs-t td{padding:12px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:middle}
+      body[data-theme="light"] .crs-t th, body[data-theme="light"] .crs-t td{border-bottom-color:rgba(0,0,0,.08)}
+      .crs-t thead th{
+        font-size:12px; opacity:.75;
+        position:sticky; top:0; z-index:2;
+        background:rgba(10,14,25,.85);
+        backdrop-filter: blur(10px);
+      }
+      body[data-theme="light"] .crs-t thead th{background:rgba(255,255,255,.85)}
+
+      .crs-actions{display:flex; flex-wrap:nowrap; gap:8px; justify-content:flex-end}
+      .linkbtn{background:none; border:none; padding:0; margin:0; color:inherit; cursor:pointer}
+      .linkbtn:hover{text-decoration:underline}
+
+      .badge{
+        display:inline-flex; align-items:center; gap:6px;
+        padding:4px 10px; border-radius:999px;
+        font-size:12px; border:1px solid rgba(255,255,255,.12);
+        opacity:.9;
+      }
+      body[data-theme="light"] .badge{border-color:rgba(0,0,0,.12)}
+      .badge.del{background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.35)}
+      .badge.st{background:rgba(59,130,246,.10); border-color:rgba(59,130,246,.25)}
+
+      /* icon buttons */
+      .btn.icon{
+        width:36px; height:36px;
+        padding:0;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:12px;
+      }
+      .btn.icon .ico img{
+        width:20px; height:20px; display:block;
+        opacity:.95;
+        filter: invert(1);
+      }
+      .btn.icon.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.12)}
+      body[data-theme="light"] .btn.icon .ico img{filter:none}
+      body[data-theme="light"] .btn.icon.danger{background: rgba(239,68,68,.10)}
+
+      /* make selects cleaner (локально) */
+      .crs select.input{
+        appearance:none;
+        background-image: linear-gradient(45deg, transparent 50%, rgba(255,255,255,.55) 50%),
+                          linear-gradient(135deg, rgba(255,255,255,.55) 50%, transparent 50%);
+        background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+        background-size: 6px 6px, 6px 6px;
+        background-repeat:no-repeat;
+        padding-right:34px;
+      }
+      body[data-theme="light"] .crs select.input{
+        background-image: linear-gradient(45deg, transparent 50%, rgba(0,0,0,.45) 50%),
+                          linear-gradient(135deg, rgba(0,0,0,.45) 50%, transparent 50%);
+      }
+
+      /* Modal */
+      .mb{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999}
+      .m{width:min(980px, calc(100vw - 24px)); background:var(--bg, #0b1020); border:1px solid rgba(255,255,255,.12); border-radius:16px; overflow:hidden}
+      body[data-theme="light"] .m{background:#fff; border-color: rgba(0,0,0,.12)}
+      .mh{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08)}
+      body[data-theme="light"] .mh{border-bottom-color: rgba(0,0,0,.08)}
+      .mbo{padding:14px}
+      .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+      @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
+      textarea.input{min-height:90px; resize:vertical}
+      .sec{margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08)}
+      body[data-theme="light"] .sec{border-top-color:rgba(0,0,0,.08)}
+      .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+      .row.right{justify-content:flex-end}
+      .mini{font-size:12px; opacity:.75}
+      .kv{display:grid; grid-template-columns:160px 1fr; gap:8px 12px}
+      @media(max-width:900px){ .kv{grid-template-columns:1fr} }
+      .k{opacity:.7; font-size:12px}
+      .v{font-weight:600}
+    </style>
+  `;
+
+  await preloadDict();
+
+  const host = $("#tabHost", view);
+  const seg = $("#seg", view);
 
   const ctx = {
-    tab: "leads", // leads | catalog
-    q: "",
-    status: "all",
-    city_id: "",
-    source_id: "",
-    include_deleted: false,
-
-    loading: true,
-    leads: [],
-    catalog: [],
+    tab: "leads",
+    includeDeleted: false,
+    leadsCache: [],
+    catalogCache: [],
   };
 
-  view.innerHTML = skeleton(ctx);
+  seg.onclick = async (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    const tab = b.dataset.tab;
+    if (tab === ctx.tab) return;
+    ctx.tab = tab;
 
-  // single delegated listeners
-  view.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-act]");
-    if (!btn) return;
-    const act = btn.dataset.act;
+    seg.querySelectorAll(".seg-btn").forEach((x) => x.classList.toggle("active", x.dataset.tab === tab));
+    await renderTab(ctx, host);
+  };
 
-    if (act === "tab") {
-      ctx.tab = btn.dataset.tab;
-      ctx.loading = true;
-      view.innerHTML = skeleton(ctx);
-      await loadTab(ctx, view);
-      return;
-    }
-
-    if (act === "reload") {
-      ctx.loading = true;
-      view.innerHTML = skeleton(ctx);
-      await loadTab(ctx, view);
-      return;
-    }
-
-    if (act === "newLead") return openLeadForm({ ctx, view });
-    if (act === "editLead") return openLeadForm({ ctx, view, id: Number(btn.dataset.id) });
-    if (act === "viewLead") return openLeadView({ ctx, view, id: Number(btn.dataset.id) });
-    if (act === "delLead") return deleteLead({ ctx, view, id: Number(btn.dataset.id) });
-
-    if (act === "newCourse") return openCourseForm({ ctx, view });
-    if (act === "editCourse") return openCourseForm({ ctx, view, id: Number(btn.dataset.id) });
-    if (act === "delCourse") return deleteCourse({ ctx, view, id: Number(btn.dataset.id) });
-  });
-
-  view.addEventListener("input", (e) => {
-    const el = e.target;
-    if (el?.dataset?.bind === "q") ctx.q = el.value;
-  });
-
-  view.addEventListener("change", async (e) => {
-    const el = e.target;
-    if (!el?.dataset?.bind) return;
-
-    const k = el.dataset.bind;
-    if (k === "status") ctx.status = el.value;
-    if (k === "city_id") ctx.city_id = el.value;
-    if (k === "source_id") ctx.source_id = el.value;
-    if (k === "include_deleted") ctx.include_deleted = el.checked;
-
-    // авто-перезагрузка только в leads табе
-    if (ctx.tab === "leads") {
-      ctx.loading = true;
-      view.innerHTML = skeleton(ctx);
-      await loadTab(ctx, view);
-    }
-  });
-
-  // first load
-  await loadTab(ctx, view);
+  await renderTab(ctx, host);
 }
 
-function skeleton(ctx) {
-  return `
-    <div class="card">
-      <div class="hd">
-        <b>${tr("courses", "Courses")}</b>
-        <span class="muted">${ctx.tab === "leads" ? tr("leads", "Leads") : tr("catalog", "Catalog")}</span>
-
-        <div class="spacer"></div>
-
-        <div class="tabs">
-          <button class="tab ${ctx.tab === "leads" ? "active" : ""}" data-act="tab" data-tab="leads">${tr("leads", "Leads")}</button>
-          <button class="tab ${ctx.tab === "catalog" ? "active" : ""}" data-act="tab" data-tab="catalog">${tr("catalog", "Catalog")}</button>
-        </div>
-
-        <div class="spacer"></div>
-
-        ${
-          ctx.tab === "leads"
-            ? `<button class="btn primary" data-act="newLead">+ ${tr("addLead", "Add lead")}</button>`
-            : `<button class="btn primary" data-act="newCourse">+ ${tr("addCourse", "Add course")}</button>`
-        }
-        <button class="btn" data-act="reload">⟳ ${tr("reload", "Reload")}</button>
-      </div>
-
-      <div class="bd">
-        ${ctx.tab === "leads" ? leadsBlock(ctx) : catalogBlock(ctx)}
-      </div>
-    </div>
-  `;
+/* =========================
+   Tabs
+========================= */
+async function renderTab(ctx, host) {
+  if (ctx.tab === "catalog") return renderCatalogTab(ctx, host);
+  return renderLeadsTab(ctx, host);
 }
 
-function leadsBlock(ctx) {
-  const cities = state.dict?.cities || [];
-  const sources = state.dict?.sources || [];
+/* =========================
+   Leads Tab
+========================= */
+async function renderLeadsTab(ctx, host) {
+  host.innerHTML = `
+    <div class="crs-top">
+      <button class="btn primary" id="btnAdd">＋</button>
+      <button class="btn" id="btnReload">⟲</button>
+      <button class="btn" id="btnDeleted"></button>
 
-  return `
-    <div class="toolbar">
-      <div class="filters">
-        <div class="field">
-          <div class="lbl">${tr("search", "Search")}</div>
-          <input class="in" data-bind="q" value="${esc(ctx.q)}" placeholder="${esc(tr("searchPlaceholder", "Name / phone / company..."))}">
-        </div>
-
-        <div class="field">
-          <div class="lbl">${tr("status", "Status")}</div>
-          <select class="in" data-bind="status">
-            <option value="all">${tr("all", "All")}</option>
-            ${LEAD_STATUS.map((x) => `<option value="${x.v}" ${ctx.status === x.v ? "selected" : ""}>${esc(x.label())}</option>`).join("")}
-          </select>
-        </div>
-
-        <div class="field">
-          <div class="lbl">${tr("city", "City")}</div>
-          <select class="in" data-bind="city_id">
-            ${selectOptions(cities, { empty: true })}
-          </select>
-        </div>
-
-        <div class="field">
-          <div class="lbl">${tr("source", "Source")}</div>
-          <select class="in" data-bind="source_id">
-            ${selectOptions(sources, { empty: true })}
-          </select>
-        </div>
-
-        <label class="chk" style="align-self:end;display:flex;gap:10px;align-items:center;">
-          <input type="checkbox" data-bind="include_deleted" ${ctx.include_deleted ? "checked" : ""}>
-          <span class="muted">${tr("showDeleted", "Show deleted")}</span>
-        </label>
+      <div class="field crs-search">
+        <input class="input" id="q" placeholder="${tr("searchPlaceholderCourses", "Name / phone / company")}..." />
       </div>
     </div>
 
-    ${
-      ctx.loading
-        ? `<div class="muted">${tr("loading", "Loading...")}</div>`
-        : `
-          <div class="table-wrap" style="max-height: calc(100vh - 320px); overflow:auto;">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>${tr("code", "Code")}</th>
-                  <th>${tr("fullName", "Full name")}</th>
-                  <th>${tr("phone", "Phone")}</th>
-                  <th>${tr("company", "Company")}</th>
-                  <th>${tr("city", "City")}</th>
-                  <th>${tr("source", "Source")}</th>
-                  <th>${tr("status", "Status")}</th>
-                  <th>${tr("created", "Created")}</th>
-                  <th style="width:120px">${tr("actions", "Actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${
-                  (ctx.leads || []).length
-                    ? ctx.leads.map(renderLeadRow).join("")
-                    : `<tr><td colspan="9" class="muted">${tr("empty", "No data")}</td></tr>`
-                }
-              </tbody>
-            </table>
-          </div>
-        `
-    }
+    <div class="crs-filters">
+      <div class="field">
+        <div class="label">${tr("status", "Status")}</div>
+        <select class="input" id="status"></select>
+      </div>
+
+      <div class="field">
+        <div class="label">${t("city")}</div>
+        <select class="input" id="city"></select>
+      </div>
+
+      <div class="field">
+        <div class="label">${t("source")}</div>
+        <select class="input" id="source"></select>
+      </div>
+
+      <div class="crs-sp"></div>
+
+      <button class="btn" id="btnClear">${t("clear")}</button>
+    </div>
+
+    <div class="crs-tablewrap" id="wrap"></div>
+
+    <div id="modalHost"></div>
   `;
+
+  const citySel = $("#city", host);
+  const sourceSel = $("#source", host);
+  const statusSel = $("#status", host);
+
+  fillSelect(citySel, state.dict.cities || [], true);
+  fillSelect(sourceSel, state.dict.sources || [], true);
+  fillStatusSelect(statusSel);
+
+  const refreshDeletedBtn = () => {
+    $("#btnDeleted", host).textContent = ctx.includeDeleted ? t("hideDeleted") : t("showDeleted");
+  };
+
+  const loadAndRender = async () => {
+    const q = ($("#q", host).value || "").trim();
+    const city_id = citySel.value || "";
+    const source_id = sourceSel.value || "";
+    const status = statusSel.value || "";
+
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (ctx.includeDeleted) params.set("include_deleted", "1");
+    if (city_id) params.set("city_id", city_id);
+    if (source_id) params.set("source_id", source_id);
+    if (status) params.set("status", status);
+
+    const data = await apiLeadsList(params.toString());
+    const list = data.items || data.leads || data.courses || data.rows || [];
+    ctx.leadsCache = list;
+    $("#wrap", host).innerHTML = leadsTableHtml(ctx, list);
+  };
+
+  $("#btnAdd", host).onclick = () => openLeadForm({ ctx, host, mode: "create", onSaved: loadAndRender });
+  $("#btnReload", host).onclick = loadAndRender;
+
+  $("#btnDeleted", host).onclick = async () => {
+    ctx.includeDeleted = !ctx.includeDeleted;
+    refreshDeletedBtn();
+    await loadAndRender();
+  };
+
+  $("#btnClear", host).onclick = async () => {
+    $("#q", host).value = "";
+    citySel.value = "";
+    sourceSel.value = "";
+    statusSel.value = "";
+    await loadAndRender();
+  };
+
+  $("#q", host).oninput = debounce(loadAndRender, 250);
+  citySel.onchange = loadAndRender;
+  sourceSel.onchange = loadAndRender;
+  statusSel.onchange = loadAndRender;
+
+  $("#wrap", host).onclick = async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    const link = e.target.closest("[data-open]");
+    const act = btn?.dataset?.act || null;
+
+    // open view by clicking name
+    if (!act && link) {
+      const id = Number(link.dataset.open);
+      return openLeadView({ ctx, host, id });
+    }
+    if (!act) return;
+
+    const id = Number(btn.dataset.id);
+    if (!id) return;
+
+    if (act === "view") return openLeadView({ ctx, host, id });
+    if (act === "edit") return openLeadForm({ ctx, host, mode: "edit", id, onSaved: loadAndRender });
+    if (act === "del") return deleteLead({ ctx, host, id, onDone: loadAndRender });
+  };
+
+  refreshDeletedBtn();
+  await loadAndRender();
 }
 
-function renderLeadRow(x) {
-  const phone = [x.phone1, x.phone2].filter(Boolean).join(" / ") || "—";
-  const st = x.status || "new";
-  const badge = `<span class="badge">${esc(st)}</span>`;
-  const del = Number(x.is_deleted || 0) === 1;
+function leadsTableHtml(ctx, items) {
+  if (!items?.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
+
+  const cities = state.dict.cities || [];
+  const sources = state.dict.sources || [];
+
+  const phoneText = (x) => {
+    const p1 = (x.phone1 || x.phone || "").trim();
+    const p2 = (x.phone2 || "").trim();
+    if (p1 && p2) return `${p1} / ${p2}`;
+    return p1 || p2 || "";
+  };
+
+  const statusPill = (st) => {
+    const s = String(st || "").trim() || "new";
+    return `<span class="badge st">${esc(s)}</span>`;
+  };
 
   return `
-    <tr class="${del ? "row-deleted" : ""}">
-      <td class="muted">${esc(x.code || "")}</td>
-      <td>
-        <button class="link" data-act="viewLead" data-id="${esc(x.id)}">${esc(x.full_name || "")}</button>
-      </td>
-      <td>${esc(phone)}</td>
-      <td>${esc(x.company || "")}</td>
-      <td class="muted">${esc(x.city_name || "")}</td>
-      <td class="muted">${esc(x.source_name || "")}</td>
-      <td>${badge}</td>
-      <td class="muted">${fmtDate(x.created_at)}</td>
-      <td>
-        <div class="row-actions">
-          <button class="btn icon" data-act="editLead" data-id="${esc(x.id)}" title="${esc(tr("edit", "Edit"))}">${iconEdit()}</button>
-          <button class="btn icon danger" data-act="delLead" data-id="${esc(x.id)}" title="${esc(tr("delete", "Delete"))}">${iconTrash()}</button>
-        </div>
-      </td>
-    </tr>
+    <table class="crs-t">
+      <thead>
+        <tr>
+          <th>${tr("code", "Code")}</th>
+          <th>${t("fullName")}</th>
+          <th>${tr("phone", "Phone")}</th>
+          <th>${tr("company", "Company")}</th>
+          <th>${t("city")}</th>
+          <th>${t("source")}</th>
+          <th>${tr("status", "Status")}</th>
+          <th>${t("createdAt")}</th>
+          <th style="text-align:right">${t("actions")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((x) => {
+          const del = Number(x.is_deleted) === 1;
+          const cityName = x.city_name || pick(cities, x.city_id) || "";
+          const srcName = x.source_name || pick(sources, x.source_id) || "";
+          return `
+            <tr style="${del ? "opacity:.55" : ""}">
+              <td>${esc(x.code || "")}${del ? ` <span class="badge del">${t("deleted")}</span>` : ""}</td>
+              <td>
+                <button class="linkbtn" data-open="${x.id}">
+                  <b>${esc(x.full_name || "")}</b>
+                </button>
+                ${x.company ? `<div class="mini muted">${esc(x.company)}</div>` : ""}
+              </td>
+              <td>${esc(phoneText(x))}</td>
+              <td>${esc(x.company || "")}</td>
+              <td>${esc(cityName)}</td>
+              <td>${esc(srcName)}</td>
+              <td>${statusPill(x.status)}</td>
+              <td>${formatTs(x.created_at)}</td>
+              <td>
+                <div class="crs-actions">
+                  <button class="btn icon" data-act="edit" data-id="${x.id}" title="${esc(t("edit"))}">
+                    <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
+                  </button>
+                  ${del ? "" : `
+                    <button class="btn icon danger" data-act="del" data-id="${x.id}" title="${esc(t("delete"))}">
+                      <span class="ico"><img src="/assets/icons/delete.svg" alt="" /></span>
+                    </button>
+                  `}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
   `;
 }
 
-function catalogBlock(ctx) {
-  return `
-    ${
-      ctx.loading
-        ? `<div class="muted">${tr("loading", "Loading...")}</div>`
-        : `
-          <div class="table-wrap" style="max-height: calc(100vh - 260px); overflow:auto;">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>${tr("name", "Name")}</th>
-                  <th style="width:140px">${tr("price", "Price")}</th>
-                  <th style="width:120px">${tr("active", "Active")}</th>
-                  <th style="width:120px">${tr("actions", "Actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${
-                  (ctx.catalog || []).length
-                    ? ctx.catalog.map((c) => `
-                      <tr>
-                        <td><b>${esc(c.name || "")}</b><div class="muted">${esc(c.code || "")}</div></td>
-                        <td>${esc(c.price ?? 0)} ${esc(c.currency || "")}</td>
-                        <td>${Number(c.active || 0) ? `<span class="pill ok">${tr("active", "Active")}</span>` : `<span class="pill">${tr("inactive", "Inactive")}</span>`}</td>
-                        <td>
-                          <div class="row-actions">
-                            <button class="btn icon" data-act="editCourse" data-id="${esc(c.id)}" title="${esc(tr("edit", "Edit"))}">${iconEdit()}</button>
-                            <button class="btn icon danger" data-act="delCourse" data-id="${esc(c.id)}" title="${esc(tr("delete", "Delete"))}">${iconTrash()}</button>
-                          </div>
-                        </td>
-                      </tr>
-                    `).join("")
-                    : `<tr><td colspan="4" class="muted">${tr("empty", "No data")}</td></tr>`
-                }
-              </tbody>
-            </table>
-          </div>
-        `
-    }
-  `;
-}
-
-async function loadTab(ctx, view) {
-  try {
-    if (ctx.tab === "leads") {
-      const sp = new URLSearchParams();
-      if (ctx.q) sp.set("q", ctx.q);
-      if (ctx.status && ctx.status !== "all") sp.set("status", ctx.status);
-      if (ctx.city_id) sp.set("city_id", ctx.city_id);
-      if (ctx.source_id) sp.set("source_id", ctx.source_id);
-      if (ctx.include_deleted) sp.set("include_deleted", "1");
-
-      const res = await apiLeadsList(sp.toString());
-      ctx.leads = res.items || res.leads || [];
-      ctx.loading = false;
-      view.innerHTML = skeleton(ctx);
-
-      // выставим выбранные фильтры обратно (селекты)
-      const citySel = $('[data-bind="city_id"]', view);
-      if (citySel) citySel.value = ctx.city_id || "";
-      const srcSel = $('[data-bind="source_id"]', view);
-      if (srcSel) srcSel.value = ctx.source_id || "";
-
-      return;
-    }
-
-    if (ctx.tab === "catalog") {
-      const res = await apiCatalogList();
-      ctx.catalog = res.items || res.courses || res.catalog || [];
-      ctx.loading = false;
-      view.innerHTML = skeleton(ctx);
-      return;
-    }
-  } catch (e) {
-    ctx.loading = false;
-    view.innerHTML = skeleton(ctx);
-    notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-  }
-}
-
-// ----------------- Lead forms & view -----------------
-async function openLeadForm({ ctx, view, id = null }) {
-  await ensureDict();
+/* =========================
+   Lead Form (create/edit)
+========================= */
+async function openLeadForm({ ctx, host, mode, id, onSaved }) {
+  const isEdit = mode === "edit";
+  const modalHost = $("#modalHost", host);
 
   let lead = null;
-  if (id) {
+  if (isEdit) {
     try {
-      const r = await apiLeadGet(id);
-      lead = r.item || r.lead || r.client || r;
+      const data = await apiLeadGet(id);
+      lead = data.item || data.lead || data.row || data;
     } catch (e) {
-      return notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
+      notify(tr("failedToLoad", "Failed to load"), "error");
+      return;
     }
   }
 
-  const cities = state.dict?.cities || [];
-  const sources = state.dict?.sources || [];
+  const cities = (state.dict.cities || []).filter((x) => x.active !== 0);
+  const sources = (state.dict.sources || []).filter((x) => x.active !== 0);
 
-  const html = `
-    <div class="modal-hd">
-      <b>${id ? tr("editLead", "Edit lead") : tr("newLead", "New lead")}</b>
-      <button class="btn icon" data-act="close" title="Close">✕</button>
-    </div>
-    <div class="modal-bd">
-      <div class="form-grid">
-        <div class="field">
-          <div class="lbl">${tr("fullName", "Full name")}</div>
-          <input class="in" id="lf_full_name" value="${esc(lead?.full_name || "")}">
+  modalHost.innerHTML = `
+    <div class="mb">
+      <div class="m">
+        <div class="mh">
+          <b>${isEdit ? tr("editLead", "Edit lead") : tr("addLead", "Add lead")}</b>
+          <button class="btn" id="mClose">✕</button>
         </div>
-        <div class="field">
-          <div class="lbl">${tr("company", "Company")}</div>
-          <input class="in" id="lf_company" value="${esc(lead?.company || "")}">
-        </div>
+        <div class="mbo">
 
-        <div class="field">
-          <div class="lbl">${tr("phone1", "Phone 1")}</div>
-          <input class="in" id="lf_phone1" value="${esc(lead?.phone1 || "")}" placeholder="+998...">
-        </div>
-        <div class="field">
-          <div class="lbl">${tr("phone2", "Phone 2")}</div>
-          <input class="in" id="lf_phone2" value="${esc(lead?.phone2 || "")}" placeholder="+998...">
-        </div>
+          <div class="grid2">
+            <div class="field">
+              <div class="label">${t("fullName")}</div>
+              <input class="input" id="mFull" value="${esc(lead?.full_name || "")}" />
+            </div>
+            <div class="field">
+              <div class="label">${tr("company", "Company")}</div>
+              <input class="input" id="mCompany" value="${esc(lead?.company || "")}" />
+            </div>
+          </div>
 
-        <div class="field">
-          <div class="lbl">${tr("city", "City")}</div>
-          <select class="in" id="lf_city_id">
-            ${selectOptions(cities)}
-          </select>
-        </div>
-        <div class="field">
-          <div class="lbl">${tr("source", "Source")}</div>
-          <select class="in" id="lf_source_id">
-            ${selectOptions(sources)}
-          </select>
-        </div>
+          <div class="grid2" style="margin-top:10px">
+            <div class="field">
+              <div class="label">${tr("phone1", "Phone 1")}</div>
+              <input class="input" id="mP1" value="${esc(lead?.phone1 || lead?.phone || "")}" />
+            </div>
+            <div class="field">
+              <div class="label">${tr("phone2", "Phone 2")}</div>
+              <input class="input" id="mP2" value="${esc(lead?.phone2 || "")}" />
+            </div>
+          </div>
 
-        <div class="field">
-          <div class="lbl">${tr("status", "Status")}</div>
-          <select class="in" id="lf_status">
-            ${LEAD_STATUS.map((x) => `<option value="${x.v}">${esc(x.label())}</option>`).join("")}
-          </select>
+          <div class="grid2" style="margin-top:10px">
+            <div class="field">
+              <div class="label">${t("city")}</div>
+              <select class="input" id="mCity">
+                <option value="">—</option>
+                ${cities.sort((a,b)=>String(a.name).localeCompare(String(b.name)))
+                  .map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="label">${t("source")}</div>
+              <select class="input" id="mSource">
+                <option value="">—</option>
+                ${sources.sort((a,b)=>String(a.name).localeCompare(String(b.name)))
+                  .map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
+            <div class="field">
+              <div class="label">${tr("status", "Status")}</div>
+              <select class="input" id="mStatus"></select>
+            </div>
+            <div class="field">
+              <div class="label">${tr("comment", "Comment")}</div>
+              <textarea class="input" id="mComment">${esc(lead?.comment || lead?.notes || "")}</textarea>
+            </div>
+          </div>
+
+          <div class="row right" style="margin-top:14px">
+            <button class="btn" id="mCancel">${t("cancel")}</button>
+            <button class="btn primary" id="mSave">${t("save")}</button>
+          </div>
+
         </div>
-
-        <div class="field" style="grid-column:1/-1;">
-          <div class="lbl">${tr("comment", "Comment")}</div>
-          <textarea class="in" id="lf_comment" rows="4" placeholder="${esc(tr("comment", "Comment"))}">${esc(lead?.comment || "")}</textarea>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row" style="display:flex; gap:10px; justify-content:flex-end;">
-        <button class="btn" data-act="close">${tr("cancel", "Cancel")}</button>
-        <button class="btn primary" id="lf_save">${tr("save", "Save")}</button>
       </div>
     </div>
   `;
 
-  const m = openModal(html);
+  const close = () => (modalHost.innerHTML = "");
+  $("#mClose", modalHost).onclick = close;
+  $("#mCancel", modalHost).onclick = close;
+  modalHost.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
 
-  // set initial select values
-  $("#lf_city_id", m.el).value = String(lead?.city_id ?? "");
-  $("#lf_source_id", m.el).value = String(lead?.source_id ?? "");
-  $("#lf_status", m.el).value = String(lead?.status ?? "new");
+  $("#mCity", modalHost).value = lead?.city_id ?? "";
+  $("#mSource", modalHost).value = lead?.source_id ?? "";
 
-  $("#lf_save", m.el).addEventListener("click", async () => {
-    const body = {
-      full_name: $("#lf_full_name", m.el).value.trim(),
-      company: $("#lf_company", m.el).value.trim(),
-      phone1: $("#lf_phone1", m.el).value.trim(),
-      phone2: $("#lf_phone2", m.el).value.trim(),
-      city_id: $("#lf_city_id", m.el).value || null,
-      source_id: $("#lf_source_id", m.el).value || null,
-      status: $("#lf_status", m.el).value || "new",
-      comment: $("#lf_comment", m.el).value.trim(),
+  const mStatus = $("#mStatus", modalHost);
+  fillStatusSelect(mStatus, true);
+  mStatus.value = lead?.status ?? "new";
+
+  $("#mSave", modalHost).onclick = async () => {
+    const full_name = $("#mFull", modalHost).value.trim();
+    if (!full_name) return notify(tr("requiredName", "Full name is required"), "error");
+
+    const payload = {
+      full_name,
+      phone1: $("#mP1", modalHost).value.trim() || null,
+      phone2: $("#mP2", modalHost).value.trim() || null,
+      city_id: $("#mCity", modalHost).value ? Number($("#mCity", modalHost).value) : null,
+      source_id: $("#mSource", modalHost).value ? Number($("#mSource", modalHost).value) : null,
+      company: $("#mCompany", modalHost).value.trim() || null,
+      comment: $("#mComment", modalHost).value.trim() || null,
+      status: ($("#mStatus", modalHost).value || "new").trim(),
     };
 
-    if (!body.full_name) return notify(tr("fullNameRequired", "Full name is required"), "error");
-
     try {
-      if (!id) await apiLeadCreate(body);
-      else await apiLeadUpdate(id, body);
-
+      if (isEdit) await apiLeadUpdate(id, payload);
+      else await apiLeadCreate(payload);
+      close();
       notify(tr("saved", "Saved"), "success");
-      m.close();
-      ctx.loading = true;
-      view.innerHTML = skeleton(ctx);
-      await loadTab(ctx, view);
+      await onSaved?.();
     } catch (e) {
-      notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
+      notify(tr("saveFailed", "Save failed"), "error");
     }
-  });
+  };
 }
 
-async function openLeadView({ ctx, view, id }) {
+/* =========================
+   Lead View + Enrollments
+========================= */
+async function openLeadView({ ctx, host, id }) {
+  const modalHost = $("#modalHost", host);
+
+  let lead = null;
   try {
-    const r = await apiLeadGet(id);
-    const lead = r.item || r.lead || r;
-
-    // enrollments + catalog in parallel
-    const [enrsRes, catRes] = await Promise.all([
-      apiEnrollmentsList(id).catch(() => ({ items: [] })),
-      apiCatalogList().catch(() => ({ items: [] })),
-    ]);
-
-    const enrollments = enrsRes.items || enrsRes.enrollments || [];
-    const catalog = catRes.items || catRes.courses || catRes.catalog || [];
-
-    const phoneText = [lead.phone1, lead.phone2].filter(Boolean).join(" / ") || "—";
-    const city = lead.city_name || (state.dict.cities || []).find((c) => String(c.id) === String(lead.city_id))?.name || "";
-    const source = lead.source_name || (state.dict.sources || []).find((s) => String(s.id) === String(lead.source_id))?.name || "";
-
-    const html = `
-      <div class="modal-hd">
-        <div>
-          <b>${esc(lead.full_name || "")}</b>
-          <div class="muted">${esc(lead.code || "")} • ${esc(lead.company || "")}</div>
-        </div>
-        <button class="btn icon" data-act="close" title="Close">✕</button>
-      </div>
-
-      <div class="modal-bd">
-        <div class="card soft">
-          <div class="bd">
-            <div class="grid-2">
-              <div><div class="muted">${tr("phone", "Phone")}</div><div>${esc(phoneText)}</div></div>
-              <div><div class="muted">${tr("status", "Status")}</div><div><span class="badge">${esc(lead.status || "new")}</span></div></div>
-              <div><div class="muted">${tr("city", "City")}</div><div>${esc(city || "—")}</div></div>
-              <div><div class="muted">${tr("source", "Source")}</div><div>${esc(source || "—")}</div></div>
-              <div style="grid-column:1/-1;"><div class="muted">${tr("comment", "Comment")}</div><div>${esc(lead.comment || "—")}</div></div>
-            </div>
-            <div class="row" style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
-              <button class="btn" id="lv_open_client">${tr("openClient", "Open client")}</button>
-              <button class="btn" id="lv_create_client">+ ${tr("createClient", "Create client")}</button>
-              <button class="btn primary" id="lv_edit">${tr("edit", "Edit")}</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card soft" style="margin-top:12px;">
-          <div class="hd"><b>${tr("enrollments", "Enrollments")}</b><span class="muted">${enrollments.length}</span></div>
-          <div class="bd">
-            ${renderEnrollments(enrollments)}
-            <div class="hr"></div>
-
-            <div class="form-grid">
-              <div class="field">
-                <div class="lbl">${tr("course", "Course")}</div>
-                <select class="in" id="en_course_id">
-                  <option value="">—</option>
-                  ${catalog.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.price ?? 0)} ${esc(c.currency || "")})</option>`).join("")}
-                </select>
-              </div>
-              <div class="field">
-                <div class="lbl">${tr("status", "Status")}</div>
-                <select class="in" id="en_status">
-                  ${ENR_STATUS.map((x) => `<option value="${x.v}">${esc(x.label())}</option>`).join("")}
-                </select>
-              </div>
-              <div class="field">
-                <div class="lbl">${tr("price", "Price")}</div>
-                <input class="in" id="en_price" type="number" step="0.01" placeholder="0">
-              </div>
-              <div class="field">
-                <div class="lbl">${tr("paidAmount", "Paid")}</div>
-                <input class="in" id="en_paid" type="number" step="0.01" placeholder="0">
-              </div>
-              <div class="field" style="grid-column:1/-1;">
-                <div class="lbl">${tr("note", "Note")}</div>
-                <input class="in" id="en_note" placeholder="${esc(tr("note", "Note"))}">
-              </div>
-            </div>
-
-            <div class="row" style="display:flex; justify-content:flex-end; margin-top:10px;">
-              <button class="btn primary" id="en_add">+ ${tr("add", "Add")}</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card soft" style="margin-top:12px;">
-          <div class="hd"><b>${tr("linkWithClients", "Link with clients")}</b></div>
-          <div class="bd">
-            <div class="muted">${tr("clientSearchHint", "Search client by phone / company and open card")}</div>
-            <div class="row" style="display:flex; gap:10px; margin-top:10px;">
-              <input class="in" id="cl_q" placeholder="${esc(tr("searchPlaceholder", "Name / phone / company..."))}">
-              <button class="btn" id="cl_find">${tr("search", "Search")}</button>
-            </div>
-            <div id="cl_res" style="margin-top:10px;"></div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const m = openModal(html);
-
-    // actions
-    $("#lv_edit", m.el).addEventListener("click", async () => {
-      m.close();
-      await openLeadForm({ ctx, view, id });
-    });
-
-    $("#lv_open_client", m.el).addEventListener("click", async () => {
-      // пробуем найти по phone1/phone2
-      const q = (lead.phone1 || lead.phone2 || lead.company || lead.full_name || "").trim();
-      if (!q) return notify(tr("noData", "No data"), "error");
-      const res = await apiClientsSearch(q);
-      const items = res.items || [];
-      if (!items.length) return notify(tr("notFound", "Not found"), "error");
-      location.hash = `#/clients/${items[0].id}`;
-      m.close();
-    });
-
-    $("#lv_create_client", m.el).addEventListener("click", async () => {
-      try {
-        const body = {
-          company_name: lead.company || lead.full_name || "",
-          full_name: lead.full_name || "",
-          phone1: lead.phone1 || "",
-          phone2: lead.phone2 || "",
-          city_id: lead.city_id || null,
-          source_id: lead.source_id || null,
-          sphere: null,
-          comment: lead.comment || "",
-        };
-        const r2 = await apiClientCreate(body);
-        const c = r2.client || r2.item || r2;
-        if (c?.id) {
-          notify(tr("created", "Created"), "success");
-          location.hash = `#/clients/${c.id}`;
-          m.close();
-        } else {
-          notify(tr("created", "Created"), "success");
-        }
-      } catch (e) {
-        notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-      }
-    });
-
-    // enrollment add
-    $("#en_add", m.el).addEventListener("click", async () => {
-      const body = {
-        course_id: $("#en_course_id", m.el).value || null,
-        status: $("#en_status", m.el).value || "planned",
-        price_total: Number($("#en_price", m.el).value || 0),
-        paid_amount: Number($("#en_paid", m.el).value || 0),
-        note: $("#en_note", m.el).value.trim(),
-      };
-      if (!body.course_id) return notify(tr("courseRequired", "Select course"), "error");
-
-      try {
-        await apiEnrollmentCreate(id, body);
-        notify(tr("saved", "Saved"), "success");
-        // refresh modal by reopening
-        m.close();
-        await openLeadView({ ctx, view, id });
-      } catch (e) {
-        notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-      }
-    });
-
-    // enrollments edit/delete delegation inside modal
-    m.el.addEventListener("click", async (e) => {
-      const b = e.target.closest("[data-en-act]");
-      if (!b) return;
-      const enAct = b.dataset.enAct;
-      const enId = Number(b.dataset.enId);
-      if (!enId) return;
-
-      if (enAct === "edit") {
-        const cur = enrollments.find((x) => Number(x.id) === enId);
-        if (!cur) return;
-
-        const fm = openModal(`
-          <div class="modal-hd">
-            <b>${tr("editEnrollment", "Edit enrollment")}</b>
-            <button class="btn icon" data-act="close">✕</button>
-          </div>
-          <div class="modal-bd">
-            <div class="form-grid">
-              <div class="field">
-                <div class="lbl">${tr("status", "Status")}</div>
-                <select class="in" id="e_status">
-                  ${ENR_STATUS.map((x) => `<option value="${x.v}">${esc(x.label())}</option>`).join("")}
-                </select>
-              </div>
-              <div class="field">
-                <div class="lbl">${tr("price", "Price")}</div>
-                <input class="in" id="e_price" type="number" step="0.01">
-              </div>
-              <div class="field">
-                <div class="lbl">${tr("paidAmount", "Paid")}</div>
-                <input class="in" id="e_paid" type="number" step="0.01">
-              </div>
-              <div class="field" style="grid-column:1/-1;">
-                <div class="lbl">${tr("note", "Note")}</div>
-                <input class="in" id="e_note">
-              </div>
-            </div>
-            <div class="row" style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
-              <button class="btn" data-act="close">${tr("cancel", "Cancel")}</button>
-              <button class="btn primary" id="e_save">${tr("save", "Save")}</button>
-            </div>
-          </div>
-        `);
-
-        $("#e_status", fm.el).value = String(cur.status || "planned");
-        $("#e_price", fm.el).value = String(cur.price_total ?? 0);
-        $("#e_paid", fm.el).value = String(cur.paid_amount ?? 0);
-        $("#e_note", fm.el).value = String(cur.note || "");
-
-        $("#e_save", fm.el).addEventListener("click", async () => {
-          const body = {
-            status: $("#e_status", fm.el).value,
-            price_total: Number($("#e_price", fm.el).value || 0),
-            paid_amount: Number($("#e_paid", fm.el).value || 0),
-            note: $("#e_note", fm.el).value.trim(),
-          };
-          try {
-            await apiEnrollmentUpdate(enId, body);
-            notify(tr("saved", "Saved"), "success");
-            fm.close();
-            m.close();
-            await openLeadView({ ctx, view, id });
-          } catch (e) {
-            notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-          }
-        });
-
-        return;
-      }
-
-      if (enAct === "delete") {
-        if (!confirm(tr("confirmDelete", "Delete?"))) return;
-        try {
-          await apiEnrollmentDelete(enId);
-          notify(tr("deleted", "Deleted"), "success");
-          m.close();
-          await openLeadView({ ctx, view, id });
-        } catch (e) {
-          notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-        }
-      }
-    });
-
-    // client search in modal
-    $("#cl_find", m.el).addEventListener("click", async () => {
-      const q = $("#cl_q", m.el).value.trim();
-      if (!q) return;
-
-      const res = await apiClientsSearch(q);
-      const items = res.items || [];
-      const box = $("#cl_res", m.el);
-
-      if (!items.length) {
-        box.innerHTML = `<div class="muted">${tr("notFound", "Not found")}</div>`;
-        return;
-      }
-
-      box.innerHTML = `
-        <div class="list">
-          ${items.slice(0, 10).map((c) => `
-            <div class="list-item">
-              <div>
-                <b>${esc(c.company_name || "")}</b>
-                <div class="muted">${esc(c.full_name || "")} • ${esc(c.phone1 || "")}</div>
-              </div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn" data-open-client="${esc(c.id)}">${tr("open", "Open")}</button>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      `;
-
-      box.querySelectorAll("[data-open-client]").forEach((b) => {
-        b.addEventListener("click", () => {
-          location.hash = `#/clients/${b.dataset.openClient}`;
-          m.close();
-        });
-      });
-    });
-
-  } catch (e) {
-    notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
+    const data = await apiLeadGet(id);
+    lead = data.item || data.lead || data.row || data;
+  } catch {
+    notify(tr("failedToLoad", "Failed to load"), "error");
+    return;
   }
-}
 
-function renderEnrollments(items) {
-  const arr = Array.isArray(items) ? items : [];
-  if (!arr.length) return `<div class="muted">${tr("empty", "No data")}</div>`;
+  const cityName = lead.city_name || pick(state.dict.cities, lead.city_id) || "—";
+  const srcName = lead.source_name || pick(state.dict.sources, lead.source_id) || "—";
+  const phones = [lead.phone1 || lead.phone || "", lead.phone2 || ""].filter(Boolean).join(" / ") || "—";
+
+  modalHost.innerHTML = `
+    <div class="mb">
+      <div class="m">
+        <div class="mh">
+          <div>
+            <b>${esc(lead.full_name || "")}</b>
+            <div class="mini muted">${esc(lead.code || "")}</div>
+          </div>
+          <button class="btn" id="vClose">✕</button>
+        </div>
+
+        <div class="mbo">
+          <div class="kv">
+            <div class="k">${tr("phone", "Phone")}</div><div class="v">${esc(phones)}</div>
+            <div class="k">${tr("company", "Company")}</div><div class="v">${esc(lead.company || "—")}</div>
+            <div class="k">${t("city")}</div><div class="v">${esc(cityName)}</div>
+            <div class="k">${t("source")}</div><div class="v">${esc(srcName)}</div>
+            <div class="k">${tr("status", "Status")}</div><div class="v"><span class="badge st">${esc(lead.status || "new")}</span></div>
+            <div class="k">${t("createdAt")}</div><div class="v">${esc(formatTs(lead.created_at))}</div>
+          </div>
+
+          ${lead.comment ? `
+            <div class="sec">
+              <div class="k">${tr("comment", "Comment")}</div>
+              <div class="v" style="font-weight:500; opacity:.92">${esc(lead.comment)}</div>
+            </div>
+          ` : ""}
+
+          <div class="sec">
+            <div class="row" style="justify-content:space-between">
+              <b>${tr("enrollments", "Enrollments")}</b>
+              <div class="row">
+                <button class="btn" id="btnFindClient">${tr("openClient", "Open client")}</button>
+                <button class="btn primary" id="btnMakeClient">${tr("createClient", "Create client")}</button>
+                <button class="btn" id="btnAddEnroll">＋ ${tr("addEnrollment", "Add")}</button>
+              </div>
+            </div>
+
+            <div id="enrollWrap" style="margin-top:10px">
+              <div class="muted">${tr("loading", "Loading...")}</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `;
+
+  const close = () => (modalHost.innerHTML = "");
+  $("#vClose", modalHost).onclick = close;
+  modalHost.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
+
+  // link with clients base
+  $("#btnFindClient", modalHost).onclick = async () => {
+    const q = String(lead.phone1 || lead.phone || "").trim();
+    if (!q) return notify(tr("noPhone", "No phone"), "error");
+    try {
+      const r = await apiFetch(`/clients?q=${encodeURIComponent(q)}`, { silent: true });
+      const list = r.clients || r.items || [];
+      if (!list.length) return notify(tr("clientNotFound", "Client not found"), "error");
+      // open first match
+      location.hash = `#/clients/${list[0].id}`;
+      close();
+    } catch {
+      notify(tr("clientNotFound", "Client not found"), "error");
+    }
+  };
+
+  $("#btnMakeClient", modalHost).onclick = async () => {
+    try {
+      await apiFetch(`/clients`, {
+        method: "POST",
+        body: {
+          company_name: lead.company || lead.full_name || "Client",
+          full_name: lead.full_name || null,
+          phone1: lead.phone1 || lead.phone || null,
+          phone2: lead.phone2 || null,
+          city_id: lead.city_id ?? null,
+          source_id: lead.source_id ?? null,
+          sphere: null,
+          comment: lead.comment || null,
+        },
+      });
+      notify(tr("saved", "Saved"), "success");
+    } catch {
+      notify(tr("saveFailed", "Save failed"), "error");
+    }
+  };
+
+  const renderEnrollments = async () => {
+    const wrap = $("#enrollWrap", modalHost);
+    try {
+      const data = await apiEnrollList(id);
+      const items = data.items || data.enrollments || data.rows || [];
+      wrap.innerHTML = enrollmentsHtml(items);
+      wrap.onclick = async (e) => {
+        const b = e.target.closest("button[data-eact]");
+        if (!b) return;
+        const eact = b.dataset.eact;
+        const eid = Number(b.dataset.id);
+        const row = items.find((x) => Number(x.id) === eid);
+        if (!row) return;
+
+        if (eact === "edit") return openEnrollForm({ modalHost, leadId: id, mode: "edit", row, onSaved: renderEnrollments });
+        if (eact === "del") return confirmModal({
+          modalHost,
+          title: tr("confirmDelete", "Delete?"),
+          text: tr("confirmDeleteEnrollmentText", "Delete enrollment"),
+          okText: t("yes"),
+          cancelText: t("no"),
+          onOk: async () => { await apiEnrollDelete(eid); notify(tr("saved", "Saved"), "success"); await renderEnrollments(); }
+        });
+      };
+    } catch {
+      wrap.innerHTML = `<div class="muted">${tr("enrollmentsSoon", "Enrollments — keyingi bosqichda.")}</div>`;
+    }
+  };
+
+  $("#btnAddEnroll", modalHost).onclick = () =>
+    openEnrollForm({ modalHost, leadId: id, mode: "create", row: null, onSaved: renderEnrollments });
+
+  await renderEnrollments();
+};
+
+function enrollmentsHtml(items) {
+  if (!items?.length) return `<div class="muted">${tr("noEnrollments", "No enrollments yet")}</div>`;
 
   return `
-    <div class="table-wrap" style="max-height: 240px; overflow:auto;">
-      <table class="table">
+    <div class="crs-tablewrap" style="max-height:320px">
+      <table class="crs-t" style="min-width:920px">
         <thead>
           <tr>
             <th>${tr("course", "Course")}</th>
-            <th style="width:120px">${tr("status", "Status")}</th>
-            <th style="width:120px">${tr("price", "Price")}</th>
-            <th style="width:120px">${tr("paidAmount", "Paid")}</th>
+            <th>${tr("status", "Status")}</th>
             <th>${tr("note", "Note")}</th>
-            <th style="width:110px">${tr("actions", "Actions")}</th>
+            <th>${t("createdAt")}</th>
+            <th style="text-align:right">${t("actions")}</th>
           </tr>
         </thead>
         <tbody>
-          ${arr.map((x) => `
+          ${items.map((x) => `
             <tr>
-              <td><b>${esc(x.course_name || x.course_title || x.course || "")}</b></td>
-              <td><span class="badge">${esc(x.status || "")}</span></td>
-              <td>${esc(x.price_total ?? 0)}</td>
-              <td>${esc(x.paid_amount ?? 0)}</td>
-              <td class="muted">${esc(x.note || "")}</td>
+              <td><b>${esc(x.course_name || x.course || x.course_title || x.course_id || "")}</b></td>
+              <td><span class="badge st">${esc(x.status || "")}</span></td>
+              <td class="muted">${esc((x.note || "").slice(0, 80))}</td>
+              <td>${formatTs(x.created_at)}</td>
               <td>
-                <div class="row-actions">
-                  <button class="btn icon" data-en-act="edit" data-en-id="${esc(x.id)}" title="${esc(tr("edit", "Edit"))}">${iconEdit()}</button>
-                  <button class="btn icon danger" data-en-act="delete" data-en-id="${esc(x.id)}" title="${esc(tr("delete", "Delete"))}">${iconTrash()}</button>
+                <div class="crs-actions">
+                  <button class="btn icon" data-eact="edit" data-id="${x.id}" title="${esc(t("edit"))}">
+                    <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
+                  </button>
+                  <button class="btn icon danger" data-eact="del" data-id="${x.id}" title="${esc(t("delete"))}">
+                    <span class="ico"><img src="/assets/icons/delete.svg" alt="" /></span>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -976,102 +856,339 @@ function renderEnrollments(items) {
   `;
 }
 
-async function deleteLead({ ctx, view, id }) {
-  if (!confirm(tr("confirmDelete", "Delete?"))) return;
+async function openEnrollForm({ modalHost, leadId, mode, row, onSaved }) {
+  const isEdit = mode === "edit";
+
+  // try load catalog for select
+  let catalog = [];
   try {
-    await apiLeadDelete(id);
-    notify(tr("deleted", "Deleted"), "success");
-    ctx.loading = true;
-    view.innerHTML = skeleton(ctx);
-    await loadTab(ctx, view);
-  } catch (e) {
-    notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-  }
-}
+    const c = await apiCatalogList();
+    catalog = c.items || c.courses || c.rows || [];
+  } catch {}
 
-// ----------------- Catalog forms -----------------
-async function openCourseForm({ ctx, view, id = null }) {
-  let course = null;
+  // mini modal inside current modal
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <div class="mb">
+      <div class="m" style="width:min(720px, calc(100vw - 24px))">
+        <div class="mh">
+          <b>${isEdit ? tr("editEnrollment", "Edit enrollment") : tr("addEnrollment", "Add enrollment")}</b>
+          <button class="btn" id="eClose">✕</button>
+        </div>
+        <div class="mbo">
+          <div class="grid2">
+            <div class="field">
+              <div class="label">${tr("course", "Course")}</div>
+              <select class="input" id="eCourse" ${isEdit ? "disabled" : ""}>
+                <option value="">—</option>
+                ${catalog.map((x) => `<option value="${x.id}">${esc(x.name || x.title || x.course_name || ("#" + x.id))}</option>`).join("")}
+              </select>
+              ${!catalog.length ? `<div class="mini muted" style="margin-top:6px">${tr("catalogMissing", "Catalog is empty / not configured yet")}</div>` : ""}
+            </div>
+            <div class="field">
+              <div class="label">${tr("status", "Status")}</div>
+              <select class="input" id="eStatus">
+                ${["planned","paid","studying","finished","canceled"].map((s) => `<option value="${s}">${esc(s)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
 
-  if (id) {
-    // простая выборка из кеша (у нас уже загружен catalog)
-    course = (ctx.catalog || []).find((x) => Number(x.id) === Number(id)) || null;
-  }
+          <div class="field" style="margin-top:10px">
+            <div class="label">${tr("note", "Note")}</div>
+            <textarea class="input" id="eNote">${esc(row?.note || "")}</textarea>
+          </div>
 
-  const html = `
-    <div class="modal-hd">
-      <b>${id ? tr("editCourse", "Edit course") : tr("newCourse", "New course")}</b>
-      <button class="btn icon" data-act="close">✕</button>
-    </div>
-    <div class="modal-bd">
-      <div class="form-grid">
-        <div class="field">
-          <div class="lbl">${tr("name", "Name")}</div>
-          <input class="in" id="cf_name" value="${esc(course?.name || "")}">
+          <div class="row right" style="margin-top:14px">
+            <button class="btn" id="eCancel">${t("cancel")}</button>
+            <button class="btn primary" id="eSave">${t("save")}</button>
+          </div>
         </div>
-        <div class="field">
-          <div class="lbl">${tr("price", "Price")}</div>
-          <input class="in" id="cf_price" type="number" step="0.01" value="${esc(course?.price ?? 0)}">
-        </div>
-        <div class="field">
-          <div class="lbl">${tr("currency", "Currency")}</div>
-          <input class="in" id="cf_currency" value="${esc(course?.currency || "USD")}">
-        </div>
-        <div class="field" style="align-self:end;">
-          <label class="chk" style="display:flex; gap:10px; align-items:center;">
-            <input type="checkbox" id="cf_active" ${Number(course?.active ?? 1) ? "checked" : ""}>
-            <span>${tr("active", "Active")}</span>
-          </label>
-        </div>
-        <div class="field" style="grid-column:1/-1;">
-          <div class="lbl">${tr("comment", "Comment")}</div>
-          <input class="in" id="cf_comment" value="${esc(course?.comment || "")}">
-        </div>
-      </div>
-
-      <div class="row" style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
-        <button class="btn" data-act="close">${tr("cancel", "Cancel")}</button>
-        <button class="btn primary" id="cf_save">${tr("save", "Save")}</button>
       </div>
     </div>
   `;
 
-  const m = openModal(html);
+  modalHost.appendChild(wrap);
 
-  $("#cf_save", m.el).addEventListener("click", async () => {
-    const body = {
-      name: $("#cf_name", m.el).value.trim(),
-      price: Number($("#cf_price", m.el).value || 0),
-      currency: $("#cf_currency", m.el).value.trim() || "USD",
-      active: $("#cf_active", m.el).checked ? 1 : 0,
-      comment: $("#cf_comment", m.el).value.trim(),
-    };
-    if (!body.name) return notify(tr("nameRequired", "Name is required"), "error");
+  const close = () => wrap.remove();
+  $("#eClose", wrap).onclick = close;
+  $("#eCancel", wrap).onclick = close;
+  wrap.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
+
+  if (isEdit) {
+    $("#eCourse", wrap).value = row.course_id ?? "";
+    $("#eStatus", wrap).value = row.status ?? "planned";
+    $("#eNote", wrap).value = row.note ?? "";
+  }
+
+  $("#eSave", wrap).onclick = async () => {
+    const status = ($("#eStatus", wrap).value || "").trim();
+    const note = $("#eNote", wrap).value.trim() || null;
 
     try {
-      if (!id) await apiCatalogCreate(body);
-      else await apiCatalogUpdate(id, body);
+      if (isEdit) {
+        await apiEnrollUpdate(row.id, { status, note });
+      } else {
+        const course_id = $("#eCourse", wrap).value ? Number($("#eCourse", wrap).value) : null;
+        if (!course_id) return notify(tr("pickCourse", "Pick a course"), "error");
+        await apiEnrollCreate(leadId, { course_id, status: status || "planned", note });
+      }
 
+      close();
       notify(tr("saved", "Saved"), "success");
-      m.close();
-      ctx.loading = true;
-      view.innerHTML = skeleton(ctx);
-      await loadTab(ctx, view);
-    } catch (e) {
-      notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
+      await onSaved?.();
+    } catch {
+      notify(tr("saveFailed", "Save failed"), "error");
     }
+  };
+}
+
+/* =========================
+   Delete Lead
+========================= */
+function deleteLead({ ctx, host, id, onDone }) {
+  const modalHost = $("#modalHost", host);
+  confirmModal({
+    modalHost,
+    title: tr("confirmDelete", "Delete?"),
+    text: tr("confirmDeleteLeadText", "Delete this lead"),
+    okText: t("yes"),
+    cancelText: t("no"),
+    onOk: async () => {
+      try {
+        await apiLeadDelete(id);
+        notify(tr("saved", "Saved"), "success");
+        await onDone?.();
+      } catch {
+        notify(tr("deleteFailed", "Delete failed"), "error");
+      }
+    },
   });
 }
 
-async function deleteCourse({ ctx, view, id }) {
-  if (!confirm(tr("confirmDelete", "Delete?"))) return;
-  try {
-    await apiCatalogDelete(id);
-    notify(tr("deleted", "Deleted"), "success");
-    ctx.loading = true;
-    view.innerHTML = skeleton(ctx);
-    await loadTab(ctx, view);
-  } catch (e) {
-    notify(`${tr("error", "Error")}: ${e?.message || e}`, "error");
-  }
+/* =========================
+   Catalog Tab (optional)
+========================= */
+async function renderCatalogTab(ctx, host) {
+  host.innerHTML = `
+    <div class="crs-top">
+      <button class="btn primary" id="btnAddCourse">＋</button>
+      <button class="btn" id="btnReloadCourse">⟲</button>
+      <div class="field crs-search">
+        <input class="input" id="cq" placeholder="${tr("search", "Search")}..." />
+      </div>
+    </div>
+
+    <div class="crs-tablewrap" id="cwrap"></div>
+
+    <div id="modalHost"></div>
+  `;
+
+  let cache = [];
+
+  const loadAndRender = async () => {
+    const q = ($("#cq", host).value || "").trim().toLowerCase();
+
+    try {
+      const data = await apiCatalogList();
+      const list = data.items || data.courses || data.rows || [];
+      cache = list;
+
+      const filtered = q
+        ? list.filter((x) => String(x.name || x.title || "").toLowerCase().includes(q))
+        : list;
+
+      $("#cwrap", host).innerHTML = catalogTableHtml(filtered);
+    } catch {
+      $("#cwrap", host).innerHTML = `<div class="muted" style="padding:14px">${tr("catalogSoon", "Catalog — keyingi bosqichda.")}</div>`;
+    }
+  };
+
+  $("#btnAddCourse", host).onclick = () => openCourseForm({ host, mode: "create", row: null, onSaved: loadAndRender });
+  $("#btnReloadCourse", host).onclick = loadAndRender;
+  $("#cq", host).oninput = debounce(loadAndRender, 250);
+
+  $("#cwrap", host).onclick = (e) => {
+    const b = e.target.closest("button[data-cact]");
+    if (!b) return;
+    const act = b.dataset.cact;
+    const id = Number(b.dataset.id);
+    const row = cache.find((x) => Number(x.id) === id);
+    if (!row) return;
+
+    if (act === "edit") return openCourseForm({ host, mode: "edit", row, onSaved: loadAndRender });
+    if (act === "del") return confirmModal({
+      modalHost: $("#modalHost", host),
+      title: tr("confirmDelete", "Delete?"),
+      text: esc(row.name || row.title || ""),
+      okText: t("yes"),
+      cancelText: t("no"),
+      onOk: async () => { await apiCatalogDelete(id); notify(tr("saved", "Saved"), "success"); await loadAndRender(); }
+    });
+  };
+
+  await loadAndRender();
+}
+
+function catalogTableHtml(items) {
+  if (!items?.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
+  return `
+    <table class="crs-t">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>${tr("name", "Name")}</th>
+          <th>${tr("price", "Price")}</th>
+          <th style="text-align:right">${t("actions")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((x) => `
+          <tr>
+            <td>${esc(x.id)}</td>
+            <td><b>${esc(x.name || x.title || "")}</b></td>
+            <td>${esc(x.price ?? "")}</td>
+            <td>
+              <div class="crs-actions">
+                <button class="btn icon" data-cact="edit" data-id="${x.id}" title="${esc(t("edit"))}">
+                  <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
+                </button>
+                <button class="btn icon danger" data-cact="del" data-id="${x.id}" title="${esc(t("delete"))}">
+                  <span class="ico"><img src="/assets/icons/delete.svg" alt="" /></span>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function openCourseForm({ host, mode, row, onSaved }) {
+  const isEdit = mode === "edit";
+  const modalHost = $("#modalHost", host);
+
+  modalHost.innerHTML = `
+    <div class="mb">
+      <div class="m" style="width:min(720px, calc(100vw - 24px))">
+        <div class="mh">
+          <b>${isEdit ? tr("editCourse", "Edit course") : tr("addCourse", "Add course")}</b>
+          <button class="btn" id="cClose">✕</button>
+        </div>
+        <div class="mbo">
+
+          <div class="grid2">
+            <div class="field">
+              <div class="label">${tr("name", "Name")}</div>
+              <input class="input" id="cName" value="${esc(row?.name || row?.title || "")}" />
+            </div>
+            <div class="field">
+              <div class="label">${tr("price", "Price")}</div>
+              <input class="input" id="cPrice" value="${esc(row?.price ?? "")}" />
+            </div>
+          </div>
+
+          <div class="row right" style="margin-top:14px">
+            <button class="btn" id="cCancel">${t("cancel")}</button>
+            <button class="btn primary" id="cSave">${t("save")}</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `;
+
+  const close = () => (modalHost.innerHTML = "");
+  $("#cClose", modalHost).onclick = close;
+  $("#cCancel", modalHost).onclick = close;
+  modalHost.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
+
+  $("#cSave", modalHost).onclick = async () => {
+    const name = $("#cName", modalHost).value.trim();
+    if (!name) return notify(tr("requiredName", "Name is required"), "error");
+
+    const priceRaw = $("#cPrice", modalHost).value.trim();
+    const price = priceRaw === "" ? null : Number(priceRaw);
+
+    try {
+      if (isEdit) await apiCatalogUpdate(row.id, { name, price });
+      else await apiCatalogCreate({ name, price });
+      close();
+      notify(tr("saved", "Saved"), "success");
+      await onSaved?.();
+    } catch {
+      notify(tr("saveFailed", "Save failed"), "error");
+    }
+  };
+}
+
+/* =========================
+   Confirm modal (reuse)
+========================= */
+function confirmModal({ modalHost, title, text, okText, cancelText, onOk }) {
+  modalHost.innerHTML = `
+    <div class="mb">
+      <div class="m" style="width:min(520px, calc(100vw - 24px))">
+        <div class="mh">
+          <b>${esc(title)}</b>
+          <button class="btn" id="xClose">✕</button>
+        </div>
+        <div class="mbo">
+          <div class="muted">${esc(text || "")}</div>
+          <div class="row right" style="margin-top:14px">
+            <button class="btn" id="xCancel">${esc(cancelText || t("cancel"))}</button>
+            <button class="btn danger" id="xOk">${esc(okText || t("yes"))}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => (modalHost.innerHTML = "");
+  $("#xClose", modalHost).onclick = close;
+  $("#xCancel", modalHost).onclick = close;
+  modalHost.querySelector(".mb").onclick = (e) => { if (e.target.classList.contains("mb")) close(); };
+  $("#xOk", modalHost).onclick = async () => { close(); await onOk?.(); };
+}
+
+/* =========================
+   Dict preload + selects
+========================= */
+async function preloadDict() {
+  state.dict = state.dict || {};
+  const needCities = !Array.isArray(state.dict.cities);
+  const needSources = !Array.isArray(state.dict.sources);
+  if (!needCities && !needSources) return;
+
+  const [cities, sources] = await Promise.all([
+    apiFetch("/dict/cities", { silent: true }).catch(() => ({ items: [] })),
+    apiFetch("/dict/sources", { silent: true }).catch(() => ({ items: [] })),
+  ]);
+
+  state.dict.cities = cities.items || [];
+  state.dict.sources = sources.items || [];
+}
+
+function fillSelect(sel, arr, allowEmpty = true) {
+  const options = (arr || [])
+    .slice()
+    .filter((x) => x.active !== 0)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((x) => `<option value="${x.id}">${esc(x.name)}</option>`)
+    .join("");
+  sel.innerHTML = `${allowEmpty ? `<option value="">—</option>` : ""}${options}`;
+}
+
+function fillStatusSelect(sel, allowEmpty = false) {
+  const opts = [
+    ["new", tr("statusNew", "new")],
+    ["contacted", tr("statusContacted", "contacted")],
+    ["planned", tr("statusPlanned", "planned")],
+    ["paid", tr("statusPaid", "paid")],
+    ["studying", tr("statusStudying", "studying")],
+    ["finished", tr("statusFinished", "finished")],
+    ["canceled", tr("statusCanceled", "canceled")],
+  ];
+  sel.innerHTML =
+    `${allowEmpty ? `<option value="">${tr("all", "All")}</option>` : ""}` +
+    opts.map(([v, lbl]) => `<option value="${esc(v)}">${esc(lbl)}</option>`).join("");
 }
