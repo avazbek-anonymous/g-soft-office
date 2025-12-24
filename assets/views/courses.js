@@ -3,6 +3,19 @@ import { apiFetch } from "../core/api.js";
 import { t } from "../core/i18n.js";
 import * as TOAST from "../ui/toast.js";
 
+
+
+function ensureModalHost() {
+  let el = document.getElementById("modalHost");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "modalHost";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+
 const $ = (sel, el = document) => el.querySelector(sel);
 
 const tr = (key, fallback) => {
@@ -163,7 +176,6 @@ const apiCatalogDelete = (id) => apiFirst(
 ========================= */
 export async function renderCourses(view) {
   view.innerHTML = `
-    <div id="modalHost"></div>
     <div class="card crs">
       <div class="hd">
         <b>${t("courses")}</b>
@@ -317,6 +329,8 @@ export async function renderCourses(view) {
     </style>
   `;
 
+  ensureModalHost().innerHTML = ""; // чтобы чистить старые модалки
+
   await preloadDict();
 
   const host = $("#tabHost", view);
@@ -388,7 +402,7 @@ async function renderLeadsTab(ctx, host) {
     </div>
 
     <div class="crs-tablewrap" id="wrap"></div>
-
+    <div id="modalHost"></div>
   `;
 
   const citySel = $("#city", host);
@@ -546,7 +560,7 @@ function leadsTableHtml(ctx, items) {
 ========================= */
 async function openLeadForm({ ctx, host, mode, id, onSaved }) {
   const isEdit = mode === "edit";
-  const modalHost = $("#modalHost", host);
+  const modalHost = ensureModalHost();
 
   let lead = null;
   if (isEdit) {
@@ -677,7 +691,8 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
    Lead View + Enrollments
 ========================= */
 async function openLeadView({ ctx, host, id }) {
-  const modalHost = $("#modalHost", host);
+  const modalHost = ensureModalHost();
+
 
   let lead = null;
   try {
@@ -946,7 +961,8 @@ async function openEnrollForm({ modalHost, leadId, mode, row, onSaved }) {
    Delete Lead
 ========================= */
 function deleteLead({ ctx, host, id, onDone }) {
-  const modalHost = $("#modalHost", host);
+  const modalHost = ensureModalHost();
+
   confirmModal({
     modalHost,
     title: tr("confirmDelete", "Delete?"),
@@ -1017,7 +1033,7 @@ async function renderCatalogTab(ctx, host) {
 
     if (act === "edit") return openCourseForm({ host, mode: "edit", row, onSaved: loadAndRender });
     if (act === "del") return confirmModal({
-      modalHost: $("#modalHost", host),
+      modalHost: ensureModalHost(),
       title: tr("confirmDelete", "Delete?"),
       text: esc(row.name || row.title || ""),
       okText: t("yes"),
