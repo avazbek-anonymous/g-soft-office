@@ -163,6 +163,7 @@ const apiCatalogDelete = (id) => apiFirst(
 ========================= */
 export async function renderCourses(view) {
   view.innerHTML = `
+    <div id="modalHost"></div>
     <div class="card crs">
       <div class="hd">
         <b>${t("courses")}</b>
@@ -181,7 +182,7 @@ export async function renderCourses(view) {
       </div>
     </div>
 
-    <div id="modalHost"></div>
+    
 
     <style>
       .crs-tabs{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
@@ -388,7 +389,6 @@ async function renderLeadsTab(ctx, host) {
 
     <div class="crs-tablewrap" id="wrap"></div>
 
-    <div id="modalHost"></div>
   `;
 
   const citySel = $("#city", host);
