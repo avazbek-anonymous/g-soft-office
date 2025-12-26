@@ -33,6 +33,100 @@ const notify = (msg, type = "info") => {
   console[type === "error" ? "error" : "log"](msg);
 };
 
+
+/* =========================
+   i18n: auto rerender on language change
+   (потому что смена языка не всегда триггерит перерисовку страницы)
+========================= */
+function getLangToken() {
+  const htmlLang = document.documentElement?.getAttribute?.("lang") || "";
+  const bodyLang = document.body?.getAttribute?.("data-lang") || "";
+  const bodyLang2 = document.body?.getAttribute?.("lang") || "";
+  let sample = "";
+  try { sample = t("courses"); } catch {}
+  return `${htmlLang}|${bodyLang}|${bodyLang2}|${sample}`;
+}
+
+function bindLangAutoRerender(view, rerender) {
+  try { if (view.__crsLangCleanup) view.__crsLangCleanup(); } catch {}
+
+  if (!view || typeof rerender !== "function") return;
+
+  let last = getLangToken();
+  let scheduled = false;
+
+  const safeRerender = () => {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(() => {
+      scheduled = false;
+      if (!document.body.contains(view)) return;
+      const now = getLangToken();
+      if (now === last) return;
+      last = now;
+      rerender();
+    }, 0);
+  };
+
+  const events = [
+    "gsoft:lang",
+    "gsoft:language",
+    "gsoft:langChanged",
+    "i18n:change",
+    "i18n:changed",
+    "languagechange",
+  ];
+  events.forEach((ev) => window.addEventListener(ev, safeRerender));
+
+  const obs = new MutationObserver(() => safeRerender());
+  try {
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    obs.observe(document.body, { attributes: true, attributeFilter: ["data-lang", "lang"] });
+  } catch {}
+
+  const iv = setInterval(() => {
+    if (!document.body.contains(view)) { try { clearInterval(iv); } catch {} return; }
+    const now = getLangToken();
+    if (now !== last) {
+      last = now;
+      rerender();
+    }
+  }, 900);
+
+  view.__crsLangCleanup = () => {
+    try { clearInterval(iv); } catch {}
+    events.forEach((ev) => window.removeEventListener(ev, safeRerender));
+    try { obs.disconnect(); } catch {}
+  };
+}
+
+/* =========================
+   Leads statuses
+========================= */
+const LEAD_STATUSES = [
+  "new",
+  "contacted",
+  "planned",
+  "paid",
+  "studying",
+  "finished",
+  "canceled",
+];
+
+let draggingLeadId = null;
+
+function leadStatusLabel(st) {
+  const s = String(st || "").trim() || "new";
+  if (s === "new") return tr("statusNew", "new");
+  if (s === "contacted") return tr("statusContacted", "contacted");
+  if (s === "planned") return tr("statusPlanned", "planned");
+  if (s === "paid") return tr("statusPaid", "paid");
+  if (s === "studying") return tr("statusStudying", "studying");
+  if (s === "finished") return tr("statusFinished", "finished");
+  if (s === "canceled") return tr("statusCanceled", "canceled");
+  return s;
+}
+
 function esc(v) {
   return String(v ?? "").replace(/[&<>"']/g, (m) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
@@ -45,45 +139,6 @@ function formatTs(ts) {
   const d = new Date(n * 1000);
   return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
-
-/* =========================
-   i18n auto re-render (to update texts on language switch)
-========================= */
-function bindLangAutoRerender(view, rerender) {
-  try { if (view.__crsCleanup) view.__crsCleanup(); } catch {}
-
-  const handler = () => {
-    if (!document.body.contains(view)) return;
-    rerender();
-  };
-
-  const events = [
-    "gsoft:lang",
-    "gsoft:language",
-    "i18n:change",
-    "i18n:changed",
-    "langchange",
-    "langChanged",
-    "app:lang",
-    "app:language",
-  ];
-  events.forEach((ev) => window.addEventListener(ev, handler));
-
-  const body = document.body;
-  const html = document.documentElement;
-  const obs = new MutationObserver(() => handler());
-
-  try {
-    obs.observe(body, { attributes: true, attributeFilter: ["data-lang", "lang", "data-language"] });
-    obs.observe(html, { attributes: true, attributeFilter: ["lang"] });
-  } catch {}
-
-  view.__crsCleanup = () => {
-    events.forEach((ev) => window.removeEventListener(ev, handler));
-    try { obs.disconnect(); } catch {}
-  };
-}
-
 function pick(dictArr, id, field = "name") {
   const x = (dictArr || []).find((z) => Number(z.id) === Number(id));
   return x ? x[field] : "";
@@ -102,6 +157,61 @@ async function apiFirst(paths, options = {}) {
     }
   }
   throw lastErr;
+}
+
+
+async function apiTry(paths, methods, options = {}) {
+  let lastErr = null;
+  for (const p of paths) {
+    for (const method of methods) {
+      try {
+        const opts = { ...options, method };
+        // safety: body only for non-GET
+        if (String(method).toUpperCase() === "GET") delete opts.body;
+        return await apiFetch(p, opts);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/* =========================
+   Clients -> company list (для выбора компании в лиде)
+========================= */
+const apiClientsList = (params) => apiFirst(
+  [
+    `/clients${params ? "?" + params : ""}`,
+    `/clients/list${params ? "?" + params : ""}`,
+  ],
+  { silent: true }
+);
+
+async function ensureClientCompanies(force = false) {
+  state.dict = state.dict || {};
+  if (!force && Array.isArray(state.dict.client_companies) && state.dict.client_companies.length) {
+    return state.dict.client_companies;
+  }
+
+  try {
+    // пытаемся “много” — если backend не поддерживает limit, просто отдаст дефолтную пагинацию
+    const r = await apiClientsList("limit=2000");
+    const list = r.clients || r.items || r.rows || [];
+    const set = new Set();
+
+    for (const c of list) {
+      const name =
+        (c.company_name || c.company || c.name || c.title || "").toString().trim();
+      if (name) set.add(name);
+    }
+
+    state.dict.client_companies = Array.from(set).sort((a, b) => a.localeCompare(b));
+  } catch {
+    state.dict.client_companies = [];
+  }
+
+  return state.dict.client_companies;
 }
 
 const apiLeadsList = (params) => apiFirst(
@@ -128,25 +238,14 @@ const apiLeadCreate = (body) => apiFirst(
   { method: "POST", body }
 );
 
-const apiLeadUpdate = async (id, body) => {
-  const paths = [
+const apiLeadUpdate = (id, body) => apiTry(
+  [
     `/courses/leads/${id}`,
     `/courses/${id}`,
-  ];
-  const methods = ["PATCH", "PUT", "POST"];
-  let lastErr = null;
-
-  for (const p of paths) {
-    for (const method of methods) {
-      try {
-        return await apiFetch(p, { method, body });
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-  }
-  throw lastErr;
-};
+  ],
+  ["PATCH", "PUT", "POST"],
+  { body }
+);
 
 const apiLeadDelete = (id) => apiFirst(
   [
@@ -155,35 +254,6 @@ const apiLeadDelete = (id) => apiFirst(
   ],
   { method: "POST", body: {} }
 );
-
-
-// clients list (companies for lead form)
-const apiClientsList = (params) => apiFirst(
-  [
-    `/clients${params ? "?" + params : ""}`,
-    `/clients/list${params ? "?" + params : ""}`,
-  ],
-  { method: "GET", silent: true }
-);
-
-async function preloadClientCompanies() {
-  state.dict = state.dict || {};
-  if (Array.isArray(state.dict.client_companies)) return state.dict.client_companies;
-
-  try {
-    const r = await apiClientsList("limit=2000");
-    const list = r.clients || r.items || r.rows || [];
-    const set = new Set();
-    for (const c of list) {
-      const name = (c.company_name || c.company || c.name || "").toString().trim();
-      if (name) set.add(name);
-    }
-    state.dict.client_companies = Array.from(set).sort((a, b) => a.localeCompare(b));
-  } catch {
-    state.dict.client_companies = [];
-  }
-  return state.dict.client_companies;
-}
 
 // enrollments (если backend уже есть — заработает; если нет — просто покажет “скоро”)
 const apiEnrollList = (leadId) => apiFirst(
@@ -202,12 +272,13 @@ const apiEnrollCreate = (leadId, body) => apiFirst(
   { method: "POST", body }
 );
 
-const apiEnrollUpdate = (id, body) => apiFirst(
+const apiEnrollUpdate = (id, body) => apiTry(
   [
     `/courses/enrollments/${id}`,
     `/course_enrollments/${id}`,
   ],
-  { method: "PATCH", body }
+  ["PATCH", "PUT", "POST"],
+  { body }
 );
 
 const apiEnrollDelete = (id) => apiFirst(
@@ -235,12 +306,13 @@ const apiCatalogCreate = (body) => apiFirst(
   { method: "POST", body }
 );
 
-const apiCatalogUpdate = (id, body) => apiFirst(
+const apiCatalogUpdate = (id, body) => apiTry(
   [
     `/courses/catalog/${id}`,
     `/courses/courses/${id}`,
   ],
-  { method: "PATCH", body }
+  ["PATCH", "PUT", "POST"],
+  { body }
 );
 
 const apiCatalogDelete = (id) => apiFirst(
@@ -315,6 +387,87 @@ export async function renderCourses(view) {
       }
       body[data-theme="light"] .crs-filters{border-color:rgba(0,0,0,.10); background:rgba(0,0,0,.02)}
       .crs-sp{flex:1}
+
+/* ===== Leads Kanban ===== */
+.crs-boardWrap{
+  margin-top:12px;
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  height: calc(100vh - 320px);
+  padding-bottom:10px;
+}
+@media(max-width:920px){ .crs-boardWrap{height: calc(100vh - 280px)} }
+.crs-boardWrap::-webkit-scrollbar{height:10px}
+.crs-boardWrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12); border-radius:999px}
+body[data-theme="light"] .crs-boardWrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12)}
+
+.crs-col{
+  flex:0 0 310px;
+  min-width:310px;
+  height:100%;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:16px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+body[data-theme="light"] .crs-col{border-color:rgba(0,0,0,.10); background:rgba(0,0,0,.02)}
+.crs-colHead{
+  padding:10px 10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  font-weight:900;
+}
+body[data-theme="light"] .crs-colHead{border-bottom-color:rgba(0,0,0,.08)}
+.crs-colBody{
+  flex:1;
+  min-height:0;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  overflow:auto;
+}
+.crs-colBody.dropHint{
+  outline:2px dashed rgba(34,197,94,.55);
+  outline-offset:-6px;
+  background:rgba(34,197,94,.06);
+}
+body[data-theme="light"] .crs-colBody.dropHint{
+  outline:2px dashed rgba(14,165,233,.55);
+  background:rgba(14,165,233,.06);
+}
+
+.crs-card{
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.18);
+  border-radius:14px;
+  padding:10px;
+  cursor:pointer;
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+  user-select:none;
+}
+body[data-theme="light"] .crs-card{background:rgba(0,0,0,.03); border-color:rgba(0,0,0,.10)}
+.crs-card:hover{transform: translateY(-2px); box-shadow:0 14px 40px rgba(0,0,0,.18)}
+.crs-card.dragging{opacity:.55; transform: rotate(1deg) scale(.99)}
+.crs-card.is-del{opacity:.55; cursor:default}
+
+.crs-cardTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+.crs-title{font-weight:900; line-height:1.2}
+.crs-sub{margin-top:4px; opacity:.75; font-size:12px}
+.crs-meta{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+.crs-chip{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 8px; border-radius:999px;
+  font-size:12px; border:1px solid rgba(255,255,255,.12); opacity:.92;
+}
+body[data-theme="light"] .crs-chip{border-color:rgba(0,0,0,.12)}
 
       /* ✅ scroll ONLY for list */
       .crs-tablewrap{
@@ -407,90 +560,7 @@ export async function renderCourses(view) {
       @media(max-width:900px){ .kv{grid-template-columns:1fr} }
       .k{opacity:.7; font-size:12px}
       .v{font-weight:600}
-    
-      /* ===== Kanban board (Leads) ===== */
-      .crs-board{
-        margin-top:10px;
-        display:flex;
-        gap:12px;
-        padding:12px 0 6px;
-        overflow-x:auto;
-        overflow-y:hidden;
-        min-height:320px;
-      }
-      .crs-col{
-        flex:1 0 280px;
-        min-width:280px;
-        border:1px solid rgba(255,255,255,.10);
-        background:rgba(255,255,255,.03);
-        border-radius:18px;
-        display:flex;
-        flex-direction:column;
-        overflow:hidden;
-      }
-      body[data-theme="light"] .crs-col{border-color:rgba(0,0,0,.10); background:rgba(0,0,0,.02)}
-      .crs-colHead{
-        padding:10px 12px;
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:10px;
-        border-bottom:1px solid rgba(255,255,255,.08);
-        font-weight:800;
-      }
-      body[data-theme="light"] .crs-colHead{border-bottom-color:rgba(0,0,0,.08)}
-      .crs-colBody{
-        flex:1;
-        min-height:0;
-        padding:10px;
-        display:flex;
-        flex-direction:column;
-        gap:10px;
-        overflow:auto;
-      }
-      .crs-dropHint{
-        outline:2px dashed rgba(34,197,94,.55);
-        outline-offset:-6px;
-        background:rgba(34,197,94,.06);
-      }
-      body[data-theme="light"] .crs-dropHint{
-        outline:2px dashed rgba(14,165,233,.55);
-        background:rgba(14,165,233,.06);
-      }
-
-      .crs-item{
-        border:1px solid rgba(255,255,255,.12);
-        background:rgba(0,0,0,.18);
-        border-radius:16px;
-        padding:10px;
-        user-select:none;
-        cursor:pointer;
-        transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
-      }
-      body[data-theme="light"] .crs-item{background:rgba(0,0,0,.03); border-color:rgba(0,0,0,.10)}
-      .crs-item:hover{transform: translateY(-2px); box-shadow:0 14px 40px rgba(0,0,0,.18)}
-      .crs-item.dragging{opacity:.55; transform: rotate(1deg) scale(.99)}
-      .crs-item.del{opacity:.55}
-      .crs-itTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
-      .crs-itTitle{font-weight:900; line-height:1.2}
-      .crs-itSub{margin-top:4px; opacity:.75; font-size:12px}
-      .crs-itMeta{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
-      .crs-chip{
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:4px 8px;
-        border-radius:999px;
-        font-size:12px;
-        border:1px solid rgba(255,255,255,.12);
-        opacity:.92;
-      }
-      body[data-theme="light"] .crs-chip{border-color:rgba(0,0,0,.12)}
-      .crs-miniActions{display:flex; gap:6px}
-      .crs-miniActions .btn.icon{width:34px; height:34px; padding:0; justify-content:center}
-
     </style>
-
   `;
 
   ensureModalHost().innerHTML = ""; // чтобы чистить старые модалки
@@ -532,6 +602,7 @@ async function renderTab(ctx, host) {
 /* =========================
    Leads Tab
 ========================= */
+
 async function renderLeadsTab(ctx, host) {
   host.innerHTML = `
     <div class="crs-top">
@@ -565,18 +636,17 @@ async function renderLeadsTab(ctx, host) {
       <button class="btn" id="btnClear">${t("clear")}</button>
     </div>
 
-    <div class="crs-board" id="board"></div>
-
+    <div class="crs-boardWrap" id="board"></div>
   `;
 
   const citySel = $("#city", host);
   const sourceSel = $("#source", host);
   const statusSel = $("#status", host);
-  const board = $("#board", host);
 
   fillSelect(citySel, state.dict.cities || [], true);
   fillSelect(sourceSel, state.dict.sources || [], true);
-  fillStatusSelect(statusSel);
+  fillStatusSelect(statusSel, true);
+  statusSel.value = "";
 
   const refreshDeletedBtn = () => {
     $("#btnDeleted", host).textContent = ctx.includeDeleted ? t("hideDeleted") : t("showDeleted");
@@ -598,7 +668,15 @@ async function renderLeadsTab(ctx, host) {
     const data = await apiLeadsList(params.toString());
     const list = data.items || data.leads || data.courses || data.rows || [];
     ctx.leadsCache = list;
-    renderLeadsBoard(ctx, board, list, loadAndRender);
+
+    const board = $("#board", host);
+    board.innerHTML = leadsBoardHtml(ctx, list);
+    bindLeadsBoard({
+      ctx,
+      host,
+      board,
+      onReload: loadAndRender,
+    });
   };
 
   $("#btnAdd", host).onclick = () => openLeadForm({ ctx, host, mode: "create", onSaved: loadAndRender });
@@ -623,61 +701,13 @@ async function renderLeadsTab(ctx, host) {
   sourceSel.onchange = loadAndRender;
   statusSel.onchange = loadAndRender;
 
-    board.onclick = async (e) => {
-    const btn = e.target.closest("button[data-act]");
-    const card = e.target.closest("[data-id]");
-    const act = btn?.dataset?.act || null;
-
-    // If clicked on card (not on action buttons) -> view
-    if (!act && card) {
-      const id = Number(card.dataset.id);
-      if (id) return openLeadView({ ctx, host, id });
-      return;
-    }
-    if (!act) return;
-
-    const id = Number(btn.dataset.id);
-    if (!id) return;
-
-    if (act === "view") return openLeadView({ ctx, host, id });
-    if (act === "edit") return openLeadForm({ ctx, host, mode: "edit", id, onSaved: loadAndRender });
-    if (act === "del") return deleteLead({ ctx, host, id, onDone: loadAndRender });
-  };
-
   refreshDeletedBtn();
   await loadAndRender();
 }
 
-
-
-function leadStatusOptions() {
-  return [
-    ["new", tr("statusNew", "new")],
-    ["contacted", tr("statusContacted", "contacted")],
-    ["planned", tr("statusPlanned", "planned")],
-    ["paid", tr("statusPaid", "paid")],
-    ["studying", tr("statusStudying", "studying")],
-    ["finished", tr("statusFinished", "finished")],
-    ["canceled", tr("statusCanceled", "canceled")],
-  ];
-}
-function leadStatusLabel(key) {
-  const o = leadStatusOptions().find(([k]) => k === String(key || "new"));
-  return o ? o[1] : String(key || "new");
-}
-
-function renderLeadsBoard(ctx, boardEl, items, reloadFn) {
+function leadsBoardHtml(ctx, items) {
   const cities = state.dict.cities || [];
   const sources = state.dict.sources || [];
-  const opts = leadStatusOptions();
-  const keys = opts.map(([k]) => k);
-
-  const by = Object.fromEntries(keys.map((k) => [k, []]));
-  (items || []).forEach((x) => {
-    const st = String(x.status || "new").trim() || "new";
-    if (!by[st]) by["new"].push(x);
-    else by[st].push(x);
-  });
 
   const phoneText = (x) => {
     const p1 = (x.phone1 || x.phone || "").trim();
@@ -686,85 +716,156 @@ function renderLeadsBoard(ctx, boardEl, items, reloadFn) {
     return p1 || p2 || "";
   };
 
-  boardEl.innerHTML = opts.map(([st, lbl]) => {
-    const list = by[st] || [];
+  const cols = LEAD_STATUSES.map((key) => ({
+    key,
+    title: leadStatusLabel(key),
+  }));
+
+  const by = {};
+  cols.forEach((c) => (by[c.key] = []));
+  (items || []).forEach((x) => {
+    const st = String(x.status || "").trim() || "new";
+    (by[st] || by["new"]).push(x);
+  });
+
+  // sort: newest first inside each column
+  cols.forEach((c) => {
+    by[c.key] = (by[c.key] || []).slice().sort((a, b) => (Number(b.created_at || 0) - Number(a.created_at || 0)));
+  });
+
+  const cardHtml = (x) => {
+    const del = Number(x.is_deleted) === 1;
+    const cityName = x.city_name || pick(cities, x.city_id) || "";
+    const srcName = x.source_name || pick(sources, x.source_id) || "";
+    const phones = phoneText(x);
+
     return `
-      <div class="crs-col">
-        <div class="crs-colHead">
-          <span>${esc(lbl)}</span>
-          <small>${list.length}</small>
+      <div class="crs-card ${del ? "is-del" : ""}" draggable="${del ? "false" : "true"}" data-id="${esc(x.id)}" data-status="${esc(String(x.status || "new"))}">
+        <div class="crs-cardTop">
+          <div style="min-width:0">
+            <div class="crs-title">${esc(x.full_name || "")}</div>
+            <div class="crs-sub">
+              ${x.company ? esc(x.company) : ""}
+              ${x.code ? (x.company ? " • " : "") + esc(x.code) : ""}
+              ${del ? ` • <span class="badge del">${t("deleted")}</span>` : ""}
+            </div>
+          </div>
+
+          <div class="crs-actions" style="gap:6px">
+            <button class="btn icon" data-act="edit" data-id="${esc(x.id)}" title="${esc(t("edit"))}">
+              <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
+            </button>
+            ${del ? "" : `
+              <button class="btn icon danger" data-act="del" data-id="${esc(x.id)}" title="${esc(t("delete"))}">
+                <span class="ico"><img src="/assets/icons/delete.svg" alt="" /></span>
+              </button>
+            `}
+          </div>
         </div>
-        <div class="crs-colBody" data-drop="${esc(st)}">
-          ${list.map((x) => {
-            const del = Number(x.is_deleted) === 1;
-            const cityName = x.city_name || pick(cities, x.city_id) || "";
-            const srcName  = x.source_name || pick(sources, x.source_id) || "";
-            const phones   = phoneText(x);
-            const company  = (x.company || "").trim();
 
-            return `
-              <div class="crs-item ${del ? "del" : ""}" draggable="${del ? "false" : "true"}" data-id="${esc(x.id)}" data-status="${esc(st)}">
-                <div class="crs-itTop">
-                  <div style="min-width:0">
-                    <div class="crs-itTitle">${esc(x.full_name || "")}${del ? ` <span class="badge del">${t("deleted")}</span>` : ""}</div>
-                    <div class="crs-itSub">${esc([phones, company].filter(Boolean).join(" • ") || "—")}</div>
-                  </div>
-                  <div class="crs-miniActions">
-                    <button class="btn icon" data-act="edit" data-id="${esc(x.id)}" title="${esc(t("edit"))}">
-                      <span class="ico"><img src="/assets/icons/edit.svg" alt="" /></span>
-                    </button>
-                    <button class="btn icon" data-act="del" data-id="${esc(x.id)}" title="${esc(t("delete"))}">
-                      <span class="ico"><img src="/assets/icons/trash.svg" alt="" /></span>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="crs-itMeta">
-                  ${cityName ? `<span class="crs-chip">${esc(cityName)}</span>` : ""}
-                  ${srcName ? `<span class="crs-chip">${esc(srcName)}</span>` : ""}
-                </div>
-              </div>
-            `;
-          }).join("")}
+        <div class="crs-meta">
+          ${phones ? `<span class="crs-chip">📞 ${esc(phones)}</span>` : ""}
+          ${cityName ? `<span class="crs-chip">📍 ${esc(cityName)}</span>` : ""}
+          ${srcName ? `<span class="crs-chip">🔎 ${esc(srcName)}</span>` : ""}
+          ${x.created_at ? `<span class="crs-chip">🕒 ${esc(formatTs(x.created_at))}</span>` : ""}
         </div>
       </div>
     `;
-  }).join("");
+  };
 
-  // Drag & drop
-  boardEl.querySelectorAll(".crs-item[draggable='true']").forEach((card) => {
+  return cols.map((c) => `
+    <div class="crs-col" data-status="${esc(c.key)}">
+      <div class="crs-colHead">
+        <div>${esc(c.title)}</div>
+        <small class="muted">${esc(String((by[c.key] || []).length))}</small>
+      </div>
+      <div class="crs-colBody" data-drop="${esc(c.key)}">
+        ${(by[c.key] || []).map(cardHtml).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+function bindLeadsBoard({ ctx, host, board, onReload }) {
+  if (!board) return;
+
+  // click delegation: edit/del OR open view
+  board.onclick = async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (btn) {
+      e.stopPropagation();
+      const act = btn.dataset.act;
+      const id = Number(btn.dataset.id);
+      if (!id) return;
+
+      if (act === "edit") return openLeadForm({ ctx, host, mode: "edit", id, onSaved: onReload });
+      if (act === "del") return deleteLead({ ctx, host, id, onDone: onReload });
+      return;
+    }
+
+    const card = e.target.closest(".crs-card");
+    if (!card) return;
+
+    const id = Number(card.dataset.id);
+    if (!id) return;
+    return openLeadView({ ctx, host, id });
+  };
+
+  // drag and drop per column body
+  board.querySelectorAll(".crs-card[draggable='true']").forEach((card) => {
     card.addEventListener("dragstart", (e) => {
+      draggingLeadId = card.dataset.id;
       card.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", card.dataset.id);
+      try {
+        e.dataTransfer.setData("text/plain", String(card.dataset.id));
+        e.dataTransfer.effectAllowed = "move";
+      } catch {}
     });
-    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      draggingLeadId = null;
+    });
   });
 
-  boardEl.querySelectorAll(".crs-colBody").forEach((col) => {
-    col.addEventListener("dragover", (e) => {
+  board.querySelectorAll(".crs-colBody").forEach((colBody) => {
+    colBody.addEventListener("dragover", (e) => {
       e.preventDefault();
-      col.classList.add("crs-dropHint");
+      colBody.classList.add("dropHint");
     });
-    col.addEventListener("dragleave", () => col.classList.remove("crs-dropHint"));
-    col.addEventListener("drop", async (e) => {
+    colBody.addEventListener("dragleave", () => colBody.classList.remove("dropHint"));
+    colBody.addEventListener("drop", async (e) => {
       e.preventDefault();
-      col.classList.remove("crs-dropHint");
-      const id = Number(e.dataTransfer.getData("text/plain"));
-      const status = col.dataset.drop;
-      if (!id || !status) return;
+      colBody.classList.remove("dropHint");
+
+      const id = Number((() => {
+        try { return e.dataTransfer.getData("text/plain"); } catch { return ""; }
+      })() || draggingLeadId);
+
+      if (!id) return;
+
+      const targetStatus = colBody.getAttribute("data-drop") || "new";
+      const lead = (ctx.leadsCache || []).find((x) => Number(x.id) === Number(id));
+      if (!lead) return;
+
+      if (Number(lead.is_deleted) === 1) return;
+
+      const current = String(lead.status || "new").trim() || "new";
+      if (current === targetStatus) return;
 
       try {
-        await apiLeadUpdate(id, { status });
+        await apiLeadUpdate(id, { status: targetStatus });
         notify(tr("saved", "Saved"), "success");
-        await reloadFn?.();
+        await onReload?.();
       } catch {
         notify(tr("saveFailed", "Save failed"), "error");
+        await onReload?.();
       }
     });
   });
 }
 
 function leadsTableHtml(ctx, items) {
+(ctx, items) {
   if (!items?.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
 
   const cities = state.dict.cities || [];
@@ -855,11 +956,10 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
     }
   }
 
-    const companies = await preloadClientCompanies();
-  const companyOpts = (companies || []).slice(0, 1500).map((x) => `<option value="${esc(x)}"></option>`).join("");
-
   const cities = (state.dict.cities || []).filter((x) => x.active !== 0);
   const sources = (state.dict.sources || []).filter((x) => x.active !== 0);
+
+  const companies = await ensureClientCompanies();
 
   modalHost.innerHTML = `
     <div class="mb">
@@ -877,8 +977,10 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
             </div>
             <div class="field">
               <div class="label">${tr("company", "Company")}</div>
-              <input class="input" id="mCompany" list="mCompanyList" value="${esc(lead?.company || "")}" />
-              <datalist id="mCompanyList">${companyOpts}</datalist>
+              <input class="input" id="mCompany" list="crsCompanyList" value="${esc(lead?.company || "")}" />
+              <datalist id="crsCompanyList">
+                ${(companies || []).slice(0, 2000).map((nm) => `<option value="${esc(nm)}"></option>`).join("")}
+              </datalist>
             </div>
           </div>
 
@@ -916,7 +1018,10 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
           <div class="grid2" style="margin-top:10px">
             <div class="field">
               <div class="label">${tr("status", "Status")}</div>
-              <select class="input" id="mStatus"></select>
+              ${isEdit
+                ? `<select class="input" id="mStatus"></select>`
+                : `<input class="input" id="mStatusFixed" value="${esc(leadStatusLabel("new"))}" disabled />`
+              }
             </div>
             <div class="field">
               <div class="label">${tr("comment", "Comment")}</div>
@@ -942,10 +1047,11 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
   $("#mCity", modalHost).value = lead?.city_id ?? "";
   $("#mSource", modalHost).value = lead?.source_id ?? "";
 
-  const mStatus = $("#mStatus", modalHost);
-  fillStatusSelect(mStatus, true);
-  mStatus.value = lead?.status ?? "new";
-  if (!isEdit) { mStatus.value = "new"; mStatus.disabled = true; }
+  if (isEdit) {
+    const mStatus = $("#mStatus", modalHost);
+    fillStatusSelect(mStatus, true);
+    mStatus.value = lead?.status ?? "new";
+  }
 
   $("#mSave", modalHost).onclick = async () => {
     const full_name = $("#mFull", modalHost).value.trim();
@@ -954,12 +1060,15 @@ async function openLeadForm({ ctx, host, mode, id, onSaved }) {
     const payload = {
       full_name,
       phone1: $("#mP1", modalHost).value.trim() || null,
+      phone: $("#mP1", modalHost).value.trim() || null,
       phone2: $("#mP2", modalHost).value.trim() || null,
       city_id: $("#mCity", modalHost).value ? Number($("#mCity", modalHost).value) : null,
       source_id: $("#mSource", modalHost).value ? Number($("#mSource", modalHost).value) : null,
       company: $("#mCompany", modalHost).value.trim() || null,
+      company_name: $("#mCompany", modalHost).value.trim() || null,
       comment: $("#mComment", modalHost).value.trim() || null,
-      status: (isEdit ? ($("#mStatus", modalHost).value || "new").trim() : "new"),
+      notes: $("#mComment", modalHost).value.trim() || null,
+      status: isEdit ? ($("#mStatus", modalHost).value || "new").trim() : "new",
     };
 
     try {
@@ -1011,7 +1120,7 @@ async function openLeadView({ ctx, host, id }) {
             <div class="k">${tr("company", "Company")}</div><div class="v">${esc(lead.company || "—")}</div>
             <div class="k">${t("city")}</div><div class="v">${esc(cityName)}</div>
             <div class="k">${t("source")}</div><div class="v">${esc(srcName)}</div>
-            <div class="k">${tr("status", "Status")}</div><div class="v"><span class="badge st">${esc(lead.status || "new")}</span></div>
+            <div class="k">${tr("status", "Status")}</div><div class="v"><span class="badge st">${esc(leadStatusLabel(lead.status || "new"))}</span></div>
             <div class="k">${t("createdAt")}</div><div class="v">${esc(formatTs(lead.created_at))}</div>
           </div>
 
