@@ -865,7 +865,6 @@ function bindLeadsBoard({ ctx, host, board, onReload }) {
 }
 
 function leadsTableHtml(ctx, items) {
-(ctx, items) {
   if (!items?.length) return `<div class="muted" style="padding:14px">${t("notFound")}</div>`;
 
   const cities = state.dict.cities || [];
