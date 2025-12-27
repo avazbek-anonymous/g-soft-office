@@ -122,7 +122,7 @@ function ensure() {
           <div class="brandMark">G</div>
           <div class="col" style="gap:2px;min-width:0">
             <div class="brandName" data-i18n="app.name"></div>
-            <div class="brandSub muted">JARVIS UI</div>
+            <div class="brandSub muted">Moliya Agentligi</div>
           </div>
         </div>
 
@@ -138,7 +138,7 @@ function ensure() {
       <header class="header card">
         <div class="headerTitle">
           <div class="t1" id="hdrTitle">${i18n.t("app.name")}</div>
-          <div class="t2" id="hdrSubtitle">${api.API_BASE}</div>
+          <div class="t2" id="hdrSubtitle">Avazbek tizim ustida ishalayapti hali</div>
         </div>
 
         <div class="headerRight">

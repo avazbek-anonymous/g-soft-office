@@ -18,7 +18,7 @@ function renderBoot() {
               <div class="brandSub">boot…</div>
             </div>
           </div>
-          <div class="muted caps" style="font-size:12px;letter-spacing:.10em">JARVIS UI</div>
+          <div class="muted caps" style="font-size:12px;letter-spacing:.10em">Moliya Agentligi</div>
         </div>
       </div>
     </div>
