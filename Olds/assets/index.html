@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark light">
+  <title>G-SOFT | Management</title>
+
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+
+<body data-theme="dark">
+  <!-- Loading overlay -->
+  <div id="loading" class="loading" aria-hidden="true">
+    <div class="loader">
+      <div class="spinner"></div>
+      <div>
+        <b id="loadingTitle">Loading…</b>
+        <span id="loadingText">Please wait…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Mobile drawer -->
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+  <div id="drawer" class="drawer">
+    <div class="drawer-inner">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M7 14c2.5 2.5 7.5 2.5 10 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M4 10c3.8-5.2 12.2-5.2 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="brand-title">
+            <b>G-SOFT | Management</b>
+            <span id="subBrand">ofis.gekto.uz</span>
+          </div>
+        </div>
+        <button class="btn" id="drawerClose">✕</button>
+      </div>
+
+      <nav id="navDrawer" class="nav"></nav>
+
+      <div class="card" style="margin-top:14px">
+        <div class="bd">
+          <div class="row" style="justify-content:space-between">
+            <button class="btn" id="btnLangDrawer">🌐</button>
+            <button class="btn" id="themeToggleDrawer">☾</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App root -->
+  <div id="root"></div>
+
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

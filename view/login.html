@@ -1,0 +1,37 @@
+<div class="authWrap">
+  <div class="authPanel card">
+    <div class="authHead">
+      <div class="authTitle">
+        <div class="brandMark">G</div>
+        <div class="col" style="gap:2px;min-width:0">
+          <h1 data-i18n="auth.login.title"></h1>
+          <p class="muted"><span data-i18n="app.name"></span> · JARVIS UI</p>
+        </div>
+      </div>
+
+      <div class="seg" data-lang-seg>
+        <button type="button" data-lang="ru">ru</button>
+        <button type="button" data-lang="uz">uz</button>
+        <button type="button" data-lang="en">en</button>
+      </div>
+    </div>
+
+    <form id="loginForm" class="col" style="gap:12px;">
+      <div id="loginError" class="errorLine"></div>
+
+      <div class="field">
+        <label data-i18n="auth.login.login"></label>
+        <input id="loginInput" class="input" autocomplete="username" />
+      </div>
+
+      <div class="field">
+        <label data-i18n="auth.login.password"></label>
+        <input id="passwordInput" class="input" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="row" style="justify-content:flex-end;margin-top:4px">
+        <button id="loginBtn" class="btn primary" type="submit" data-i18n="auth.login.submit"></button>
+      </div>
+    </form>
+  </div>
+</div>
