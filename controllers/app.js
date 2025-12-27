@@ -3,12 +3,7 @@ import { api } from "./api.js";
 import { router } from "./router.js";
 import { appShell } from "./appShell.js";
 
-// Global app state (small, explicit)
-window.APP = window.APP || {
-  user: null,
-  lang: null,
-  outlet: null,
-};
+window.APP = window.APP || { user: null, lang: null, outlet: null };
 
 function renderBoot() {
   const root = document.getElementById("app");
@@ -34,68 +29,88 @@ async function initAuth() {
   try {
     const me = await api.get("/me");
     window.APP.user = me;
-
-    // Sync language: if user.lang exists and local not set — take user.lang.
     i18n.syncFromUser(me);
-
-    // Ensure shell exists for protected routes
-    return { ok: true };
-  } catch (e) {
-    // api.get already redirects on 401 (guard), but we normalize:
+    return true;
+  } catch {
     window.APP.user = null;
-    return { ok: false };
+    return false;
   }
 }
 
+function moduleImportMap() {
+  return {
+    main: () => import("./main.js"),
+    tasks: () => import("./tasks.js"),
+    projects: () => import("./projects.js"),
+    courses: () => import("./courses.js"),
+    course_catalog: () => import("./course_catalog.js"),
+    clients: () => import("./clients.js"),
+    settings: () => import("./settings.js"),
+    users: () => import("./users.js"),
+    roles: () => import("./roles.js"),
+  };
+}
+
+function addModuleRoutes(list, moduleName, navKey) {
+  const imp = moduleImportMap()[moduleName];
+  const base = `/${moduleName}`;
+
+  list.push(
+    { path: base, requiresAuth: true, shell: true, titleKey: navKey,
+      handler: async () => (await imp()).pages.index },
+    { path: `${base}/view`, requiresAuth: true, shell: true, titleKey: navKey,
+      handler: async () => (await imp()).pages.view },
+    { path: `${base}/new`, requiresAuth: true, shell: true, titleKey: navKey,
+      handler: async () => (await imp()).pages.new },
+    { path: `${base}/edit`, requiresAuth: true, shell: true, titleKey: navKey,
+      handler: async () => (await imp()).pages.edit },
+  );
+}
+
 function registerRoutes() {
-  router.register([
+  const routes = [
     {
       path: "/login",
       requiresAuth: false,
       shell: false,
       titleKey: "auth.login.title",
-      controllerPath: () => import("./auth/login.js"),
+      handler: async () => (await import("./auth/login.js")).controller,
     },
+
     {
       path: "/main",
       requiresAuth: true,
       shell: true,
       titleKey: "nav.main",
-      controllerPath: () => import("./main/index.js"),
+      handler: async () => (await import("./main.js")).pages.index,
     },
+  ];
 
-    // Stage 1 placeholders (visible by RBAC in sidebar)
-    ...router.placeholders([
-      { path: "/tasks", titleKey: "nav.tasks" },
-      { path: "/projects", titleKey: "nav.projects" },
-      { path: "/courses", titleKey: "nav.courses" },
-      { path: "/course_catalog", titleKey: "nav.course_catalog" },
-      { path: "/clients", titleKey: "nav.clients" },
-      { path: "/settings", titleKey: "nav.settings" },
-      { path: "/users", titleKey: "nav.users" },
-      { path: "/roles", titleKey: "nav.roles" },
-    ]),
-  ]);
+  addModuleRoutes(routes, "tasks", "nav.tasks");
+  addModuleRoutes(routes, "projects", "nav.projects");
+  addModuleRoutes(routes, "courses", "nav.courses");
+  addModuleRoutes(routes, "course_catalog", "nav.course_catalog");
+  addModuleRoutes(routes, "clients", "nav.clients");
+  addModuleRoutes(routes, "settings", "nav.settings");
+  addModuleRoutes(routes, "users", "nav.users");
+  addModuleRoutes(routes, "roles", "nav.roles");
+
+  router.register(routes);
 }
 
 async function boot() {
   renderBoot();
 
-  // i18n first (localStorage)
   i18n.init();
-
   registerRoutes();
 
-  // On language change → rerender current route + shell labels
   i18n.onChange(() => {
     appShell.refreshText();
     router.refresh();
   });
 
-  // Guard check /me once on start
   await initAuth();
 
-  // Start router (it will decide whether shell is needed)
   router.start({
     defaultRoute: "#/main",
     onNeedShell: () => appShell.ensure(),
