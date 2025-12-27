@@ -2,16 +2,35 @@ import { i18n } from "./i18n.js";
 import { router } from "./router.js";
 import { api } from "./api.js";
 
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+/** ✅ Robust role resolver (fix "admin not detected") */
+function getRoleKey(user) {
+  const v =
+    user?.role_key ??
+    user?.roleKey ??
+    user?.role?.key ??
+    user?.role?.role_key ??
+    user?.role?.name ??
+    user?.role ??
+    (user?.is_admin ? "admin" : "");
+
+  return (v ?? "").toString();
+}
+
 function roleLabel(roleKey) {
   const rk = (roleKey || "").toLowerCase();
   if (rk === "admin") return i18n.t("header.role.admin");
   if (rk === "pm") return i18n.t("header.role.pm");
   if (rk === "fin") return i18n.t("header.role.fin");
   return roleKey || "";
-}
-
-function getRoleKey(user) {
-  return (user?.role_key || user?.role || "").toString();
 }
 
 function canSeeNav(item, user) {
@@ -25,7 +44,7 @@ function canSeeNav(item, user) {
 }
 
 function iconSvg(name) {
-  // Simple inline icons with currentColor (no colors here)
+  // Inline icons with currentColor (no colors in JS)
   const common = `fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`;
   switch (name) {
     case "home":
@@ -75,7 +94,6 @@ function ensure() {
 
   // already rendered?
   if (root.querySelector(".shell")) {
-    // ensure outlet reference is set
     window.APP.outlet = document.getElementById("routeOutlet");
     refreshText();
     markActiveNav();
@@ -146,21 +164,26 @@ function ensure() {
   window.APP.outlet = document.getElementById("routeOutlet");
   i18n.apply(root);
 
-  // listeners
+  // Language switch
   const seg = root.querySelector("[data-lang-seg]");
   seg?.addEventListener("click", (e) => {
     const btn = e.target?.closest("button[data-lang]");
     if (!btn) return;
     const lang = btn.getAttribute("data-lang");
     i18n.setLang(lang);
-    // update active styles
+
     seg.querySelectorAll("button[data-lang]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-lang") === i18n.lang);
     });
   });
 
+  // Logout
   root.querySelector("#btnLogout")?.addEventListener("click", async () => {
-    try { await api.post("/auth/logout", {}); } catch (_) {}
+    try {
+      await api.post("/auth/logout", {});
+    } catch (_) {
+      // ignore
+    }
     window.APP.user = null;
     router.go("#/login");
   });
@@ -172,25 +195,30 @@ function refreshText() {
   const root = document.getElementById("app");
   if (!root) return;
   i18n.apply(root);
-
-  // refresh title/subtitle from current route
   markActiveNav();
 }
 
+/** ✅ Active menu + header title based on BASE PATH
+ *  Example: "#/tasks/view?id=1" -> basePath "/tasks"
+ */
 function markActiveNav() {
   const root = document.getElementById("app");
   const nav = root?.querySelector("#sidebarNav");
   if (!nav) return;
 
   const hash = window.location.hash || "";
-  const path = hash.startsWith("#/") ? hash.slice(1).split("?")[0] : "/main";
+  const fullPath = hash.startsWith("#/") ? hash.slice(1).split("?")[0] : "/main";
+
+  // basePath = "/tasks" for "/tasks/view"
+  const seg = fullPath.split("/").filter(Boolean);
+  const basePath = seg.length ? `/${seg[0]}` : "/main";
 
   nav.querySelectorAll(".navItem").forEach((a) => {
     const p = a.getAttribute("data-nav");
-    a.classList.toggle("active", p === path);
+    a.classList.toggle("active", p === basePath);
   });
 
-  const titleKey = guessTitleKeyByPath(path);
+  const titleKey = guessTitleKeyByPath(basePath);
   const hdrTitle = root.querySelector("#hdrTitle");
   if (hdrTitle) hdrTitle.textContent = titleKey ? i18n.t(titleKey) : i18n.t("app.name");
 }
@@ -208,15 +236,6 @@ function guessTitleKeyByPath(path) {
     "/roles": "nav.roles",
   };
   return map[path] || null;
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 export const appShell = { ensure, refreshText, markActiveNav };

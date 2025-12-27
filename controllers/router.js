@@ -7,10 +7,16 @@ let onNeedShell = null;
 
 function parseHash() {
   const h = window.location.hash || "";
-  if (!h.startsWith("#/")) return { path: "/main" };
-  const raw = h.slice(1); // "/main"
-  const [path] = raw.split("?");
-  return { path: path || "/main" };
+  if (!h.startsWith("#/")) return { path: "/main", query: {} };
+
+  const raw = h.slice(1); // "/tasks/view?id=1"
+  const [pathPart, queryPart] = raw.split("?");
+  const query = {};
+  if (queryPart) {
+    const sp = new URLSearchParams(queryPart);
+    for (const [k, v] of sp.entries()) query[k] = v;
+  }
+  return { path: pathPart || "/main", query };
 }
 
 function setDocumentTitle(titleKey) {
@@ -19,30 +25,22 @@ function setDocumentTitle(titleKey) {
   document.title = page ? `${appName} — ${page}` : appName;
 }
 
-async function loadController(def) {
-  const mod = await def.controllerPath();
-  // convention: module exports "controller"
-  return mod.controller;
-}
-
 async function render() {
-  const { path } = parseHash();
+  const { path, query } = parseHash();
   const def = routes.get(path) || routes.get("/main");
-
   if (!def) return;
 
-  // auth guard
+  // auth guard (UI)
   const user = window.APP?.user || null;
   if (def.requiresAuth && !user) {
     go("#/login");
     return;
   }
 
-  // shell switch
+  // shell/no-shell
   if (def.shell) {
     onNeedShell && onNeedShell();
   } else {
-    // if route is no-shell → wipe app container (login page)
     const root = document.getElementById("app");
     root.innerHTML = "";
     window.APP.outlet = null;
@@ -52,22 +50,28 @@ async function render() {
 
   const ctx = {
     path,
+    query,
     user: window.APP?.user || null,
     lang: window.APP?.lang || "ru",
     titleKey: def.titleKey,
     outlet: window.APP.outlet || document.getElementById("app"),
   };
 
-  const controller = await loadController(def);
+  // handler must return "page" object: {load, calc, render, mount}
+  const page = def.handler ? await def.handler(ctx) : null;
+  if (!page) {
+    ctx.outlet.innerHTML = `<div class="card" style="padding:14px">No page</div>`;
+    return;
+  }
 
-  const data = controller.load ? await controller.load(ctx) : null;
-  const vm = controller.calc ? controller.calc(ctx, data) : data;
-  const html = controller.render ? controller.render(ctx, vm) : "";
+  const data = page.load ? await page.load(ctx) : null;
+  const vm = page.calc ? page.calc(ctx, data) : data;
+  const html = page.render ? page.render(ctx, vm) : "";
 
   ctx.outlet.innerHTML = html;
   i18n.apply(ctx.outlet);
 
-  if (controller.mount) controller.mount(ctx, vm);
+  if (page.mount) page.mount(ctx, vm);
 
   currentRoute = { def, ctx };
 }
@@ -78,7 +82,7 @@ function start(opts = {}) {
   onNeedShell = opts.onNeedShell || null;
 
   window.addEventListener("hashchange", () => render());
-  // initial route
+
   if (!window.location.hash) {
     window.location.hash = opts.defaultRoute || "#/main";
     return;
@@ -103,16 +107,4 @@ function refresh() {
   render();
 }
 
-/** Helper: Stage 1 placeholders */
-function placeholders(items) {
-  return items.map((it) => ({
-    path: it.path,
-    requiresAuth: true,
-    shell: true,
-    titleKey: it.titleKey,
-    controllerPath: () => import("./_shared/placeholder.js"),
-    _placeholderTitleKey: it.titleKey,
-  }));
-}
-
-export const router = { start, register, go, refresh, placeholders };
+export const router = { start, register, go, refresh };
