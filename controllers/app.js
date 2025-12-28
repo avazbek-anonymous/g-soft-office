@@ -25,17 +25,29 @@ function renderBoot() {
   `;
 }
 
+
+
 async function initAuth() {
   try {
     const me = await api.get("/me");
-    window.APP.user = me;
-    i18n.syncFromUser(me);
+
+    // ✅ FIX: /me returns { ok, user, perms }
+    const user = me?.user ?? me;
+    const perms = me?.perms ?? me?.permissions ?? [];
+
+    window.APP.user = user;
+    window.APP.perms = perms;
+
+    i18n.syncFromUser(user);
     return true;
   } catch {
     window.APP.user = null;
+    window.APP.perms = [];
     return false;
   }
 }
+
+
 
 function moduleImportMap() {
   return {

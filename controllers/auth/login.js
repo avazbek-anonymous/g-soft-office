@@ -63,13 +63,20 @@ function mount(ctx) {
     btn.disabled = true;
 
     try {
-      await api.post("/auth/login", { login, password });
-      const me = await api.get("/me");
+      await api.post("/auth/login", body);
 
-      window.APP.user = me;
-      i18n.syncFromUser(me);
+const me = await api.get("/me");
 
-      router.go("#/main");
+// ✅ FIX: /me returns { ok, user, perms }
+const user = me?.user ?? me;
+const perms = me?.perms ?? me?.permissions ?? [];
+
+window.APP.user = user;
+window.APP.perms = perms;
+
+i18n.syncFromUser(user);
+router.go("#/main");
+
     } catch (ex) {
       showError(ex?.message || i18n.t("auth.login.error"));
     } finally {
