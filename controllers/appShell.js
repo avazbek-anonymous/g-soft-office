@@ -1,6 +1,8 @@
 import { i18n } from "./i18n.js";
 import { router } from "./router.js";
 import { api } from "./api.js";
+import { hasPerm } from "./rbac.js";
+
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -33,15 +35,26 @@ function roleLabel(roleKey) {
   return roleKey || "";
 }
 
-function canSeeNav(item, user) {
-  const rk = getRoleKey(user).toLowerCase();
-  if (rk === "admin") return true;
+//function canSeeNav(item, user) {
+//  const rk = getRoleKey(user).toLowerCase();
+//  if (rk === "admin") return true;
 
   // TZ: pm/fin — скрыть users/roles/settings если не разрешены
-  if (["/users", "/roles", "/settings"].includes(item.path)) return false;
+//  if (["/users", "/roles", "/settings"].includes(item.path)) return false;
+//
+//  return true;
+//}
 
-  return true;
+function canSeeNav(item) {
+  const module = item.path.replace("/", "");
+  // main — отдельный случай
+  if (module === "main") return hasPerm("main.index") || hasPerm("*");
+
+  // показываем пункт меню только если есть module.index
+  return hasPerm(`${module}.index`);
 }
+
+
 
 function iconSvg(name) {
   // Inline icons with currentColor (no colors in JS)
@@ -104,7 +117,7 @@ function ensure() {
   const uName = user?.full_name || user?.name || user?.login || `#${user?.id ?? ""}`;
 
   const navItems = navConfig()
-    .filter((it) => canSeeNav(it, user))
+    .filter((it) => canSeeNav(it))
     .map((it) => {
       return `
         <a class="navItem" href="#${it.path}" data-nav="${it.path}">
