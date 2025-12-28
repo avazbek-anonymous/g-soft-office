@@ -1,0 +1,636 @@
+{
+  "id": "GSOFT2-REGISTER-v1",
+  "tz_id": "GSOFT2-FRONT-JARVIS-TZ-v1",
+  "base_id": "GSOFT-BASE-v1:d91e2932409a",
+  "timezone": "Asia/Tashkent",
+  "rules_non_breakable": {
+    "frontend_structure": "index.html + view/{modules}/... + controllers/",
+    "pages_not_modals": true,
+    "languages": ["ru", "uz", "en"],
+    "single_i18n_controller": true,
+    "rbac_frontend": "UI hides forbidden; backend is source of truth",
+    "soft_delete": "archive/restore; never hard delete in UI",
+    "dicts_from_api_only": "all dropdown lists from settings/dict_items via API",
+    "no_new_tables_or_values": true,
+    "field_names": "frontend uses backend field names; no renaming"
+  },
+
+  "constants": {
+    "API_BASE": "https://api.ofis.gekto.uz",
+    "DEFAULT_ROUTE": "#/main",
+    "LANG_ORDER": ["ru", "uz", "en"],
+    "MODULES": [
+      "main",
+      "tasks",
+      "projects",
+      "courses",
+      "course_catalog",
+      "clients",
+      "settings",
+      "users",
+      "roles"
+    ],
+    "AUTH_COOKIE": "gsoft_session",
+    "CORS_ALLOW": ["https://ofis.gekto.uz", "http://localhost:5173", "http://localhost:3000"]
+  },
+
+  "frontend_architecture": {
+    "views": {
+      "root": "view/",
+      "per_module_pages": ["index.html", "view.html", "new.html", "edit.html"],
+      "login_page": "view/login.html",
+      "modules": {
+        "main": ["index.html"],
+        "tasks": ["index.html", "view.html", "new.html", "edit.html"],
+        "projects": ["index.html", "view.html", "new.html", "edit.html"],
+        "courses": ["index.html", "view.html", "new.html", "edit.html"],
+        "course_catalog": ["index.html", "view.html", "new.html", "edit.html"],
+        "clients": ["index.html", "view.html", "new.html", "edit.html"],
+        "settings": ["index.html", "view.html", "new.html", "edit.html"],
+        "users": ["index.html", "view.html", "new.html", "edit.html"],
+        "roles": ["index.html", "view.html", "new.html", "edit.html"]
+      }
+    },
+
+    "controllers": {
+      "root": "controllers/",
+      "core": [
+        "app.js",
+        "router.js",
+        "api.js",
+        "i18n.js",
+        "rbac.js",
+        "appShell.js",
+        "viewLoader.js",
+        "moduleFactory.js"
+      ],
+      "modules": [
+        "main.js",
+        "tasks.js",
+        "projects.js",
+        "courses.js",
+        "course_catalog.js",
+        "clients.js",
+        "settings.js",
+        "users.js",
+        "roles.js"
+      ],
+      "auth": ["auth/login.js"],
+      "controller_contract": {
+        "load": "load(ctx) -> loads data + template",
+        "calc": "calc(ctx, data) -> prepares UI view-model (grouping/kanban/counters)",
+        "render": "render(ctx, vm) -> returns HTML string",
+        "mount": "mount(ctx, vm) -> listeners after HTML inserted (optional)"
+      }
+    },
+
+    "router": {
+      "default_route": "#/main",
+      "login_route": "#/login",
+      "shell_routes_require_auth": true,
+      "auth_guard": {
+        "startup_check": "GET /me",
+        "on_401": "redirect #/login",
+        "on_ok": "window.APP.user = me.user; window.APP.perms = me.perms; sync lang"
+      }
+    },
+
+    "shell_layout": {
+      "sidebar": {
+        "visible_rule": "show item if hasPerm('<module>.index') OR perms includes '*'",
+        "active_highlight": "basePath rule: #/tasks/view -> /tasks active"
+      },
+      "header": {
+        "left": "current module title (i18n)",
+        "right": ["user (name + role)", "language switch", "logout"]
+      },
+      "main_container": {
+        "route_outlet": "#routeOutlet",
+        "cards": ".card style panels"
+      }
+    }
+  },
+
+  "icons": {
+    "root": "icons/",
+    "files": [
+      "asosiy.svg",
+      "clients.svg",
+      "cources.svg",
+      "catalog.svg",
+      "delete.svg",
+      "edit.svg",
+      "projects.svg",
+      "settings.svg",
+      "tasks.svg",
+      "users.svg",
+      "roles.svg"
+    ],
+    "nav_map": {
+      "main": "asosiy.svg",
+      "tasks": "tasks.svg",
+      "projects": "projects.svg",
+      "courses": "cources.svg",
+      "course_catalog": "catalog.svg",
+      "clients": "clients.svg",
+      "settings": "settings.svg",
+      "users": "users.svg",
+      "roles": "roles.svg"
+    },
+    "action_icons": {
+      "edit": "edit.svg",
+      "archive": "delete.svg",
+      "delete_alias": {
+        "deprecated_action": "delete",
+        "maps_to": "archive",
+        "icon": "delete.svg"
+      }
+    },
+    "usage_rule": "use CSS mask + currentColor; no hardcoded colors in JS"
+  },
+
+  "permissions": {
+    "format": "module.action",
+    "actions": ["index", "view", "create", "edit", "archive", "restore"],
+    "soft_delete": {
+      "delete_not_used": true,
+      "archive_restore_used": true
+    },
+    "menu_visibility": "module is visible in sidebar iff module.index allowed",
+    "wildcard": {
+      "key": "*",
+      "meaning": "all permissions allowed"
+    },
+    "generated_keys": [
+      "main.index",
+
+      "tasks.index",
+      "tasks.view",
+      "tasks.create",
+      "tasks.edit",
+      "tasks.archive",
+      "tasks.restore",
+
+      "projects.index",
+      "projects.view",
+      "projects.create",
+      "projects.edit",
+      "projects.archive",
+      "projects.restore",
+
+      "courses.index",
+      "courses.view",
+      "courses.create",
+      "courses.edit",
+      "courses.archive",
+      "courses.restore",
+
+      "course_catalog.index",
+      "course_catalog.view",
+      "course_catalog.create",
+      "course_catalog.edit",
+      "course_catalog.archive",
+      "course_catalog.restore",
+
+      "clients.index",
+      "clients.view",
+      "clients.create",
+      "clients.edit",
+      "clients.archive",
+      "clients.restore",
+
+      "settings.index",
+      "settings.view",
+      "settings.create",
+      "settings.edit",
+      "settings.archive",
+      "settings.restore",
+
+      "users.index",
+      "users.view",
+      "users.create",
+      "users.edit",
+      "users.archive",
+      "users.restore",
+
+      "roles.index",
+      "roles.view",
+      "roles.create",
+      "roles.edit",
+      "roles.archive",
+      "roles.restore"
+    ]
+  },
+
+  "routes": {
+    "DEFAULT_ROUTE": "#/main",
+    "login": "#/login",
+
+    "main.index": "#/main",
+
+    "tasks.index": "#/tasks",
+    "tasks.view": "#/tasks/view?id=:id",
+    "tasks.new": "#/tasks/new",
+    "tasks.edit": "#/tasks/edit?id=:id",
+
+    "projects.index": "#/projects",
+    "projects.view": "#/projects/view?id=:id",
+    "projects.new": "#/projects/new",
+    "projects.edit": "#/projects/edit?id=:id",
+
+    "courses.index": "#/courses",
+    "courses.view": "#/courses/view?id=:id",
+    "courses.new": "#/courses/new",
+    "courses.edit": "#/courses/edit?id=:id",
+
+    "course_catalog.index": "#/course_catalog",
+    "course_catalog.view": "#/course_catalog/view?id=:id",
+    "course_catalog.new": "#/course_catalog/new",
+    "course_catalog.edit": "#/course_catalog/edit?id=:id",
+
+    "clients.index": "#/clients",
+    "clients.view": "#/clients/view?id=:id",
+    "clients.new": "#/clients/new",
+    "clients.edit": "#/clients/edit?id=:id",
+
+    "settings.index": "#/settings",
+    "settings.view": "#/settings/view?dict=:dict&archived=:0or1",
+    "settings.new": "#/settings/new?dict=:dict",
+    "settings.edit": "#/settings/edit?dict=:dict&id=:id",
+
+    "users.index": "#/users",
+    "users.view": "#/users/view?id=:id",
+    "users.new": "#/users/new",
+    "users.edit": "#/users/edit?id=:id",
+
+    "roles.index": "#/roles",
+    "roles.view": "#/roles/view?id=:id",
+    "roles.new": "#/roles/new",
+    "roles.edit": "#/roles/edit?id=:id"
+  },
+
+  "dicts": {
+    "source": "settings/dict_items via API only",
+    "dicts_list": [
+      { "key": "cities", "title_i18n": "dict.cities" },
+      { "key": "sources", "title_i18n": "dict.sources" },
+      { "key": "spheres", "title_i18n": "dict.spheres" },
+      { "key": "task_statuses", "title_i18n": "dict.task_statuses" },
+      { "key": "project_statuses", "title_i18n": "dict.project_statuses" },
+      { "key": "lead_statuses", "title_i18n": "dict.lead_statuses" },
+      {
+        "key": "project_types",
+        "title_i18n": "dict.project_types",
+        "extra_fields": ["final_type"],
+        "final_type_enum": ["success", "cancel"]
+      }
+    ],
+    "dict_item_fields_common": [
+      "id",
+      "dict_key",
+      "name",
+      "color",
+      "sort",
+      "active",
+      "is_default",
+      "is_deleted",
+      "created_at",
+      "updated_at"
+    ],
+    "dict_item_fields_extra": {
+      "project_types": ["final_type"]
+    }
+  },
+
+  "i18n": {
+    "lang_order": ["ru", "uz", "en"],
+    "storage": {
+      "local": "localStorage",
+      "key": "gsoft_lang",
+      "sync_from_me": "user.lang if present"
+    },
+    "required_keys_stage1": [
+      "app.name",
+
+      "nav.main",
+      "nav.tasks",
+      "nav.projects",
+      "nav.courses",
+      "nav.course_catalog",
+      "nav.clients",
+      "nav.settings",
+      "nav.users",
+      "nav.roles",
+
+      "auth.login.title",
+      "auth.login.login",
+      "auth.login.password",
+      "auth.login.submit",
+      "auth.login.error",
+      "auth.logout",
+
+      "header.role.admin",
+      "header.role.pm",
+      "header.role.fin"
+    ],
+    "dict_title_keys": [
+      "dict.cities",
+      "dict.sources",
+      "dict.spheres",
+      "dict.task_statuses",
+      "dict.project_statuses",
+      "dict.lead_statuses",
+      "dict.project_types"
+    ],
+    "common_keys": [
+      "common.name",
+      "common.color",
+      "common.sort",
+      "common.active",
+      "common.default",
+      "common.actions",
+      "common.save",
+      "common.new",
+      "common.edit",
+      "common.archive",
+      "common.restore",
+      "common.noData",
+      "common.noAccess",
+      "common.back"
+    ],
+    "settings_keys": [
+      "settings.dicts",
+      "settings.items",
+      "settings.showArchived",
+      "settings.finalType"
+    ],
+    "roles_keys": [
+      "roles.title",
+      "roles.permissions",
+      "roles.save"
+    ],
+    "users_keys": [
+      "users.title",
+      "users.role",
+      "users.status",
+      "users.save"
+    ]
+  },
+
+  "ui_jarvis": {
+    "theme_vars_required": [
+      "--bg",
+      "--panel",
+      "--text",
+      "--muted",
+      "--accent",
+      "--accent2",
+      "--danger",
+      "--success",
+      "--warning",
+      "--stroke",
+      "--stroke2"
+    ],
+    "style_rules": {
+      "no_colors_in_js": true,
+      "use_css_vars_only": true,
+      "glass_panels": "card panels with subtle transparency + border",
+      "hover_glow": "accent2 glow on hover/active",
+      "animation_ms": [150, 250]
+    },
+    "components": {
+      "card": "panel container",
+      "btn": "buttons (primary/ghost)",
+      "input": "inputs/selects",
+      "techTable": "thin grid table"
+    }
+  },
+
+  "api_registry": {
+    "auth": [
+      {
+        "method": "POST",
+        "path": "/auth/login",
+        "credentials": "include",
+        "description": "login; sets cookie gsoft_session"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/logout",
+        "credentials": "include",
+        "description": "logout; clears session"
+      },
+      {
+        "method": "GET",
+        "path": "/me",
+        "credentials": "include",
+        "description": "returns {ok, user, perms}; 401 if no session"
+      }
+    ],
+
+    "settings": [
+      {
+        "method": "GET",
+        "path": "/settings/dicts",
+        "credentials": "include",
+        "perm": "settings.index",
+        "description": "list dict keys available"
+      },
+      {
+        "method": "GET",
+        "path": "/settings/dict-items?dict=:key&include_deleted=:0or1",
+        "credentials": "include",
+        "perm": "settings.view",
+        "description": "list items of dictionary"
+      },
+      {
+        "method": "GET",
+        "path": "/settings/dict-items/:id",
+        "credentials": "include",
+        "perm": "settings.view",
+        "description": "single dict item"
+      },
+      {
+        "method": "POST",
+        "path": "/settings/dict-items",
+        "credentials": "include",
+        "perm": "settings.create",
+        "description": "create dict item (no hardcoded values in frontend)"
+      },
+      {
+        "method": "PATCH",
+        "path": "/settings/dict-items/:id",
+        "credentials": "include",
+        "perm": "settings.edit",
+        "description": "edit dict item; also supports archive/restore via is_deleted"
+      }
+    ],
+
+    "roles": [
+      {
+        "method": "GET",
+        "path": "/roles",
+        "credentials": "include",
+        "perm": "roles.index",
+        "description": "list roles"
+      },
+      {
+        "method": "GET",
+        "path": "/roles/:id",
+        "credentials": "include",
+        "perm": "roles.view",
+        "description": "role details"
+      },
+      {
+        "method": "GET",
+        "path": "/roles/:id/permissions",
+        "credentials": "include",
+        "perm": "roles.view",
+        "description": "role permissions matrix"
+      },
+      {
+        "method": "PATCH",
+        "path": "/roles/:id/permissions",
+        "credentials": "include",
+        "perm": "roles.edit",
+        "description": "update role permissions"
+      }
+    ],
+
+    "users": [
+      {
+        "method": "GET",
+        "path": "/users",
+        "credentials": "include",
+        "perm": "users.index",
+        "description": "list users"
+      },
+      {
+        "method": "GET",
+        "path": "/users/:id",
+        "credentials": "include",
+        "perm": "users.view",
+        "description": "user view"
+      },
+      {
+        "method": "POST",
+        "path": "/users",
+        "credentials": "include",
+        "perm": "users.create",
+        "description": "create user"
+      },
+      {
+        "method": "PATCH",
+        "path": "/users/:id",
+        "credentials": "include",
+        "perm": "users.edit",
+        "description": "edit user"
+      },
+      {
+        "method": "PATCH",
+        "path": "/users/:id/archive",
+        "credentials": "include",
+        "perm": "users.archive",
+        "description": "soft delete"
+      },
+      {
+        "method": "PATCH",
+        "path": "/users/:id/restore",
+        "credentials": "include",
+        "perm": "users.restore",
+        "description": "restore"
+      }
+    ],
+
+    "clients": [
+      {
+        "method": "GET",
+        "path": "/clients",
+        "credentials": "include",
+        "perm": "clients.index",
+        "description": "clients list"
+      },
+      {
+        "method": "GET",
+        "path": "/clients/:id",
+        "credentials": "include",
+        "perm": "clients.view",
+        "description": "client view (incl projects + course leads if backend provides)"
+      },
+      {
+        "method": "POST",
+        "path": "/clients",
+        "credentials": "include",
+        "perm": "clients.create",
+        "description": "create client"
+      },
+      {
+        "method": "PATCH",
+        "path": "/clients/:id",
+        "credentials": "include",
+        "perm": "clients.edit",
+        "description": "edit client"
+      },
+      {
+        "method": "PATCH",
+        "path": "/clients/:id/archive",
+        "credentials": "include",
+        "perm": "clients.archive",
+        "description": "soft delete"
+      },
+      {
+        "method": "PATCH",
+        "path": "/clients/:id/restore",
+        "credentials": "include",
+        "perm": "clients.restore",
+        "description": "restore"
+      }
+    ],
+
+    "course_catalog": [
+      {
+        "method": "GET",
+        "path": "/course_catalog",
+        "credentials": "include",
+        "perm": "course_catalog.index",
+        "description": "catalog list"
+      }
+    ],
+
+    "courses": [
+      {
+        "method": "GET",
+        "path": "/courses",
+        "credentials": "include",
+        "perm": "courses.index",
+        "description": "courses list (kanban in index)"
+      }
+    ],
+
+    "projects": [
+      {
+        "method": "GET",
+        "path": "/projects",
+        "credentials": "include",
+        "perm": "projects.index",
+        "description": "projects list (kanban in index)"
+      }
+    ],
+
+    "tasks": [
+      {
+        "method": "GET",
+        "path": "/tasks",
+        "credentials": "include",
+        "perm": "tasks.index",
+        "description": "tasks list (kanban in index); admin may filter by users"
+      }
+    ]
+  },
+
+  "notes": {
+    "no_fallback_values": "Frontend must not invent dict items/status lists; only show data from API.",
+    "seed_optional": "If you seed dict items, do it via explicit seed scripts (you control values).",
+    "permissions_storage": "DB: role_permissions(permission_id FK) + permissions(key). /me should return perms as keys."
+  }
+}

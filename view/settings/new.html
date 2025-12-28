@@ -4,10 +4,64 @@
       <div class="caps" style="font-weight:900;font-size:13px;letter-spacing:.12em" data-slot="title"></div>
       <div class="muted" style="margin-top:4px" data-slot="subtitle"></div>
     </div>
-    <div class="row" data-slot="actions"></div>
+    <div class="row" style="gap:8px" data-slot="actions"></div>
   </div>
 
-  <div style="margin-top:12px" data-slot="content"></div>
+  <div style="margin-top:12px" data-slot="content">
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;">
+      <div class="card" style="padding:12px; box-shadow:none;">
+        <div class="caps" style="font-size:12px;letter-spacing:.10em" data-i18n="settings.dicts"></div>
+        <input id="dictSearch" class="input" style="margin-top:10px" placeholder="Search" />
+        <div id="dictList" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="padding:12px; box-shadow:none;">
+        <form id="settingsForm" class="col" style="gap:10px">
+          <div class="col" style="gap:6px">
+            <div class="muted" data-i18n="common.name">Name</div>
+            <input id="fName" class="input" />
+          </div>
+
+          <div class="row" style="gap:10px;flex-wrap:wrap">
+            <div class="col" style="gap:6px;min-width:160px;flex:1">
+              <div class="muted" data-i18n="common.color">Color</div>
+              <input id="fColor" class="input" placeholder="#00E5FF" />
+            </div>
+
+            <div class="col" style="gap:6px;min-width:120px">
+              <div class="muted" data-i18n="common.sort">Sort</div>
+              <input id="fSort" class="input" type="number" />
+            </div>
+          </div>
+
+          <div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">
+            <label class="row" style="gap:8px;align-items:center">
+              <input id="fActive" type="checkbox" />
+              <span class="muted" data-i18n="common.active">Active</span>
+            </label>
+
+            <label class="row" style="gap:8px;align-items:center">
+              <input id="fDefault" type="checkbox" />
+              <span class="muted" data-i18n="common.default">Default</span>
+            </label>
+          </div>
+
+          <div id="finalTypeWrap" class="col" style="gap:6px;display:none">
+            <div class="muted" data-i18n="settings.finalType">Final type</div>
+            <select id="fFinalType" class="input">
+              <option value=""></option>
+              <option value="success">success</option>
+              <option value="cancel">cancel</option>
+            </select>
+          </div>
+
+          <div class="row" style="gap:10px;justify-content:flex-end;margin-top:6px">
+            <button class="btn" type="submit" data-i18n="common.save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <div class="errorLine" data-slot="error" style="margin-top:12px"></div>
 </div>

@@ -7,7 +7,19 @@
     <div class="row" data-slot="actions"></div>
   </div>
 
-  <div style="margin-top:12px" data-slot="content"></div>
+  <div style="margin-top:12px" data-slot="content">
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;">
+      <div class="card" style="padding:12px; box-shadow:none;">
+        <div class="caps" style="font-size:12px;letter-spacing:.10em" data-i18n="settings.dicts"></div>
+        <input id="dictSearch" class="input" style="margin-top:10px" placeholder="Search" />
+        <div id="dictList" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="padding:12px; box-shadow:none;">
+        <div class="muted">…</div>
+      </div>
+    </div>
+  </div>
 
   <div class="errorLine" data-slot="error" style="margin-top:12px"></div>
 </div>
