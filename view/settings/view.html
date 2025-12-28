@@ -1,32 +1,42 @@
-<div class="card" style="padding:14px;">
-  <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap">
-    <div>
-      <div class="caps" style="font-weight:900;font-size:13px;letter-spacing:.12em" data-slot="title"></div>
-      <div class="muted" style="margin-top:4px" data-slot="subtitle"></div>
+<!-- view/settings/view.html -->
+<div id="settingsView" class="sv-root">
+  <div class="sv-head">
+    <div class="sv-title">
+      <div class="sv-h1"><span data-i18n="common.view">View</span> · <span data-i18n="settings.title">Settings</span></div>
+      <div class="sv-h2" id="svDictTitle"></div>
     </div>
-    <div class="row" style="gap:8px" data-slot="actions"></div>
-  </div>
-
-  <div style="margin-top:12px" data-slot="content">
-    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;">
-      <div class="card" style="padding:12px; box-shadow:none;">
-        <div class="caps" style="font-size:12px;letter-spacing:.10em" data-i18n="settings.dicts"></div>
-        <input id="dictSearch" class="input" style="margin-top:10px" placeholder="Search" />
-        <div id="dictList" style="margin-top:10px"></div>
-      </div>
-
-      <div class="card" style="padding:12px; box-shadow:none;">
-        <div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-          <label class="row" style="gap:8px;align-items:center">
-            <input type="checkbox" id="showArchived" />
-            <span class="muted" data-i18n="settings.showArchived">Show archived</span>
-          </label>
-        </div>
-
-        <div style="margin-top:10px" id="itemsWrap"></div>
-      </div>
+    <div class="sv-actions">
+      <button class="sv-btn ghost" id="svBackBtn" type="button" data-i18n="common.back">Back</button>
+      <button class="sv-btn" id="svEditBtn" type="button" data-i18n="common.edit">Edit</button>
     </div>
   </div>
 
-  <div class="errorLine" data-slot="error" style="margin-top:12px"></div>
+  <div id="svError" class="sv-error" style="display:none"></div>
+
+  <div class="sv-panel">
+    <div class="sv-row"><div class="sv-k" data-i18n="common.name">Name</div><div class="sv-v" id="svName"></div></div>
+    <div class="sv-row"><div class="sv-k" data-i18n="common.color">Color</div><div class="sv-v"><span class="sv-swatch" id="svColor"></span> <span id="svColorTxt"></span></div></div>
+    <div class="sv-row"><div class="sv-k" data-i18n="common.sort">Sort</div><div class="sv-v" id="svSort"></div></div>
+    <div class="sv-row"><div class="sv-k" data-i18n="common.active">Active</div><div class="sv-v" id="svActive"></div></div>
+    <div class="sv-row"><div class="sv-k" data-i18n="common.default">Default</div><div class="sv-v" id="svDefault"></div></div>
+    <div class="sv-row" id="svFinalTypeRow" style="display:none"><div class="sv-k" data-i18n="settings.finalType">Final type</div><div class="sv-v" id="svFinalType"></div></div>
+  </div>
 </div>
+
+<style>
+  .sv-root{display:flex;flex-direction:column;gap:12px}
+  .sv-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+  .sv-h1{font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+  .sv-h2{color:var(--muted);font-size:12px;margin-top:2px}
+  .sv-panel{border:1px solid var(--border);border-radius:16px;background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .sv-row{display:grid;grid-template-columns:220px 1fr;gap:10px;padding:10px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(0,0,0,.18)}
+  .sv-k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .sv-v{color:var(--text)}
+  .sv-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .sv-btn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer}
+  .sv-btn:hover{border-color:rgba(0,229,255,.35)}
+  .sv-btn.ghost{background:transparent}
+  .sv-error{padding:10px 12px;border-radius:14px;border:1px solid rgba(255,77,79,.45);background:rgba(255,77,79,.08);color:rgba(255,255,255,.92)}
+  .sv-swatch{width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.18);display:inline-block;vertical-align:middle;margin-right:8px}
+  @media (max-width: 980px){.sv-row{grid-template-columns:1fr}}
+</style>

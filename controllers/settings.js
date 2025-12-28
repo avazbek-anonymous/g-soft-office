@@ -1,562 +1,498 @@
-import { i18n } from "./i18n.js";
+// controllers/settings.js
+// Settings module (dict_items)
+// Pages: index / new / edit / view
+// API: /settings/dicts, /settings/dict-items, /settings/dict-items/:id
+
 import { api } from "./api.js";
-import { loadTpl } from "./viewLoader.js";
-import { hasPerm } from "./rbac.js";
-import { appShell } from "./appShell.js";
+import { t, applyI18n } from "./i18n.js"; // если у тебя applyI18n называется иначе — поменяй тут
 
-const EP = {
-  dicts: "/settings/dicts",
-  items: (dict, includeDeleted) =>
-    `/settings/dict-items?dict=${encodeURIComponent(dict)}&include_deleted=${includeDeleted ? 1 : 0}`,
-  item: (id) => `/settings/dict-items/${encodeURIComponent(id)}`,
-  create: "/settings/dict-items",
-  update: (id) => `/settings/dict-items/${encodeURIComponent(id)}`,
-};
+const LS_DICT = "gsoft.settings.dict";
+const LS_ARCH = "gsoft.settings.include_deleted";
 
-function qsEscape(s) {
-  return encodeURIComponent(String(s ?? ""));
+let _dictsCache = null;
+
+function qsFromHash() {
+  const h = location.hash || "";
+  const i = h.indexOf("?");
+  const q = i >= 0 ? h.slice(i + 1) : "";
+  return new URLSearchParams(q);
 }
 
-function setText(root, sel, text) {
-  const el = root.querySelector(sel);
-  if (el) el.textContent = text ?? "";
+function getPageFromHash() {
+  const p = (location.hash.split("?")[0] || "").replace("#", "");
+  // "#/settings/edit" -> ["", "settings", "edit"]
+  const parts = p.split("/").filter(Boolean);
+  const page = parts[1] || "index";
+  return page; // index | new | edit | view
 }
 
-function setHtml(root, sel, html) {
-  const el = root.querySelector(sel);
-  if (el) el.innerHTML = html ?? "";
+function getDictKey(qs) {
+  return qs.get("dict") || localStorage.getItem(LS_DICT) || "";
 }
 
-function setError(root, msg) {
-  const el = root.querySelector('[data-slot="error"]');
+function setDictKey(dict) {
+  if (dict) localStorage.setItem(LS_DICT, dict);
+}
+
+function getIncludeDeleted(qs) {
+  if (qs.has("include_deleted")) return qs.get("include_deleted") === "1";
+  return localStorage.getItem(LS_ARCH) === "1";
+}
+
+function setIncludeDeleted(v) {
+  localStorage.setItem(LS_ARCH, v ? "1" : "0");
+}
+
+function setErr(el, msg) {
   if (!el) return;
-  if (!msg) {
-    el.classList.remove("show");
-    el.textContent = "";
+  el.style.display = msg ? "" : "none";
+  el.textContent = msg ? String(msg) : "";
+}
+
+function navToIndex(dict, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  if (includeDeleted) q.set("include_deleted", "1");
+  location.hash = `#/settings?${q.toString()}`;
+}
+
+function navToNew(dict, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  if (includeDeleted) q.set("include_deleted", "1");
+  location.hash = `#/settings/new?${q.toString()}`;
+}
+
+function navToEdit(dict, id, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  q.set("id", String(id));
+  if (includeDeleted) q.set("include_deleted", "1");
+  location.hash = `#/settings/edit?${q.toString()}`;
+}
+
+function navToView(dict, id, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  q.set("id", String(id));
+  if (includeDeleted) q.set("include_deleted", "1");
+  location.hash = `#/settings/view?${q.toString()}`;
+}
+
+async function loadDicts() {
+  if (_dictsCache) return _dictsCache;
+  const r = await api.get("/settings/dicts");
+  _dictsCache = r.dicts || [];
+  return _dictsCache;
+}
+
+async function loadItems(dict, includeDeleted) {
+  const q = new URLSearchParams();
+  q.set("dict", dict);
+  q.set("include_deleted", includeDeleted ? "1" : "0");
+  const r = await api.get(`/settings/dict-items?${q.toString()}`);
+  return r.items || [];
+}
+
+/* ========================= INDEX ========================= */
+async function mountIndex() {
+  const root = document.getElementById("settingsIndex");
+  if (!root) return;
+
+  // i18n apply for this fragment (если у тебя другой метод — просто убери строку)
+  try { applyI18n(root); } catch {}
+
+  const qs = qsFromHash();
+  const errEl = document.getElementById("stError");
+  const dictListEl = document.getElementById("stDictList");
+  const dictEmptyEl = document.getElementById("stDictEmpty");
+  const itemsBody = document.getElementById("stItemsBody");
+  const noDataEl = document.getElementById("stNoData");
+  const dictPill = document.getElementById("stDictKeyPill");
+  const countEl = document.getElementById("stCount");
+
+  const searchEl = document.getElementById("stSearch");
+  const archivedEl = document.getElementById("stShowArchived");
+  const newBtn = document.getElementById("stNewBtn");
+
+  setErr(errEl, "");
+
+  const dicts = await loadDicts();
+  let dict = getDictKey(qs);
+  if (!dict && dicts.length) dict = dicts[0].key;
+
+  const includeDeleted = getIncludeDeleted(qs);
+
+  if (archivedEl) archivedEl.checked = includeDeleted;
+
+  // render dict list
+  dictListEl.innerHTML = "";
+  if (!dicts.length) {
+    dictEmptyEl.style.display = "";
+  } else {
+    dictEmptyEl.style.display = "none";
+    for (const d of dicts) {
+      const el = document.createElement("div");
+      el.className = "st-dict" + (d.key === dict ? " active" : "");
+      el.innerHTML = `
+        <div>
+          <div>${t(d.title_i18n || d.key)}</div>
+          <small>${d.key}</small>
+        </div>
+      `;
+      el.addEventListener("click", () => {
+        setDictKey(d.key);
+        navToIndex(d.key, includeDeleted);
+      });
+      dictListEl.appendChild(el);
+    }
+  }
+
+  if (!dict) {
+    dictPill.textContent = "";
+    itemsBody.innerHTML = "";
+    noDataEl.style.display = "";
+    if (countEl) countEl.textContent = "";
     return;
   }
-  el.classList.add("show");
-  el.textContent = msg;
-}
 
-function safeT(key, fallback) {
-  const v = i18n.t(key);
-  return !v || v === key ? fallback : v;
-}
+  setDictKey(dict);
+  dictPill.textContent = dict;
 
-function normMeDicts(dicts) {
-  // expected: [{key,title,description?}]
-  if (Array.isArray(dicts)) return dicts;
-  return [];
-}
-
-function fallbackDicts() {
-  // only as UI fallback if backend not ready
-  return [
-    { key: "cities", title: "Cities" },
-    { key: "sources", title: "Sources" },
-    { key: "spheres", title: "Spheres" },
-    { key: "task_statuses", title: "Task statuses" },
-    { key: "project_statuses", title: "Project statuses" },
-    { key: "lead_statuses", title: "Lead statuses" },
-    { key: "project_types", title: "Project types" },
-  ];
-}
-
-function renderDictList(dicts, activeKey, q) {
-  const query = (q || "").trim().toLowerCase();
-  const list = dicts
-    .filter((d) => {
-      if (!query) return true;
-      return (
-        String(d.key || "").toLowerCase().includes(query) ||
-        String(d.title || "").toLowerCase().includes(query)
-      );
-    })
-    .map((d) => {
-      const active = d.key === activeKey ? "active" : "";
-      return `
-        <a class="dictItem ${active}" href="#/settings/view?dict=${qsEscape(d.key)}" data-dict="${qsEscape(d.key)}">
-          <div class="dictKey">${escapeHtml(d.key)}</div>
-          <div class="dictTitle muted">${escapeHtml(d.title || d.key)}</div>
-        </a>
-      `;
-    })
-    .join("");
-
-  return list || `<div class="muted" style="padding:10px">${safeT("common.noData", "No data")}</div>`;
-}
-
-function renderItemsTable(items, opts) {
-  const { canEdit, canArchive, canRestore } = opts;
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return `<div class="muted">${safeT("common.noData", "No data")}</div>`;
+  let items = [];
+  try {
+    items = await loadItems(dict, includeDeleted);
+  } catch (e) {
+    setErr(errEl, e?.message || "Load error");
+    return;
   }
 
-  const rows = items
-    .map((it) => {
-      const id = it.id;
-      const name = it.name ?? it.title ?? it.value ?? it.key ?? `#${id}`;
-      const color = it.color ?? "";
-      const sort = it.sort ?? "";
-      const active = (it.active ?? 1) ? "✓" : "";
-      const deleted = (it.is_deleted ?? 0) ? "archived" : "";
+  // UI events
+  if (newBtn) {
+    newBtn.onclick = () => navToNew(dict, includeDeleted);
+  }
+  if (archivedEl) {
+    archivedEl.onchange = () => {
+      setIncludeDeleted(archivedEl.checked);
+      navToIndex(dict, archivedEl.checked);
+    };
+  }
 
-      const editBtn =
-        canEdit && !(it.is_deleted ?? 0)
-          ? `<a class="btn ghost sm" href="#/settings/edit?dict=${qsEscape(it.dict || "")}&id=${qsEscape(id)}">${safeT(
-              "common.edit",
-              "Edit"
-            )}</a>`
-          : "";
+  function renderRows() {
+    const q = String(searchEl?.value || "").toLowerCase().trim();
+    const filtered = items.filter(it => {
+      if (!q) return true;
+      return String(it.name || "").toLowerCase().includes(q);
+    });
 
-      const archiveBtn =
-        canArchive && !(it.is_deleted ?? 0)
-          ? `<button class="btn ghost sm" type="button" data-act="archive" data-id="${qsEscape(
-              id
-            )}">${safeT("common.archive", "Archive")}</button>`
-          : "";
+    if (countEl) countEl.textContent = `${filtered.length}`;
+    itemsBody.innerHTML = "";
 
-      const restoreBtn =
-        canRestore && (it.is_deleted ?? 0)
-          ? `<button class="btn ghost sm" type="button" data-act="restore" data-id="${qsEscape(
-              id
-            )}">${safeT("common.restore", "Restore")}</button>`
-          : "";
+    if (!filtered.length) {
+      noDataEl.style.display = "";
+      return;
+    }
+    noDataEl.style.display = "none";
 
-      const nameLink = canEdit
-        ? `<a class="link" href="#/settings/edit?dict=${qsEscape(it.dict || "")}&id=${qsEscape(id)}">${escapeHtml(
-            name
-          )}</a>`
-        : `<span>${escapeHtml(name)}</span>`;
+    for (const it of filtered) {
+      const tr = document.createElement("tr");
 
-      return `
-        <tr class="${deleted}">
-          <td style="width:40%">${nameLink}</td>
-          <td style="width:16%"><span class="muted">${escapeHtml(color)}</span></td>
-          <td style="width:12%"><span class="muted">${escapeHtml(sort)}</span></td>
-          <td style="width:10%"><span class="muted">${active}</span></td>
-          <td style="width:22%">
-            <div class="row" style="gap:6px;justify-content:flex-end;flex-wrap:wrap">
-              ${editBtn}${archiveBtn}${restoreBtn}
-            </div>
-          </td>
-        </tr>
+      const swatch = `<span class="st-swatch" style="background:${it.color || "transparent"}"></span>`;
+
+      tr.innerHTML = `
+        <td>
+          <a href="javascript:void(0)" class="st-link" style="color:rgba(0,229,255,.9);text-decoration:none">
+            ${escapeHtml(it.name || "")}
+          </a>
+        </td>
+        <td>${swatch} <span style="color:var(--muted)">${escapeHtml(it.color || "")}</span></td>
+        <td>${Number(it.sort || 0)}</td>
+        <td>${it.active ? "1" : "0"}</td>
+        <td>${it.is_default ? "1" : "0"}</td>
+        <td>
+          <div class="st-rowActions">
+            <button class="st-a" data-act="edit">${t("common.edit")}</button>
+            <button class="st-a" data-act="view">${t("common.view")}</button>
+            ${
+              it.is_deleted
+                ? `<button class="st-a" data-act="restore">${t("common.restore")}</button>`
+                : `<button class="st-a danger" data-act="archive">${t("common.archive")}</button>`
+            }
+          </div>
+        </td>
       `;
-    })
-    .join("");
 
-  return `
-    <div class="techTableWrap">
-      <table class="techTable">
-        <thead>
-          <tr>
-            <th>${safeT("common.name", "Name")}</th>
-            <th>${safeT("common.color", "Color")}</th>
-            <th>${safeT("common.sort", "Sort")}</th>
-            <th>${safeT("common.active", "Active")}</th>
-            <th style="text-align:right">${safeT("common.actions", "Actions")}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
+      // name click -> view
+      tr.querySelector(".st-link")?.addEventListener("click", () => navToView(dict, it.id, includeDeleted));
+
+      tr.querySelector('[data-act="edit"]')?.addEventListener("click", () => navToEdit(dict, it.id, includeDeleted));
+      tr.querySelector('[data-act="view"]')?.addEventListener("click", () => navToView(dict, it.id, includeDeleted));
+
+      tr.querySelector('[data-act="archive"]')?.addEventListener("click", async () => {
+        await api.patch(`/settings/dict-items/${it.id}`, { is_deleted: 1 });
+        items = await loadItems(dict, includeDeleted);
+        renderRows();
+      });
+
+      tr.querySelector('[data-act="restore"]')?.addEventListener("click", async () => {
+        await api.patch(`/settings/dict-items/${it.id}`, { is_deleted: 0 });
+        items = await loadItems(dict, includeDeleted);
+        renderRows();
+      });
+
+      itemsBody.appendChild(tr);
+    }
+  }
+
+  if (searchEl) {
+    searchEl.oninput = () => renderRows();
+  }
+
+  renderRows();
 }
 
+/* ========================= NEW / EDIT form shared ========================= */
+function showFinalTypeIfNeeded(dictKey, rowEl) {
+  if (!rowEl) return;
+  rowEl.style.display = dictKey === "project_types" ? "" : "none";
+}
+
+async function mountNew() {
+  const root = document.getElementById("settingsNew");
+  if (!root) return;
+
+  try { applyI18n(root); } catch {}
+
+  const qs = qsFromHash();
+  const dict = getDictKey(qs);
+  const includeDeleted = getIncludeDeleted(qs);
+
+  const errEl = document.getElementById("sfError");
+  const dictTitleEl = document.getElementById("sfDictTitle");
+  const backBtn = document.getElementById("sfBackBtn");
+  const cancelBtn = document.getElementById("sfCancelBtn");
+  const form = document.getElementById("sfForm");
+
+  const nameEl = document.getElementById("sfName");
+  const colorEl = document.getElementById("sfColor");
+  const sortEl = document.getElementById("sfSort");
+  const activeEl = document.getElementById("sfActive");
+  const defEl = document.getElementById("sfDefault");
+  const finalTypeRow = document.getElementById("sfFinalTypeRow");
+  const finalTypeEl = document.getElementById("sfFinalType");
+
+  setErr(errEl, "");
+
+  const dicts = await loadDicts();
+  const d = dicts.find(x => x.key === dict);
+  dictTitleEl.textContent = d ? `${t(d.title_i18n || d.key)} · ${dict}` : dict;
+
+  showFinalTypeIfNeeded(dict, finalTypeRow);
+
+  backBtn.onclick = () => navToIndex(dict, includeDeleted);
+  cancelBtn.onclick = () => navToIndex(dict, includeDeleted);
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    setErr(errEl, "");
+
+    const payload = {
+      dict_key: dict,
+      name: String(nameEl.value || "").trim(),
+      color: String(colorEl.value || "").trim(),
+      sort: Number(sortEl.value || 0),
+      active: activeEl.checked ? 1 : 0,
+      is_default: defEl.checked ? 1 : 0,
+    };
+    if (!payload.name) {
+      setErr(errEl, t("common.requiredName") || "Name required");
+      return;
+    }
+    if (dict === "project_types") {
+      payload.final_type = String(finalTypeEl.value || "").trim() || null;
+    }
+
+    try {
+      await api.post("/settings/dict-items", payload);
+      navToIndex(dict, includeDeleted);
+    } catch (e2) {
+      setErr(errEl, e2?.message || "Save error");
+    }
+  };
+}
+
+async function mountEdit() {
+  const root = document.getElementById("settingsEdit");
+  if (!root) return;
+
+  try { applyI18n(root); } catch {}
+
+  const qs = qsFromHash();
+  const dict = getDictKey(qs);
+  const includeDeleted = getIncludeDeleted(qs);
+  const id = Number(qs.get("id") || 0);
+
+  const errEl = document.getElementById("sfError");
+  const dictTitleEl = document.getElementById("sfDictTitle");
+  const backBtn = document.getElementById("sfBackBtn");
+  const cancelBtn = document.getElementById("sfCancelBtn");
+  const form = document.getElementById("sfForm");
+
+  const nameEl = document.getElementById("sfName");
+  const colorEl = document.getElementById("sfColor");
+  const sortEl = document.getElementById("sfSort");
+  const activeEl = document.getElementById("sfActive");
+  const defEl = document.getElementById("sfDefault");
+  const finalTypeRow = document.getElementById("sfFinalTypeRow");
+  const finalTypeEl = document.getElementById("sfFinalType");
+
+  setErr(errEl, "");
+
+  const dicts = await loadDicts();
+  const d = dicts.find(x => x.key === dict);
+  dictTitleEl.textContent = d ? `${t(d.title_i18n || d.key)} · ${dict} · #${id}` : `${dict} · #${id}`;
+
+  showFinalTypeIfNeeded(dict, finalTypeRow);
+
+  backBtn.onclick = () => navToIndex(dict, includeDeleted);
+  cancelBtn.onclick = () => navToIndex(dict, includeDeleted);
+
+  if (!id) {
+    setErr(errEl, "Missing id");
+    return;
+  }
+
+  let item;
+  try {
+    const r = await api.get(`/settings/dict-items/${id}`);
+    item = r.item;
+  } catch (e) {
+    setErr(errEl, e?.message || "Load error");
+    return;
+  }
+
+  // fill
+  nameEl.value = item?.name || "";
+  colorEl.value = item?.color || "";
+  sortEl.value = Number(item?.sort || 0);
+  activeEl.checked = !!item?.active;
+  defEl.checked = !!item?.is_default;
+  if (dict === "project_types") finalTypeEl.value = item?.final_type || "";
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    setErr(errEl, "");
+
+    const payload = {
+      name: String(nameEl.value || "").trim(),
+      color: String(colorEl.value || "").trim(),
+      sort: Number(sortEl.value || 0),
+      active: activeEl.checked ? 1 : 0,
+      is_default: defEl.checked ? 1 : 0,
+    };
+    if (!payload.name) {
+      setErr(errEl, t("common.requiredName") || "Name required");
+      return;
+    }
+    if (dict === "project_types") {
+      payload.final_type = String(finalTypeEl.value || "").trim() || null;
+    }
+
+    try {
+      await api.patch(`/settings/dict-items/${id}`, payload);
+      navToIndex(dict, includeDeleted);
+    } catch (e2) {
+      setErr(errEl, e2?.message || "Save error");
+    }
+  };
+}
+
+/* ========================= VIEW ========================= */
+async function mountView() {
+  const root = document.getElementById("settingsView");
+  if (!root) return;
+
+  try { applyI18n(root); } catch {}
+
+  const qs = qsFromHash();
+  const dict = getDictKey(qs);
+  const includeDeleted = getIncludeDeleted(qs);
+  const id = Number(qs.get("id") || 0);
+
+  const errEl = document.getElementById("svError");
+  const dictTitleEl = document.getElementById("svDictTitle");
+  const backBtn = document.getElementById("svBackBtn");
+  const editBtn = document.getElementById("svEditBtn");
+
+  const nameEl = document.getElementById("svName");
+  const colorEl = document.getElementById("svColor");
+  const colorTxtEl = document.getElementById("svColorTxt");
+  const sortEl = document.getElementById("svSort");
+  const activeEl = document.getElementById("svActive");
+  const defEl = document.getElementById("svDefault");
+  const finalTypeRow = document.getElementById("svFinalTypeRow");
+  const finalTypeEl = document.getElementById("svFinalType");
+
+  setErr(errEl, "");
+
+  const dicts = await loadDicts();
+  const d = dicts.find(x => x.key === dict);
+  dictTitleEl.textContent = d ? `${t(d.title_i18n || d.key)} · ${dict} · #${id}` : `${dict} · #${id}`;
+
+  backBtn.onclick = () => navToIndex(dict, includeDeleted);
+  editBtn.onclick = () => navToEdit(dict, id, includeDeleted);
+
+  if (!id) {
+    setErr(errEl, "Missing id");
+    return;
+  }
+
+  let item;
+  try {
+    const r = await api.get(`/settings/dict-items/${id}`);
+    item = r.item;
+  } catch (e) {
+    setErr(errEl, e?.message || "Load error");
+    return;
+  }
+
+  nameEl.textContent = item?.name || "";
+  colorEl.style.background = item?.color || "transparent";
+  colorTxtEl.textContent = item?.color || "";
+  sortEl.textContent = String(Number(item?.sort || 0));
+  activeEl.textContent = item?.active ? "1" : "0";
+  defEl.textContent = item?.is_default ? "1" : "0";
+
+  if (dict === "project_types") {
+    finalTypeRow.style.display = "";
+    finalTypeEl.textContent = item?.final_type || "";
+  } else {
+    finalTypeRow.style.display = "none";
+  }
+}
+
+/* ========================= PUBLIC INIT =========================
+  Роутер должен вызывать initSettings() после подгрузки HTML страницы.
+  Например:
+    if (module==="settings") import("./controllers/settings.js").then(m=>m.initSettings())
+*/
+export async function initSettings() {
+  const page = getPageFromHash();
+  if (page === "new") return mountNew();
+  if (page === "edit") return mountEdit();
+  if (page === "view") return mountView();
+  return mountIndex();
+}
+
+// для удобства — если хочешь, можешь дергать window.GSOFT_SETTINGS_INIT()
+window.GSOFT_SETTINGS_INIT = initSettings;
+
+/* ========================= helpers ========================= */
 function escapeHtml(s) {
-  return String(s ?? "")
+  return String(s || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-
-async function fetchDictsSafe() {
-  try {
-    const r = await api.get(EP.dicts);
-    // expected: {ok:true, dicts:[...]} or direct [...]
-    const dicts = normMeDicts(r?.dicts ?? r);
-    return dicts.length ? dicts : fallbackDicts();
-  } catch (_) {
-    return fallbackDicts();
-  }
-}
-
-async function fetchItemsSafe(dictKey, includeDeleted) {
-  const r = await api.get(EP.items(dictKey, includeDeleted));
-  const items = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
-  // attach dict for routes
-  return items.map((x) => ({ ...x, dict: x.dict ?? dictKey }));
-}
-
-function getDictKey(ctx) {
-  return (ctx.query?.dict || "").trim();
-}
-
-function getItemId(ctx) {
-  return (ctx.query?.id || "").trim();
-}
-
-function bindDictSidebar(root, dicts, activeKey) {
-  const input = root.querySelector("#dictSearch");
-  const listEl = root.querySelector("#dictList");
-
-  const render = () => {
-    const q = input?.value || "";
-    listEl.innerHTML = renderDictList(dicts, activeKey, q);
-    i18n.apply(listEl);
-  };
-
-  input?.addEventListener("input", render);
-  render();
-}
-
-function bindBackToIndex(root) {
-  const a = root.querySelector('[data-act="backIndex"]');
-  a?.addEventListener("click", () => {
-    window.location.hash = "#/settings";
-  });
-}
-
-function bindFormCommon(root, initial) {
-  root.querySelector("#fName").value = initial.name ?? "";
-  root.querySelector("#fColor").value = initial.color ?? "";
-  root.querySelector("#fSort").value = initial.sort ?? 0;
-  root.querySelector("#fActive").checked = (initial.active ?? 1) ? true : false;
-  root.querySelector("#fDefault").checked = (initial.is_default ?? 0) ? true : false;
-
-  // project_types only
-  const ftWrap = root.querySelector("#finalTypeWrap");
-  const ft = root.querySelector("#fFinalType");
-  const dictKey = root.getAttribute("data-dict") || "";
-
-  if (dictKey === "project_types") {
-    ftWrap.style.display = "";
-    ft.value = initial.final_type ?? "";
-  } else {
-    ftWrap.style.display = "none";
-    ft.value = "";
-  }
-}
-
-function readForm(root) {
-  const name = root.querySelector("#fName").value.trim();
-  const color = root.querySelector("#fColor").value.trim();
-  const sort = Number(root.querySelector("#fSort").value || 0);
-  const active = root.querySelector("#fActive").checked ? 1 : 0;
-  const is_default = root.querySelector("#fDefault").checked ? 1 : 0;
-  const final_type = (root.querySelector("#finalTypeWrap").style.display !== "none")
-    ? (root.querySelector("#fFinalType").value || "").trim()
-    : null;
-
-  return { name, color, sort, active, is_default, final_type };
-}
-
-/* =========================
-   PAGES
-========================= */
-
-export const pages = {
-  index: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/index.html");
-      const dicts = await fetchDictsSafe();
-      return { tpl, dicts };
-    },
-    calc(ctx, data) {
-      return data;
-    },
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, null);
-
-      setText(root, '[data-slot="title"]', i18n.t("nav.settings"));
-      setText(root, '[data-slot="subtitle"]', safeT("settings.subtitle", "Dictionaries"));
-
-      // actions empty here
-      setHtml(root, '[data-slot="actions"]', "");
-
-      // dict sidebar
-      bindDictSidebar(root, vm.dicts, "");
-
-      // right pane
-      setHtml(
-        root,
-        '[data-slot="content"]',
-        `<div class="muted">${safeT("settings.pickDict", "Select a dictionary on the left")}</div>`
-      );
-
-      appShell.markActiveNav();
-    },
-  },
-
-  view: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/view.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
-
-      // by default do not include deleted
-      const includeDeleted = ctx.query?.archived === "1";
-      let items = [];
-      let err = "";
-
-      if (!dictKey) {
-        err = safeT("settings.noDict", "Dictionary is not selected");
-      } else {
-        try {
-          items = await fetchItemsSafe(dictKey, includeDeleted);
-        } catch (e) {
-          err = String(e?.message || e);
-        }
-      }
-
-      return { tpl, dicts, dictKey, includeDeleted, items, err };
-    },
-
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
-
-      const canCreate = hasPerm("settings.create");
-      const canEdit = hasPerm("settings.edit");
-      const canArchive = hasPerm("settings.archive");
-      const canRestore = hasPerm("settings.restore");
-
-      return { ...data, dictTitle, canCreate, canEdit, canArchive, canRestore };
-    },
-
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, vm.err || null);
-
-      setText(root, '[data-slot="title"]', vm.dictTitle || i18n.t("nav.settings"));
-      setText(root, '[data-slot="subtitle"]', safeT("settings.items", "Items"));
-
-      // actions
-      const addBtn = vm.canCreate && vm.dictKey
-        ? `<a class="btn" href="#/settings/new?dict=${qsEscape(vm.dictKey)}">+ ${safeT("common.new", "New")}</a>`
-        : "";
-
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings">${safeT("common.back", "Back")}</a>${addBtn}`
-      );
-
-      // dict sidebar highlight + search
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
-
-      // archived toggle
-      const chk = root.querySelector("#showArchived");
-      chk.checked = !!vm.includeDeleted;
-      chk.addEventListener("change", () => {
-        const arch = chk.checked ? "1" : "0";
-        window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}&archived=${arch}`;
-      });
-
-      // table
-      const html = renderItemsTable(vm.items, {
-        canEdit: vm.canEdit,
-        canArchive: vm.canArchive,
-        canRestore: vm.canRestore,
-      });
-
-      setHtml(root, '[data-slot="content"]', html);
-      i18n.apply(root);
-
-      // archive/restore actions
-      root.querySelector(".techTableWrap")?.addEventListener("click", async (e) => {
-        const btn = e.target?.closest("button[data-act][data-id]");
-        if (!btn) return;
-
-        const act = btn.getAttribute("data-act");
-        const id = btn.getAttribute("data-id");
-        if (!id) return;
-
-        try {
-          setError(root, null);
-          btn.disabled = true;
-
-          if (act === "archive") {
-            await api.patch(EP.update(id), { is_deleted: 1 });
-          } else if (act === "restore") {
-            await api.patch(EP.update(id), { is_deleted: 0 });
-          }
-
-          // refresh current view
-          window.location.hash = window.location.hash;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        } finally {
-          btn.disabled = false;
-        }
-      });
-
-      appShell.markActiveNav();
-    },
-  },
-
-  new: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/new.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
-
-      return { tpl, dicts, dictKey };
-    },
-
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
-      const canCreate = hasPerm("settings.create");
-      return { ...data, dictTitle, canCreate };
-    },
-
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, null);
-
-      if (!vm.canCreate) {
-        setError(root, safeT("common.noAccess", "No access"));
-      }
-
-      setText(root, '[data-slot="title"]', `${i18n.t("nav.settings")} · ${safeT("common.new", "New")}`);
-      setText(root, '[data-slot="subtitle"]', vm.dictTitle || "");
-
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings/view?dict=${qsEscape(vm.dictKey)}">${safeT("common.back", "Back")}</a>`
-      );
-
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
-
-      // bind form
-      root.setAttribute("data-dict", vm.dictKey || "");
-      bindFormCommon(root, { active: 1, sort: 0, is_default: 0 });
-
-      const form = root.querySelector("#settingsForm");
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!vm.canCreate) return;
-
-        try {
-          setError(root, null);
-
-          const payload = readForm(root);
-          if (!payload.name) {
-            setError(root, safeT("common.requiredName", "Name is required"));
-            return;
-          }
-
-          await api.post(EP.create, { dict: vm.dictKey, ...payload });
-
-          window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}`;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        }
-      });
-
-      appShell.markActiveNav();
-    },
-  },
-
-  edit: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/edit.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
-      const id = getItemId(ctx);
-
-      let item = null;
-      let err = "";
-
-      if (!dictKey || !id) {
-        err = safeT("common.notFound", "Not found");
-      } else {
-        try {
-          const r = await api.get(EP.item(id));
-          item = r?.item ?? r;
-          if (item && !item.dict) item.dict = dictKey;
-        } catch (e) {
-          err = String(e?.message || e);
-        }
-      }
-
-      return { tpl, dicts, dictKey, id, item, err };
-    },
-
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
-      const canEdit = hasPerm("settings.edit");
-      return { ...data, dictTitle, canEdit };
-    },
-
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, vm.err || null);
-
-      if (!vm.canEdit) {
-        setError(root, safeT("common.noAccess", "No access"));
-      }
-
-      setText(root, '[data-slot="title"]', `${i18n.t("nav.settings")} · ${safeT("common.edit", "Edit")}`);
-      setText(root, '[data-slot="subtitle"]', vm.dictTitle || "");
-
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings/view?dict=${qsEscape(vm.dictKey)}">${safeT("common.back", "Back")}</a>`
-      );
-
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
-
-      root.setAttribute("data-dict", vm.dictKey || "");
-      bindFormCommon(root, vm.item || {});
-
-      const form = root.querySelector("#settingsForm");
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!vm.canEdit) return;
-
-        try {
-          setError(root, null);
-
-          const payload = readForm(root);
-          if (!payload.name) {
-            setError(root, safeT("common.requiredName", "Name is required"));
-            return;
-          }
-
-          await api.patch(EP.update(vm.id), { dict: vm.dictKey, ...payload });
-
-          window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}`;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        }
-      });
-
-      appShell.markActiveNav();
-    },
-  },
-};
