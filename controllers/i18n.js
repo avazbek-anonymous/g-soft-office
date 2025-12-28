@@ -1,11 +1,11 @@
 // controllers/i18n.js
 // G-SOFT 2 — single i18n controller (ru/uz/en)
 
-const STORAGE_KEY = "gsoft_lang";
+const LS_KEY = "gsoft_lang";
 const LANG_ORDER = ["ru", "uz", "en"];
 
 // ====== DICTIONARIES (ALL KEYS) ======
-const DICT = {
+const dict = {
   ru: {
     // App
     "app.name": "G-SOFT",
@@ -575,7 +575,7 @@ function isSupportedLang(lang) {
 
 function getStoredLang() {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
+    const v = localStorage.getItem(LS_KEY);
     return isSupportedLang(v) ? v : null;
   } catch {
     return null;
@@ -584,7 +584,7 @@ function getStoredLang() {
 
 function storeLang(lang) {
   try {
-    localStorage.setItem(STORAGE_KEY, lang);
+    localStorage.setItem(LS_KEY, lang);
   } catch {}
 }
 
@@ -597,8 +597,8 @@ function format(str, vars) {
 let _lang = getStoredLang() || "ru";
 
 function t(key, vars) {
-  const table = DICT[_lang] || {};
-  const raw = table[key] ?? DICT["ru"]?.[key] ?? key;
+  const table = dict[_lang] || {};
+  const raw = table[key] ?? dict["ru"]?.[key] ?? key;
   return format(raw, vars);
 }
 
