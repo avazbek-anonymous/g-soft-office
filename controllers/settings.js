@@ -1,172 +1,95 @@
-import { i18n } from "./i18n.js";
+// controllers/settings.js
+// Settings (dict_items)
+// Pages: view/settings/{index,new,edit,view}.html
+// Worker routes used:
+//   GET   /dict/:key/all
+//   POST  /dict/:key
+//   PATCH /dict-items/:id
+
 import { api } from "./api.js";
-import { loadTpl } from "./viewLoader.js";
-import { hasPerm } from "./rbac.js";
-import { appShell } from "./appShell.js";
+import { t } from "./i18n.js";
 
-const EP = {
-  dicts: "/settings/dicts",
-  items: (dict, includeDeleted) =>
-    `/settings/dict-items?dict=${encodeURIComponent(dict)}&include_deleted=${includeDeleted ? 1 : 0}`,
-  item: (id) => `/settings/dict-items/${encodeURIComponent(id)}`,
-  create: "/settings/dict-items",
-  update: (id) => `/settings/dict-items/${encodeURIComponent(id)}`,
-};
+// optional (если у тебя есть applyI18n)
+import * as i18n from "./i18n.js";
+const applyI18n = i18n.applyI18n || ((root) => {
+  // fallback: минимальный apply по data-i18n / data-i18n-ph
+  if (!root) return;
+  root.querySelectorAll("[data-i18n]").forEach((el) => {
+    const k = el.getAttribute("data-i18n");
+    if (k) el.textContent = t(k);
+  });
+  root.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+    const k = el.getAttribute("data-i18n-ph");
+    if (k) el.setAttribute("placeholder", t(k));
+  });
+});
 
-function qsEscape(s) {
-  return encodeURIComponent(String(s ?? ""));
+const LS_DICT = "gsoft.settings.dict";
+const LS_ARCH = "gsoft.settings.include_deleted";
+
+// ---------- helpers ----------
+function getHashPath() {
+  return (location.hash.split("?")[0] || "").replace("#", "");
 }
-
-function setText(root, sel, text) {
-  const el = root.querySelector(sel);
-  if (el) el.textContent = text ?? "";
+function getPage() {
+  // "#/settings/edit" => ["settings","edit"]
+  const parts = getHashPath().split("/").filter(Boolean);
+  return parts[1] || "index";
 }
-
-function setHtml(root, sel, html) {
-  const el = root.querySelector(sel);
-  if (el) el.innerHTML = html ?? "";
+function getQS() {
+  const h = location.hash || "";
+  const i = h.indexOf("?");
+  return new URLSearchParams(i >= 0 ? h.slice(i + 1) : "");
 }
-
-function setError(root, msg) {
-  const el = root.querySelector('[data-slot="error"]');
+function getDictKey(qs) {
+  return qs.get("dict") || localStorage.getItem(LS_DICT) || "";
+}
+function setDictKey(v) {
+  if (v) localStorage.setItem(LS_DICT, v);
+}
+function getIncludeDeleted(qs) {
+  if (qs.has("include_deleted")) return qs.get("include_deleted") === "1";
+  return localStorage.getItem(LS_ARCH) === "1";
+}
+function setIncludeDeleted(v) {
+  localStorage.setItem(LS_ARCH, v ? "1" : "0");
+}
+function nav(hash) {
+  location.hash = hash;
+}
+function navIndex(dict, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  if (includeDeleted) q.set("include_deleted", "1");
+  nav(`#/settings?${q.toString()}`);
+}
+function navNew(dict, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  if (includeDeleted) q.set("include_deleted", "1");
+  nav(`#/settings/new?${q.toString()}`);
+}
+function navEdit(dict, id, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  q.set("id", String(id));
+  if (includeDeleted) q.set("include_deleted", "1");
+  nav(`#/settings/edit?${q.toString()}`);
+}
+function navView(dict, id, includeDeleted) {
+  const q = new URLSearchParams();
+  if (dict) q.set("dict", dict);
+  q.set("id", String(id));
+  if (includeDeleted) q.set("include_deleted", "1");
+  nav(`#/settings/view?${q.toString()}`);
+}
+function setErr(el, msg) {
   if (!el) return;
-  if (!msg) {
-    el.classList.remove("show");
-    el.textContent = "";
-    return;
-  }
-  el.classList.add("show");
-  el.textContent = msg;
+  el.style.display = msg ? "" : "none";
+  el.textContent = msg ? String(msg) : "";
 }
-
-function safeT(key, fallback) {
-  const v = i18n.t(key);
-  return !v || v === key ? fallback : v;
-}
-
-function normMeDicts(dicts) {
-  // expected: [{key,title,description?}]
-  if (Array.isArray(dicts)) return dicts;
-  return [];
-}
-
-function fallbackDicts() {
-  // only as UI fallback if backend not ready
-  return [
-    { key: "cities", title: "Cities" },
-    { key: "sources", title: "Sources" },
-    { key: "spheres", title: "Spheres" },
-    { key: "task_statuses", title: "Task statuses" },
-    { key: "project_statuses", title: "Project statuses" },
-    { key: "lead_statuses", title: "Lead statuses" },
-    { key: "project_types", title: "Project types" },
-  ];
-}
-
-function renderDictList(dicts, activeKey, q) {
-  const query = (q || "").trim().toLowerCase();
-  const list = dicts
-    .filter((d) => {
-      if (!query) return true;
-      return (
-        String(d.key || "").toLowerCase().includes(query) ||
-        String(d.title || "").toLowerCase().includes(query)
-      );
-    })
-    .map((d) => {
-      const active = d.key === activeKey ? "active" : "";
-      return `
-        <a class="dictItem ${active}" href="#/settings/view?dict=${qsEscape(d.key)}" data-dict="${qsEscape(d.key)}">
-          <div class="dictKey">${escapeHtml(d.key)}</div>
-          <div class="dictTitle muted">${escapeHtml(d.title || d.key)}</div>
-        </a>
-      `;
-    })
-    .join("");
-
-  return list || `<div class="muted" style="padding:10px">${safeT("common.noData", "No data")}</div>`;
-}
-
-function renderItemsTable(items, opts) {
-  const { canEdit, canArchive, canRestore } = opts;
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return `<div class="muted">${safeT("common.noData", "No data")}</div>`;
-  }
-
-  const rows = items
-    .map((it) => {
-      const id = it.id;
-      const name = it.name ?? it.title ?? it.value ?? it.key ?? `#${id}`;
-      const color = it.color ?? "";
-      const sort = it.sort ?? "";
-      const active = (it.active ?? 1) ? "✓" : "";
-      const deleted = (it.is_deleted ?? 0) ? "archived" : "";
-
-      const editBtn =
-        canEdit && !(it.is_deleted ?? 0)
-          ? `<a class="btn ghost sm" href="#/settings/edit?dict=${qsEscape(it.dict || "")}&id=${qsEscape(id)}">${safeT(
-              "common.edit",
-              "Edit"
-            )}</a>`
-          : "";
-
-      const archiveBtn =
-        canArchive && !(it.is_deleted ?? 0)
-          ? `<button class="btn ghost sm" type="button" data-act="archive" data-id="${qsEscape(
-              id
-            )}">${safeT("common.archive", "Archive")}</button>`
-          : "";
-
-      const restoreBtn =
-        canRestore && (it.is_deleted ?? 0)
-          ? `<button class="btn ghost sm" type="button" data-act="restore" data-id="${qsEscape(
-              id
-            )}">${safeT("common.restore", "Restore")}</button>`
-          : "";
-
-      const nameLink = canEdit
-        ? `<a class="link" href="#/settings/edit?dict=${qsEscape(it.dict || "")}&id=${qsEscape(id)}">${escapeHtml(
-            name
-          )}</a>`
-        : `<span>${escapeHtml(name)}</span>`;
-
-      return `
-        <tr class="${deleted}">
-          <td style="width:40%">${nameLink}</td>
-          <td style="width:16%"><span class="muted">${escapeHtml(color)}</span></td>
-          <td style="width:12%"><span class="muted">${escapeHtml(sort)}</span></td>
-          <td style="width:10%"><span class="muted">${active}</span></td>
-          <td style="width:22%">
-            <div class="row" style="gap:6px;justify-content:flex-end;flex-wrap:wrap">
-              ${editBtn}${archiveBtn}${restoreBtn}
-            </div>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  return `
-    <div class="techTableWrap">
-      <table class="techTable">
-        <thead>
-          <tr>
-            <th>${safeT("common.name", "Name")}</th>
-            <th>${safeT("common.color", "Color")}</th>
-            <th>${safeT("common.sort", "Sort")}</th>
-            <th>${safeT("common.active", "Active")}</th>
-            <th style="text-align:right">${safeT("common.actions", "Actions")}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
+function esc(s) {
+  return String(s || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -174,389 +97,377 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-async function fetchDictsSafe() {
-  try {
-    const r = await api.get(EP.dicts);
-    // expected: {ok:true, dicts:[...]} or direct [...]
-    const dicts = normMeDicts(r?.dicts ?? r);
-    return dicts.length ? dicts : fallbackDicts();
-  } catch (_) {
-    return fallbackDicts();
+function getDictsFromRegister() {
+  // ожидаем: window.REGISTER.dicts = [{ key:"cities", title_i18n:"settings.dict.cities" }, ...]
+  const reg = window.REGISTER || window.APP?.REGISTER || null;
+  const dicts = reg?.dicts;
+  if (Array.isArray(dicts) && dicts.length) return dicts;
+
+  // fallback (если register ещё не подключён) — можно убрать если хочешь строго без хардкода
+  return [
+    { key: "cities", title_i18n: "settings.dict.cities" },
+    { key: "sources", title_i18n: "settings.dict.sources" },
+    { key: "spheres", title_i18n: "settings.dict.spheres" },
+    { key: "task_statuses", title_i18n: "settings.dict.task_statuses" },
+    { key: "project_statuses", title_i18n: "settings.dict.project_statuses" },
+    { key: "lead_statuses", title_i18n: "settings.dict.lead_statuses" },
+    { key: "project_types", title_i18n: "settings.dict.project_types" },
+  ];
+}
+
+// ---------- contract load/calc/render/mount ----------
+export async function load(ctx = {}) {
+  const qs = getQS();
+  const page = getPage();
+
+  const dicts = getDictsFromRegister();
+  let dict = getDictKey(qs);
+  if (!dict && dicts.length) dict = dicts[0].key;
+
+  const includeDeleted = getIncludeDeleted(qs);
+  const id = Number(qs.get("id") || 0);
+
+  let items = [];
+  if (dict) {
+    const r = await api.get(`/dict/${encodeURIComponent(dict)}/all`);
+    items = r.items || [];
   }
+
+  return { page, qs, dicts, dict, includeDeleted, id, items };
 }
 
-async function fetchItemsSafe(dictKey, includeDeleted) {
-  const r = await api.get(EP.items(dictKey, includeDeleted));
-  const items = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
-  // attach dict for routes
-  return items.map((x) => ({ ...x, dict: x.dict ?? dictKey }));
-}
+export function calc(ctx = {}, data) {
+  const { page, dict, includeDeleted, id, dicts } = data;
+  let items = Array.isArray(data.items) ? data.items : [];
 
-function getDictKey(ctx) {
-  return (ctx.query?.dict || "").trim();
-}
+  // includeDeleted=0 => убираем is_deleted=1
+  if (!includeDeleted) items = items.filter((x) => !x.is_deleted);
 
-function getItemId(ctx) {
-  return (ctx.query?.id || "").trim();
-}
+  const item = id ? (data.items || []).find((x) => Number(x.id) === Number(id)) : null;
 
-function bindDictSidebar(root, dicts, activeKey) {
-  const input = root.querySelector("#dictSearch");
-  const listEl = root.querySelector("#dictList");
+  const dictMeta = dicts.find((d) => d.key === dict) || null;
 
-  const render = () => {
-    const q = input?.value || "";
-    listEl.innerHTML = renderDictList(dicts, activeKey, q);
-    i18n.apply(listEl);
+  return {
+    page,
+    dict,
+    includeDeleted,
+    id,
+    dictMeta,
+    items,
+    item,
   };
-
-  input?.addEventListener("input", render);
-  render();
 }
 
-function bindBackToIndex(root) {
-  const a = root.querySelector('[data-act="backIndex"]');
-  a?.addEventListener("click", () => {
-    window.location.hash = "#/settings";
-  });
+export function render(ctx = {}, vm) {
+  // Мы НЕ возвращаем HTML строку, потому что view/*.html уже загружает router.
+  // Тут только заполняем placeholders.
+  const page = vm.page;
+
+  if (page === "index") return renderIndex(vm);
+  if (page === "new") return renderNew(vm);
+  if (page === "edit") return renderEdit(vm);
+  if (page === "view") return renderView(vm);
 }
 
-function bindFormCommon(root, initial) {
-  root.querySelector("#fName").value = initial.name ?? "";
-  root.querySelector("#fColor").value = initial.color ?? "";
-  root.querySelector("#fSort").value = initial.sort ?? 0;
-  root.querySelector("#fActive").checked = (initial.active ?? 1) ? true : false;
-  root.querySelector("#fDefault").checked = (initial.is_default ?? 0) ? true : false;
+export function mount(ctx = {}, vm) {
+  // навешиваем listeners
+  const page = vm.page;
 
-  // project_types only
-  const ftWrap = root.querySelector("#finalTypeWrap");
-  const ft = root.querySelector("#fFinalType");
-  const dictKey = root.getAttribute("data-dict") || "";
+  if (page === "index") return mountIndex(vm);
+  if (page === "new") return mountNew(vm);
+  if (page === "edit") return mountEdit(vm);
+  if (page === "view") return mountView(vm);
+}
 
-  if (dictKey === "project_types") {
-    ftWrap.style.display = "";
-    ft.value = initial.final_type ?? "";
-  } else {
-    ftWrap.style.display = "none";
-    ft.value = "";
+// удобный wrapper (если твой router просто вызывает controller.init())
+export async function init(ctx = {}) {
+  const data = await load(ctx);
+  const vm = calc(ctx, data);
+  // применяем i18n к текущей странице
+  applyI18n(document);
+  render(ctx, vm);
+  await mount(ctx, vm);
+  return vm;
+}
+
+// также кладём в window на всякий случай
+window.controllers = window.controllers || {};
+window.controllers.settings = { load, calc, render, mount, init };
+
+// ---------- page: index ----------
+function renderIndex(vm) {
+  const root = document.getElementById("settingsIndex");
+  if (!root) return;
+
+  const dictListEl = document.getElementById("stDictList");
+  const dictPill = document.getElementById("stDictKeyPill");
+  const itemsBody = document.getElementById("stItemsBody");
+  const noDataEl = document.getElementById("stNoData");
+  const countEl = document.getElementById("stCount");
+
+  // dict list
+  dictListEl.innerHTML = "";
+  for (const d of vm.dictMeta ? vm.dictMeta ? vm.dictMeta && [] : [] : []) {} // no-op (чтобы линтер не ругался)
+
+  const dicts = getDictsFromRegister();
+  for (const d of dicts) {
+    const el = document.createElement("div");
+    el.className = "st-dict" + (d.key === vm.dict ? " active" : "");
+    el.innerHTML = `
+      <div>
+        <div>${t(d.title_i18n || d.titleKey || d.key)}</div>
+        <small>${d.key}</small>
+      </div>
+    `;
+    el.onclick = () => {
+      setDictKey(d.key);
+      navIndex(d.key, vm.includeDeleted);
+    };
+    dictListEl.appendChild(el);
+  }
+
+  dictPill.textContent = vm.dict || "";
+
+  // rows
+  itemsBody.innerHTML = "";
+  const items = vm.items || [];
+  if (countEl) countEl.textContent = String(items.length);
+
+  if (!items.length) {
+    noDataEl.style.display = "";
+    return;
+  }
+  noDataEl.style.display = "none";
+
+  for (const it of items) {
+    const tr = document.createElement("tr");
+    const swatch = `<span class="st-swatch" style="background:${esc(it.color || "")}"></span>`;
+    tr.innerHTML = `
+      <td>
+        <a href="javascript:void(0)" class="st-link" style="color:rgba(0,229,255,.9);text-decoration:none">
+          ${esc(it.name || "")}
+        </a>
+      </td>
+      <td>${swatch} <span style="color:var(--muted)">${esc(it.color || "")}</span></td>
+      <td>${Number(it.sort || 0)}</td>
+      <td>${it.active ? "1" : "0"}</td>
+      <td>${it.is_default ? "1" : "0"}</td>
+      <td>
+        <div class="st-rowActions">
+          <button class="st-a" data-act="edit">${t("common.edit")}</button>
+          <button class="st-a" data-act="view">${t("common.view")}</button>
+          ${
+            it.is_deleted
+              ? `<button class="st-a" data-act="restore">${t("common.restore")}</button>`
+              : `<button class="st-a danger" data-act="archive">${t("common.archive")}</button>`
+          }
+        </div>
+      </td>
+    `;
+
+    tr.querySelector(".st-link")?.addEventListener("click", () => navView(vm.dict, it.id, vm.includeDeleted));
+    tr.querySelector('[data-act="edit"]')?.addEventListener("click", () => navEdit(vm.dict, it.id, vm.includeDeleted));
+    tr.querySelector('[data-act="view"]')?.addEventListener("click", () => navView(vm.dict, it.id, vm.includeDeleted));
+
+    tr.querySelector('[data-act="archive"]')?.addEventListener("click", async () => {
+      await api.patch(`/dict-items/${it.id}`, { is_deleted: 1 });
+      navIndex(vm.dict, vm.includeDeleted);
+    });
+
+    tr.querySelector('[data-act="restore"]')?.addEventListener("click", async () => {
+      await api.patch(`/dict-items/${it.id}`, { is_deleted: 0 });
+      navIndex(vm.dict, vm.includeDeleted);
+    });
+
+    itemsBody.appendChild(tr);
   }
 }
 
-function readForm(root) {
-  const name = root.querySelector("#fName").value.trim();
-  const color = root.querySelector("#fColor").value.trim();
-  const sort = Number(root.querySelector("#fSort").value || 0);
-  const active = root.querySelector("#fActive").checked ? 1 : 0;
-  const is_default = root.querySelector("#fDefault").checked ? 1 : 0;
-  const final_type = (root.querySelector("#finalTypeWrap").style.display !== "none")
-    ? (root.querySelector("#fFinalType").value || "").trim()
-    : null;
+function mountIndex(vm) {
+  const root = document.getElementById("settingsIndex");
+  if (!root) return;
 
-  return { name, color, sort, active, is_default, final_type };
+  const searchEl = document.getElementById("stSearch");
+  const archivedEl = document.getElementById("stShowArchived");
+  const newBtn = document.getElementById("stNewBtn");
+
+  if (archivedEl) archivedEl.checked = !!vm.includeDeleted;
+
+  if (newBtn) newBtn.onclick = () => navNew(vm.dict, vm.includeDeleted);
+
+  if (archivedEl) {
+    archivedEl.onchange = () => {
+      setIncludeDeleted(archivedEl.checked);
+      navIndex(vm.dict, archivedEl.checked);
+    };
+  }
+
+  // search (на клиенте фильтруем текущий tbody)
+  if (searchEl) {
+    searchEl.oninput = () => {
+      const q = String(searchEl.value || "").toLowerCase().trim();
+      const rows = root.querySelectorAll("#stItemsBody tr");
+      rows.forEach((tr) => {
+        const name = (tr.querySelector("td")?.textContent || "").toLowerCase();
+        tr.style.display = !q || name.includes(q) ? "" : "none";
+      });
+    };
+  }
 }
 
-/* =========================
-   PAGES
-========================= */
+// ---------- page: new ----------
+function renderNew(vm) {
+  const root = document.getElementById("settingsNew");
+  if (!root) return;
 
-export const pages = {
-  index: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/index.html");
-      const dicts = await fetchDictsSafe();
-      return { tpl, dicts };
-    },
-    calc(ctx, data) {
-      return data;
-    },
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, null);
+  const title = document.getElementById("sfDictTitle");
+  title.textContent = vm.dictMeta ? `${t(vm.dictMeta.title_i18n || vm.dictMeta.key)} · ${vm.dict}` : vm.dict;
 
-      setText(root, '[data-slot="title"]', i18n.t("nav.settings"));
-      setText(root, '[data-slot="subtitle"]', safeT("settings.subtitle", "Dictionaries"));
+  const finalRow = document.getElementById("sfFinalTypeRow");
+  if (finalRow) finalRow.style.display = vm.dict === "project_types" ? "" : "none";
+}
 
-      // actions empty here
-      setHtml(root, '[data-slot="actions"]', "");
+function mountNew(vm) {
+  const root = document.getElementById("settingsNew");
+  if (!root) return;
 
-      // dict sidebar
-      bindDictSidebar(root, vm.dicts, "");
+  const errEl = document.getElementById("sfError");
+  const form = document.getElementById("sfForm");
+  const backBtn = document.getElementById("sfBackBtn");
+  const cancelBtn = document.getElementById("sfCancelBtn");
 
-      // right pane
-      setHtml(
-        root,
-        '[data-slot="content"]',
-        `<div class="muted">${safeT("settings.pickDict", "Select a dictionary on the left")}</div>`
-      );
+  backBtn.onclick = () => navIndex(vm.dict, vm.includeDeleted);
+  cancelBtn.onclick = () => navIndex(vm.dict, vm.includeDeleted);
 
-      appShell.markActiveNav();
-    },
-  },
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    setErr(errEl, "");
 
-  view: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/view.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
+    const name = String(document.getElementById("sfName")?.value || "").trim();
+    if (!name) return setErr(errEl, t("common.requiredName") || "name required");
 
-      // by default do not include deleted
-      const includeDeleted = ctx.query?.archived === "1";
-      let items = [];
-      let err = "";
+    const payload = {
+      name,
+      color: String(document.getElementById("sfColor")?.value || "").trim() || null,
+      sort: Number(document.getElementById("sfSort")?.value || 0),
+      active: document.getElementById("sfActive")?.checked ? 1 : 0,
+      is_default: document.getElementById("sfDefault")?.checked ? 1 : 0,
+    };
 
-      if (!dictKey) {
-        err = safeT("settings.noDict", "Dictionary is not selected");
-      } else {
-        try {
-          items = await fetchItemsSafe(dictKey, includeDeleted);
-        } catch (e) {
-          err = String(e?.message || e);
-        }
-      }
+    if (vm.dict === "project_types") {
+      const ft = String(document.getElementById("sfFinalType")?.value || "").trim();
+      payload.final_type = ft || null;
+    }
 
-      return { tpl, dicts, dictKey, includeDeleted, items, err };
-    },
+    try {
+      await api.post(`/dict/${encodeURIComponent(vm.dict)}`, payload);
+      navIndex(vm.dict, vm.includeDeleted);
+    } catch (e2) {
+      setErr(errEl, e2?.message || "save error");
+    }
+  };
+}
 
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
+// ---------- page: edit ----------
+function renderEdit(vm) {
+  const root = document.getElementById("settingsEdit");
+  if (!root) return;
 
-      const canCreate = hasPerm("settings.create");
-      const canEdit = hasPerm("settings.edit");
-      const canArchive = hasPerm("settings.archive");
-      const canRestore = hasPerm("settings.restore");
+  const errEl = document.getElementById("sfError");
+  if (!vm.item) {
+    setErr(errEl, "Item not found");
+    return;
+  }
 
-      return { ...data, dictTitle, canCreate, canEdit, canArchive, canRestore };
-    },
+  document.getElementById("sfDictTitle").textContent =
+    (vm.dictMeta ? `${t(vm.dictMeta.title_i18n || vm.dictMeta.key)} · ` : "") + `${vm.dict} · #${vm.id}`;
 
-    render(ctx, vm) {
-      return vm.tpl;
-    },
+  document.getElementById("sfName").value = vm.item.name || "";
+  document.getElementById("sfColor").value = vm.item.color || "";
+  document.getElementById("sfSort").value = Number(vm.item.sort || 0);
+  document.getElementById("sfActive").checked = !!vm.item.active;
+  document.getElementById("sfDefault").checked = !!vm.item.is_default;
 
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, vm.err || null);
+  const finalRow = document.getElementById("sfFinalTypeRow");
+  if (finalRow) finalRow.style.display = vm.dict === "project_types" ? "" : "none";
+  if (vm.dict === "project_types") {
+    document.getElementById("sfFinalType").value = vm.item.final_type || "";
+  }
+}
 
-      setText(root, '[data-slot="title"]', vm.dictTitle || i18n.t("nav.settings"));
-      setText(root, '[data-slot="subtitle"]', safeT("settings.items", "Items"));
+function mountEdit(vm) {
+  const root = document.getElementById("settingsEdit");
+  if (!root) return;
 
-      // actions
-      const addBtn = vm.canCreate && vm.dictKey
-        ? `<a class="btn" href="#/settings/new?dict=${qsEscape(vm.dictKey)}">+ ${safeT("common.new", "New")}</a>`
-        : "";
+  const errEl = document.getElementById("sfError");
+  const form = document.getElementById("sfForm");
+  const backBtn = document.getElementById("sfBackBtn");
+  const cancelBtn = document.getElementById("sfCancelBtn");
 
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings">${safeT("common.back", "Back")}</a>${addBtn}`
-      );
+  backBtn.onclick = () => navIndex(vm.dict, vm.includeDeleted);
+  cancelBtn.onclick = () => navIndex(vm.dict, vm.includeDeleted);
 
-      // dict sidebar highlight + search
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    setErr(errEl, "");
 
-      // archived toggle
-      const chk = root.querySelector("#showArchived");
-      chk.checked = !!vm.includeDeleted;
-      chk.addEventListener("change", () => {
-        const arch = chk.checked ? "1" : "0";
-        window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}&archived=${arch}`;
-      });
+    const name = String(document.getElementById("sfName")?.value || "").trim();
+    if (!name) return setErr(errEl, t("common.requiredName") || "name required");
 
-      // table
-      const html = renderItemsTable(vm.items, {
-        canEdit: vm.canEdit,
-        canArchive: vm.canArchive,
-        canRestore: vm.canRestore,
-      });
+    const payload = {
+      name,
+      color: String(document.getElementById("sfColor")?.value || "").trim() || null,
+      sort: Number(document.getElementById("sfSort")?.value || 0),
+      active: document.getElementById("sfActive")?.checked ? 1 : 0,
+      is_default: document.getElementById("sfDefault")?.checked ? 1 : 0,
+    };
 
-      setHtml(root, '[data-slot="content"]', html);
-      i18n.apply(root);
+    if (vm.dict === "project_types") {
+      const ft = String(document.getElementById("sfFinalType")?.value || "").trim();
+      payload.final_type = ft || null;
+    }
 
-      // archive/restore actions
-      root.querySelector(".techTableWrap")?.addEventListener("click", async (e) => {
-        const btn = e.target?.closest("button[data-act][data-id]");
-        if (!btn) return;
+    try {
+      await api.patch(`/dict-items/${vm.id}`, payload);
+      navIndex(vm.dict, vm.includeDeleted);
+    } catch (e2) {
+      setErr(errEl, e2?.message || "save error");
+    }
+  };
+}
 
-        const act = btn.getAttribute("data-act");
-        const id = btn.getAttribute("data-id");
-        if (!id) return;
+// ---------- page: view ----------
+function renderView(vm) {
+  const root = document.getElementById("settingsView");
+  if (!root) return;
 
-        try {
-          setError(root, null);
-          btn.disabled = true;
+  const errEl = document.getElementById("svError");
+  if (!vm.item) {
+    setErr(errEl, "Item not found");
+    return;
+  }
 
-          if (act === "archive") {
-            await api.patch(EP.update(id), { is_deleted: 1 });
-          } else if (act === "restore") {
-            await api.patch(EP.update(id), { is_deleted: 0 });
-          }
+  document.getElementById("svDictTitle").textContent =
+    (vm.dictMeta ? `${t(vm.dictMeta.title_i18n || vm.dictMeta.key)} · ` : "") + `${vm.dict} · #${vm.id}`;
 
-          // refresh current view
-          window.location.hash = window.location.hash;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        } finally {
-          btn.disabled = false;
-        }
-      });
+  document.getElementById("svName").textContent = vm.item.name || "";
+  document.getElementById("svColor").style.background = vm.item.color || "transparent";
+  document.getElementById("svColorTxt").textContent = vm.item.color || "";
+  document.getElementById("svSort").textContent = String(Number(vm.item.sort || 0));
+  document.getElementById("svActive").textContent = vm.item.active ? "1" : "0";
+  document.getElementById("svDefault").textContent = vm.item.is_default ? "1" : "0";
 
-      appShell.markActiveNav();
-    },
-  },
+  const finalRow = document.getElementById("svFinalTypeRow");
+  if (finalRow) finalRow.style.display = vm.dict === "project_types" ? "" : "none";
+  if (vm.dict === "project_types") {
+    document.getElementById("svFinalType").textContent = vm.item.final_type || "";
+  }
+}
 
-  new: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/new.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
+function mountView(vm) {
+  const root = document.getElementById("settingsView");
+  if (!root) return;
 
-      return { tpl, dicts, dictKey };
-    },
-
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
-      const canCreate = hasPerm("settings.create");
-      return { ...data, dictTitle, canCreate };
-    },
-
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, null);
-
-      if (!vm.canCreate) {
-        setError(root, safeT("common.noAccess", "No access"));
-      }
-
-      setText(root, '[data-slot="title"]', `${i18n.t("nav.settings")} · ${safeT("common.new", "New")}`);
-      setText(root, '[data-slot="subtitle"]', vm.dictTitle || "");
-
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings/view?dict=${qsEscape(vm.dictKey)}">${safeT("common.back", "Back")}</a>`
-      );
-
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
-
-      // bind form
-      root.setAttribute("data-dict", vm.dictKey || "");
-      bindFormCommon(root, { active: 1, sort: 0, is_default: 0 });
-
-      const form = root.querySelector("#settingsForm");
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!vm.canCreate) return;
-
-        try {
-          setError(root, null);
-
-          const payload = readForm(root);
-          if (!payload.name) {
-            setError(root, safeT("common.requiredName", "Name is required"));
-            return;
-          }
-
-          await api.post(EP.create, { dict: vm.dictKey, ...payload });
-
-          window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}`;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        }
-      });
-
-      appShell.markActiveNav();
-    },
-  },
-
-  edit: {
-    async load(ctx) {
-      const tpl = await loadTpl("./view/settings/edit.html");
-      const dicts = await fetchDictsSafe();
-      const dictKey = getDictKey(ctx);
-      const id = getItemId(ctx);
-
-      let item = null;
-      let err = "";
-
-      if (!dictKey || !id) {
-        err = safeT("common.notFound", "Not found");
-      } else {
-        try {
-          const r = await api.get(EP.item(id));
-          item = r?.item ?? r;
-          if (item && !item.dict) item.dict = dictKey;
-        } catch (e) {
-          err = String(e?.message || e);
-        }
-      }
-
-      return { tpl, dicts, dictKey, id, item, err };
-    },
-
-    calc(ctx, data) {
-      const dictTitle =
-        data.dicts.find((d) => d.key === data.dictKey)?.title || data.dictKey || i18n.t("nav.settings");
-      const canEdit = hasPerm("settings.edit");
-      return { ...data, dictTitle, canEdit };
-    },
-
-    render(ctx, vm) {
-      return vm.tpl;
-    },
-
-    mount(ctx, vm) {
-      const root = ctx.outlet;
-      setError(root, vm.err || null);
-
-      if (!vm.canEdit) {
-        setError(root, safeT("common.noAccess", "No access"));
-      }
-
-      setText(root, '[data-slot="title"]', `${i18n.t("nav.settings")} · ${safeT("common.edit", "Edit")}`);
-      setText(root, '[data-slot="subtitle"]', vm.dictTitle || "");
-
-      setHtml(
-        root,
-        '[data-slot="actions"]',
-        `<a class="btn ghost" href="#/settings/view?dict=${qsEscape(vm.dictKey)}">${safeT("common.back", "Back")}</a>`
-      );
-
-      bindDictSidebar(root, vm.dicts, vm.dictKey);
-
-      root.setAttribute("data-dict", vm.dictKey || "");
-      bindFormCommon(root, vm.item || {});
-
-      const form = root.querySelector("#settingsForm");
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!vm.canEdit) return;
-
-        try {
-          setError(root, null);
-
-          const payload = readForm(root);
-          if (!payload.name) {
-            setError(root, safeT("common.requiredName", "Name is required"));
-            return;
-          }
-
-          await api.patch(EP.update(vm.id), { dict: vm.dictKey, ...payload });
-
-          window.location.hash = `#/settings/view?dict=${qsEscape(vm.dictKey)}`;
-        } catch (err) {
-          setError(root, String(err?.message || err));
-        }
-      });
-
-      appShell.markActiveNav();
-    },
-  },
-};
+  document.getElementById("svBackBtn").onclick = () => navIndex(vm.dict, vm.includeDeleted);
+  document.getElementById("svEditBtn").onclick = () => navEdit(vm.dict, vm.id, vm.includeDeleted);
+}
