@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ru" data-theme="dark">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -13,13 +14,13 @@
 
     :root {
       --bg: #060b12;
-      --panel: rgba(255,255,255,0.05);
-      --panel2: rgba(255,255,255,0.035);
-      --stroke: rgba(255,255,255,0.10);
-      --stroke2: rgba(255,255,255,0.06);
+      --panel: rgba(255, 255, 255, 0.05);
+      --panel2: rgba(255, 255, 255, 0.035);
+      --stroke: rgba(255, 255, 255, 0.10);
+      --stroke2: rgba(255, 255, 255, 0.06);
 
-      --text: rgba(255,255,255,0.92);
-      --muted: rgba(255,255,255,0.62);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.62);
 
       /* Brand / glow */
       --accent: #37d67a;
@@ -29,46 +30,50 @@
       --success: #37d67a;
       --warning: #ffb020;
 
-      --shadow: 0 18px 40px rgba(0,0,0,0.55);
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
       --radius: 16px;
 
-      --gridA: rgba(255,255,255,0.03);
-      --gridB: rgba(255,255,255,0.015);
+      --gridA: rgba(255, 255, 255, 0.03);
+      --gridB: rgba(255, 255, 255, 0.015);
 
-      --glowA: 0 0 0.6rem rgba(39,215,255,0.28);
-      --glowB: 0 0 1.1rem rgba(55,214,122,0.18);
+      --glowA: 0 0 0.6rem rgba(39, 215, 255, 0.28);
+      --glowB: 0 0 1.1rem rgba(55, 214, 122, 0.18);
 
       --t150: 150ms;
       --t200: 200ms;
       --t250: 250ms;
     }
 
-    [data-theme="light"]{
+    [data-theme="light"] {
       --bg: #f6f9ff;
-      --panel: rgba(0,0,0,0.04);
-      --panel2: rgba(0,0,0,0.03);
-      --stroke: rgba(0,0,0,0.12);
-      --stroke2: rgba(0,0,0,0.08);
+      --panel: rgba(0, 0, 0, 0.04);
+      --panel2: rgba(0, 0, 0, 0.03);
+      --stroke: rgba(0, 0, 0, 0.12);
+      --stroke2: rgba(0, 0, 0, 0.08);
 
-      --text: rgba(0,0,0,0.90);
-      --muted: rgba(0,0,0,0.60);
+      --text: rgba(0, 0, 0, 0.90);
+      --muted: rgba(0, 0, 0, 0.60);
 
-      --gridA: rgba(0,0,0,0.04);
-      --gridB: rgba(0,0,0,0.02);
+      --gridA: rgba(0, 0, 0, 0.04);
+      --gridB: rgba(0, 0, 0, 0.02);
     }
 
-    html, body { height: 100%; }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
       background: var(--bg);
       color: var(--text);
       overflow: hidden;
     }
 
     /* subtle tech grid */
-    body::before{
-      content:"";
+    body::before {
+      content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
@@ -80,14 +85,14 @@
     }
 
     /* App root */
-    #app{
+    #app {
       height: 100%;
       display: grid;
       place-items: stretch;
     }
 
     /* ===== reusable UI ===== */
-    .card{
+    .card {
       background: linear-gradient(180deg, var(--panel), var(--panel2));
       border: 1px solid var(--stroke);
       border-radius: var(--radius);
@@ -95,10 +100,10 @@
       backdrop-filter: blur(10px);
     }
 
-    .btn{
+    .btn {
       appearance: none;
       border: 1px solid var(--stroke);
-      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
       color: var(--text);
       border-radius: 12px;
       padding: 10px 12px;
@@ -106,43 +111,73 @@
       transition: transform var(--t150) ease, box-shadow var(--t200) ease, border-color var(--t200) ease, opacity var(--t200) ease;
       user-select: none;
     }
-    .btn:hover{ box-shadow: var(--glowA); border-color: rgba(39,215,255,0.35); }
-    .btn:active{ transform: translateY(1px); }
-    .btn.primary{
-      border-color: rgba(55,214,122,0.35);
+
+    .btn:hover {
+      box-shadow: var(--glowA);
+      border-color: rgba(39, 215, 255, 0.35);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.primary {
+      border-color: rgba(55, 214, 122, 0.35);
       box-shadow: var(--glowB);
     }
-    .btn.ghost{
+
+    .btn.ghost {
       background: transparent;
     }
-    .btn.danger{
-      border-color: rgba(255,77,109,0.35);
-    }
-    .btn:disabled{ opacity: 0.55; cursor:not-allowed; }
 
-    .input{
+    .btn.danger {
+      border-color: rgba(255, 77, 109, 0.35);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .input {
       width: 100%;
       padding: 11px 12px;
       border-radius: 12px;
       border: 1px solid var(--stroke2);
-      background: rgba(0,0,0,0.20);
+      background: rgba(0, 0, 0, 0.20);
       color: var(--text);
       outline: none;
       transition: box-shadow var(--t200) ease, border-color var(--t200) ease;
     }
-    .input:focus{
-      border-color: rgba(39,215,255,0.35);
+
+    .input:focus {
+      border-color: rgba(39, 215, 255, 0.35);
       box-shadow: var(--glowA);
     }
 
-    .muted{ color: var(--muted); }
-    .caps{ letter-spacing: .10em; text-transform: uppercase; }
+    .muted {
+      color: var(--muted);
+    }
 
-    .row{ display:flex; gap: 10px; align-items:center; }
-    .col{ display:flex; flex-direction: column; gap: 10px; }
+    .caps {
+      letter-spacing: .10em;
+      text-transform: uppercase;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
 
     /* ===== Shell Layout ===== */
-    .shell{
+    .shell {
       height: 100%;
       display: grid;
       grid-template-columns: 280px 1fr;
@@ -155,116 +190,129 @@
       box-sizing: border-box;
     }
 
-    .sidebar{
+    .sidebar {
       grid-area: sidebar;
       padding: 14px;
-      display:flex;
+      display: flex;
       flex-direction: column;
       gap: 12px;
       position: relative;
       overflow: hidden;
     }
-    .sidebar::after{
-      content:"";
-      position:absolute;
+
+    .sidebar::after {
+      content: "";
+      position: absolute;
       inset: -1px;
-      pointer-events:none;
+      pointer-events: none;
       border-radius: var(--radius);
-      box-shadow: 0 0 24px rgba(39,215,255,0.10);
+      box-shadow: 0 0 24px rgba(39, 215, 255, 0.10);
       opacity: 0.8;
     }
 
-    .brand{
-      display:flex;
-      align-items:center;
+    .brand {
+      display: flex;
+      align-items: center;
       gap: 10px;
       padding: 10px 10px 12px;
       border-bottom: 1px solid var(--stroke2);
       margin-bottom: 2px;
     }
-    .brandMark{
-      width: 36px; height: 36px;
+
+    .brandMark {
+      width: 36px;
+      height: 36px;
       border-radius: 12px;
-      border: 1px solid rgba(39,215,255,0.35);
-      background: rgba(39,215,255,0.08);
+      border: 1px solid rgba(39, 215, 255, 0.35);
+      background: rgba(39, 215, 255, 0.08);
       box-shadow: var(--glowA);
-      display:grid;
-      place-items:center;
+      display: grid;
+      place-items: center;
       font-weight: 800;
     }
-    .brandName{
+
+    .brandName {
       font-weight: 800;
       letter-spacing: .06em;
     }
-    .brandSub{
+
+    .brandSub {
       font-size: 12px;
       color: var(--muted);
       margin-top: 2px;
     }
 
-    .nav{
-      display:flex;
+    .nav {
+      display: flex;
       flex-direction: column;
       gap: 6px;
       padding-top: 6px;
     }
-    .navItem{
-      display:flex;
-      align-items:center;
+
+    .navItem {
+      display: flex;
+      align-items: center;
       gap: 10px;
       padding: 10px 10px;
       border-radius: 14px;
       border: 1px solid transparent;
       color: var(--text);
-      text-decoration:none;
+      text-decoration: none;
       transition: border-color var(--t200) ease, box-shadow var(--t200) ease, background var(--t200) ease;
     }
-    .navItem:hover{
-      border-color: rgba(39,215,255,0.25);
-      background: rgba(39,215,255,0.06);
-      box-shadow: 0 0 18px rgba(39,215,255,0.12);
+
+    .navItem:hover {
+      border-color: rgba(39, 215, 255, 0.25);
+      background: rgba(39, 215, 255, 0.06);
+      box-shadow: 0 0 18px rgba(39, 215, 255, 0.12);
     }
-    .navItem.active{
-      border-color: rgba(39,215,255,0.40);
-      background: rgba(39,215,255,0.10);
+
+    .navItem.active {
+      border-color: rgba(39, 215, 255, 0.40);
+      background: rgba(39, 215, 255, 0.10);
       box-shadow: var(--glowA);
     }
-    .navIcon{
+
+    .navIcon {
       width: 18px;
       height: 18px;
       opacity: 0.9;
     }
-    .navLabel{
+
+    .navLabel {
       font-weight: 650;
       font-size: 14px;
     }
 
-    .header{
+    .header {
       grid-area: header;
       padding: 10px 12px;
-      display:flex;
-      align-items:center;
+      display: flex;
+      align-items: center;
       justify-content: space-between;
       overflow: hidden;
       position: relative;
     }
-    .header::before{
-      content:"";
-      position:absolute;
+
+    .header::before {
+      content: "";
+      position: absolute;
       left: -40px;
       top: 50%;
       width: 180px;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(39,215,255,0.55), transparent);
+      background: linear-gradient(90deg, transparent, rgba(39, 215, 255, 0.55), transparent);
       opacity: .7;
     }
-    .headerTitle{
-      display:flex;
+
+    .headerTitle {
+      display: flex;
       flex-direction: column;
       gap: 2px;
       min-width: 0;
     }
-    .headerTitle .t1{
+
+    .headerTitle .t1 {
       font-weight: 800;
       letter-spacing: .10em;
       text-transform: uppercase;
@@ -273,7 +321,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .headerTitle .t2{
+
+    .headerTitle .t2 {
       font-size: 12px;
       color: var(--muted);
       white-space: nowrap;
@@ -281,22 +330,23 @@
       text-overflow: ellipsis;
     }
 
-    .headerRight{
-      display:flex;
-      align-items:center;
+    .headerRight {
+      display: flex;
+      align-items: center;
       gap: 10px;
     }
 
     /* segmented language */
-    .seg{
-      display:flex;
+    .seg {
+      display: flex;
       border: 1px solid var(--stroke2);
       border-radius: 14px;
-      overflow:hidden;
-      background: rgba(0,0,0,0.16);
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.16);
     }
-    .seg button{
-      border:0;
+
+    .seg button {
+      border: 0;
       background: transparent;
       color: var(--muted);
       padding: 8px 10px;
@@ -307,135 +357,150 @@
       text-transform: uppercase;
       font-size: 12px;
     }
-    .seg button.active{
+
+    .seg button.active {
       color: var(--text);
-      background: rgba(39,215,255,0.12);
+      background: rgba(39, 215, 255, 0.12);
       box-shadow: var(--glowA);
     }
 
-    .userChip{
-      display:flex;
-      align-items:center;
+    .userChip {
+      display: flex;
+      align-items: center;
       gap: 8px;
       padding: 8px 10px;
       border-radius: 14px;
       border: 1px solid var(--stroke2);
-      background: rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.03);
       max-width: 340px;
     }
-    .userChip .name{
+
+    .userChip .name {
       font-weight: 750;
       font-size: 13px;
-      overflow:hidden;
+      overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 180px;
     }
-    .userChip .role{
+
+    .userChip .role {
       font-size: 12px;
       color: var(--muted);
       white-space: nowrap;
     }
 
-    .main{
+    .main {
       grid-area: main;
       overflow: auto;
       padding: 2px;
     }
-    .mainInner{
+
+    .mainInner {
       padding: 12px;
       box-sizing: border-box;
       min-height: calc(100% - 24px);
     }
 
     /* ===== Auth page ===== */
-    .authWrap{
+    .authWrap {
       height: 100%;
-      display:grid;
+      display: grid;
       place-items: center;
       padding: 16px;
       box-sizing: border-box;
     }
-    .authPanel{
+
+    .authPanel {
       width: min(520px, 94vw);
       padding: 18px;
       position: relative;
       overflow: hidden;
     }
-    .authPanel::before{
-      content:"";
-      position:absolute;
+
+    .authPanel::before {
+      content: "";
+      position: absolute;
       inset: -120px -80px auto auto;
       width: 260px;
       height: 260px;
-      background: radial-gradient(circle, rgba(39,215,255,0.18), transparent 60%);
+      background: radial-gradient(circle, rgba(39, 215, 255, 0.18), transparent 60%);
       filter: blur(2px);
-      pointer-events:none;
+      pointer-events: none;
     }
-    .authHead{
-      display:flex;
-      align-items:center;
+
+    .authHead {
+      display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 12px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--stroke2);
     }
-    .authTitle{
-      display:flex;
+
+    .authTitle {
+      display: flex;
       gap: 10px;
-      align-items:center;
+      align-items: center;
       min-width: 0;
     }
-    .authTitle h1{
+
+    .authTitle h1 {
       margin: 0;
       font-size: 16px;
       letter-spacing: .10em;
       text-transform: uppercase;
       white-space: nowrap;
-      overflow:hidden;
+      overflow: hidden;
       text-overflow: ellipsis;
     }
-    .authTitle p{
+
+    .authTitle p {
       margin: 4px 0 0;
       font-size: 12px;
       color: var(--muted);
     }
 
-    .field{
-      display:flex;
+    .field {
+      display: flex;
       flex-direction: column;
       gap: 6px;
     }
-    .field label{
+
+    .field label {
       font-size: 12px;
       color: var(--muted);
       letter-spacing: .08em;
       text-transform: uppercase;
     }
 
-    .errorLine{
-      display:none;
+    .errorLine {
+      display: none;
       padding: 10px 12px;
       border-radius: 12px;
-      border: 1px solid rgba(255,77,109,0.35);
-      background: rgba(255,77,109,0.10);
+      border: 1px solid rgba(255, 77, 109, 0.35);
+      background: rgba(255, 77, 109, 0.10);
       color: var(--text);
     }
-    .errorLine.show{ display:block; }
+
+    .errorLine.show {
+      display: block;
+    }
 
     /* ===== Toast ===== */
-    .toastHost{
+    .toastHost {
       position: fixed;
       right: 14px;
       bottom: 14px;
-      display:flex;
+      display: flex;
       flex-direction: column;
       gap: 10px;
       z-index: 9999;
       pointer-events: none;
     }
-    .toast{
+
+    .toast {
       pointer-events: none;
       max-width: min(420px, 92vw);
       padding: 12px 14px;
@@ -445,11 +510,59 @@
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
     }
-    .toast.danger{ border-color: rgba(255,77,109,0.35); }
-    .toast.success{ border-color: rgba(55,214,122,0.35); }
-    .toast.warning{ border-color: rgba(255,176,32,0.35); }
-    .toast .t1{ font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
-    .toast .t2{ margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+    .toast.danger {
+      border-color: rgba(255, 77, 109, 0.35);
+    }
+
+    .toast.success {
+      border-color: rgba(55, 214, 122, 0.35);
+    }
+
+    .toast.warning {
+      border-color: rgba(255, 176, 32, 0.35);
+    }
+
+    .toast .t1 {
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+
+    .toast .t2 {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* Icon from /icons/*.svg via mask (inherits currentColor) */
+    .ico {
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      flex: 0 0 auto;
+      background: currentColor;
+      -webkit-mask: var(--ico-url) center / contain no-repeat;
+      mask: var(--ico-url) center / contain no-repeat;
+      opacity: .95;
+    }
+
+    .navItem .ico {
+      margin-right: 10px;
+    }
+
+    .btn .ico {
+      width: 16px;
+      height: 16px;
+      opacity: .9;
+    }
+
+    .btn .btnRow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
   </style>
 </head>
 
@@ -460,4 +573,5 @@
   <!-- Boot entry -->
   <script type="module" src="./controllers/app.js"></script>
 </body>
+
 </html>

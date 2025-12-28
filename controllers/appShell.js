@@ -3,7 +3,6 @@ import { router } from "./router.js";
 import { api } from "./api.js";
 import { hasPerm } from "./rbac.js";
 
-
 function escapeHtml(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -13,7 +12,6 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/** ✅ Robust role resolver (fix "admin not detected") */
 function getRoleKey(user) {
   const v =
     user?.role_key ??
@@ -22,6 +20,7 @@ function getRoleKey(user) {
     user?.role?.role_key ??
     user?.role?.name ??
     user?.role ??
+    (user?.role_id === 1 ? "admin" : "") ??
     (user?.is_admin ? "admin" : "");
 
   return (v ?? "").toString();
@@ -35,61 +34,35 @@ function roleLabel(roleKey) {
   return roleKey || "";
 }
 
-//function canSeeNav(item, user) {
-//  const rk = getRoleKey(user).toLowerCase();
-//  if (rk === "admin") return true;
-
-  // TZ: pm/fin — скрыть users/roles/settings если не разрешены
-//  if (["/users", "/roles", "/settings"].includes(item.path)) return false;
-//
-//  return true;
-//}
-
+/** Menu visibility: module.index permission */
 function canSeeNav(item) {
-  const module = item.path.replace("/", "");
-  // main — отдельный случай
-  if (module === "main") return hasPerm("main.index") || hasPerm("*");
+  const user = window.APP?.user || null;
+  const rk = getRoleKey(user).toLowerCase();
 
-  // показываем пункт меню только если есть module.index
+  // fallback if perms not loaded but admin
+  if (rk === "admin" && (window.APP?.perms || []).length === 0) return true;
+
+  const module = item.path.replace("/", "");
+  if (module === "main") return hasPerm("main.index");
   return hasPerm(`${module}.index`);
 }
 
-
-
-function iconSvg(name) {
-  // Inline icons with currentColor (no colors in JS)
-  const common = `fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`;
-  switch (name) {
-    case "home":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/></svg>`;
-    case "kanban":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M4 4h7v16H4z"/><path d="M13 4h7v10h-7z"/></svg>`;
-    case "folder":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M3 6h7l2 2h9v12H3z"/></svg>`;
-    case "cap":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M2 8l10-4 10 4-10 4z"/><path d="M6 10v6c0 2 12 2 12 0v-6"/></svg>`;
-    case "book":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M4 5h10a3 3 0 0 1 3 3v13H7a3 3 0 0 0-3 3V5z"/><path d="M17 21V8"/></svg>`;
-    case "users":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3"/><path d="M22 21v-2a3 3 0 0 0-2.5-3"/><path d="M17.5 3.5a3 3 0 0 1 0 6"/></svg>`;
-    case "settings":
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.2-2-3.4-2.3.6a7.6 7.6 0 0 0-1.7-1L15 6h-6l-.5 2a7.6 7.6 0 0 0-1.7 1L4 8.4 2 11.8 4 13a7.9 7.9 0 0 0 .1 1L2 15.2 4 18.6l2.3-.6a7.6 7.6 0 0 0 1.7 1L9 22h6l.5-2a7.6 7.6 0 0 0 1.7-1l2.3.6 2-3.4z"/></svg>`;
-    default:
-      return `<svg class="navIcon" viewBox="0 0 24 24" ${common}><path d="M4 12h16"/><path d="M12 4v16"/></svg>`;
-  }
+/** ✅ Use your /icons/*.svg */
+function iconSpan(file, extraClass = "ico navIcon") {
+  return `<span class="${extraClass}" style="--ico-url:url('./icons/${file}')"></span>`;
 }
 
 function navConfig() {
   return [
-    { path: "/main", key: "nav.main", icon: "home" },
-    { path: "/tasks", key: "nav.tasks", icon: "kanban" },
-    { path: "/projects", key: "nav.projects", icon: "folder" },
-    { path: "/courses", key: "nav.courses", icon: "cap" },
-    { path: "/course_catalog", key: "nav.course_catalog", icon: "book" },
-    { path: "/clients", key: "nav.clients", icon: "folder" },
-    { path: "/settings", key: "nav.settings", icon: "settings" },
-    { path: "/users", key: "nav.users", icon: "users" },
-    { path: "/roles", key: "nav.roles", icon: "users" },
+    { path: "/main", key: "nav.main", iconFile: "asosiy.svg" },
+    { path: "/tasks", key: "nav.tasks", iconFile: "tasks.svg" },
+    { path: "/projects", key: "nav.projects", iconFile: "projects.svg" },
+    { path: "/courses", key: "nav.courses", iconFile: "cources.svg" }, // именно так у тебя называется файл
+    { path: "/course_catalog", key: "nav.course_catalog", iconFile: "catalog.svg" },
+    { path: "/clients", key: "nav.clients", iconFile: "clients.svg" },
+    { path: "/settings", key: "nav.settings", iconFile: "settings.svg" },
+    { path: "/users", key: "nav.users", iconFile: "users.svg" },
+    { path: "/roles", key: "nav.roles", iconFile: "roles.svg" },
   ];
 }
 
@@ -105,7 +78,6 @@ function ensure() {
   const root = document.getElementById("app");
   const user = window.APP?.user || null;
 
-  // already rendered?
   if (root.querySelector(".shell")) {
     window.APP.outlet = document.getElementById("routeOutlet");
     refreshText();
@@ -121,7 +93,7 @@ function ensure() {
     .map((it) => {
       return `
         <a class="navItem" href="#${it.path}" data-nav="${it.path}">
-          ${iconSvg(it.icon)}
+          ${iconSpan(it.iconFile)}
           <span class="navLabel" data-i18n="${it.key}"></span>
         </a>
       `;
@@ -135,7 +107,7 @@ function ensure() {
           <div class="brandMark">G</div>
           <div class="col" style="gap:2px;min-width:0">
             <div class="brandName" data-i18n="app.name"></div>
-            <div class="brandSub muted">Moliya Agentligi</div>
+            <div class="brandSub muted">JARVIS UI</div>
           </div>
         </div>
 
@@ -151,7 +123,7 @@ function ensure() {
       <header class="header card">
         <div class="headerTitle">
           <div class="t1" id="hdrTitle">${i18n.t("app.name")}</div>
-          <div class="t2" id="hdrSubtitle">Avazbek tizim ustida ishalayapti hali</div>
+          <div class="t2" id="hdrSubtitle">${api.API_BASE}</div>
         </div>
 
         <div class="headerRight">
@@ -194,10 +166,9 @@ function ensure() {
   root.querySelector("#btnLogout")?.addEventListener("click", async () => {
     try {
       await api.post("/auth/logout", {});
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
     window.APP.user = null;
+    window.APP.perms = [];
     router.go("#/login");
   });
 
@@ -211,9 +182,6 @@ function refreshText() {
   markActiveNav();
 }
 
-/** ✅ Active menu + header title based on BASE PATH
- *  Example: "#/tasks/view?id=1" -> basePath "/tasks"
- */
 function markActiveNav() {
   const root = document.getElementById("app");
   const nav = root?.querySelector("#sidebarNav");
@@ -222,7 +190,6 @@ function markActiveNav() {
   const hash = window.location.hash || "";
   const fullPath = hash.startsWith("#/") ? hash.slice(1).split("?")[0] : "/main";
 
-  // basePath = "/tasks" for "/tasks/view"
   const seg = fullPath.split("/").filter(Boolean);
   const basePath = seg.length ? `/${seg[0]}` : "/main";
 
