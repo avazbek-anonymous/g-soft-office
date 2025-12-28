@@ -57,7 +57,7 @@ function navConfig() {
     { path: "/main", key: "nav.main", iconFile: "asosiy.svg" },
     { path: "/tasks", key: "nav.tasks", iconFile: "tasks.svg" },
     { path: "/projects", key: "nav.projects", iconFile: "projects.svg" },
-    { path: "/courses", key: "nav.courses", iconFile: "cources.svg" }, // именно так у тебя называется файл
+    { path: "/courses", key: "nav.courses", iconFile: "courses.svg" },
     { path: "/course_catalog", key: "nav.course_catalog", iconFile: "catalog.svg" },
     { path: "/clients", key: "nav.clients", iconFile: "clients.svg" },
     { path: "/settings", key: "nav.settings", iconFile: "settings.svg" },
