@@ -22,7 +22,6 @@ function setError(root, msg) {
     el.textContent = "";
     return;
   }
-
   el.classList.add("show");
   el.textContent = msg;
 }
@@ -72,31 +71,40 @@ export function makeModulePages(moduleName, navTitleKey) {
         if (actions) {
           const base = `#/${vm.moduleName}`;
 
-          const canIndex = hasPerm(`${vm.moduleName}.index`);
-          const canView = hasPerm(`${vm.moduleName}.view`);
-          const canCreate = hasPerm(`${vm.moduleName}.create`);
-          const canEdit = hasPerm(`${vm.moduleName}.edit`);
-          const canArchive = hasPerm(`${vm.moduleName}.archive`);
+          const canIndex  = hasPerm(`${vm.moduleName}.index`);
+          const canView   = hasPerm(`${vm.moduleName}.view`);
+          const canNew    = hasPerm(`${vm.moduleName}.new`);
+          const canEdit   = hasPerm(`${vm.moduleName}.edit`);
+          const canDelete = hasPerm(`${vm.moduleName}.delete`);
 
           const btnBack = canIndex
-            ? `<a class="btn ghost" href="${base}"><span class="btnRow">← ${safeT("common.back", "Back")}</span></a>`
+            ? `<a class="btn ghost" href="${base}">
+                 <span class="btnRow">← ${safeT("common.back", "Back")}</span>
+               </a>`
             : "";
 
-          const btnNew = canCreate
-            ? `<a class="btn" href="${base}/new"><span class="btnRow">+ new</span></a>`
+          const btnNew = canNew
+            ? `<a class="btn" href="${base}/new">
+                 <span class="btnRow">+ ${safeT("common.new", "New")}</span>
+               </a>`
             : "";
 
           const btnEdit = canEdit && id
-            ? `<a class="btn" href="${base}/edit?id=${encodeURIComponent(id)}"><span class="btnRow">${iconSpan("edit.svg")} edit</span></a>`
+            ? `<a class="btn" href="${base}/edit?id=${encodeURIComponent(id)}">
+                 <span class="btnRow">${iconSpan("edit.svg")} ${safeT("common.edit","Edit")}</span>
+               </a>`
             : "";
 
           const btnView = canView && id
-            ? `<a class="btn ghost" href="${base}/view?id=${encodeURIComponent(id)}"><span class="btnRow">view</span></a>`
+            ? `<a class="btn ghost" href="${base}/view?id=${encodeURIComponent(id)}">
+                 <span class="btnRow">${safeT("common.view","View")}</span>
+               </a>`
             : "";
 
-          // delete.svg (архив) — на будущее, когда появятся реальные данные
-          const btnArchive = canArchive && id
-            ? `<button class="btn ghost" type="button" data-act="archive"><span class="btnRow">${iconSpan("delete.svg")} archive</span></button>`
+          const btnArchive = canDelete && id
+            ? `<button class="btn ghost" type="button" data-act="archive">
+                 <span class="btnRow">${iconSpan("delete.svg")} ${safeT("common.archive","Archive")}</span>
+               </button>`
             : "";
 
           if (vm.pageName === "index") {
@@ -111,13 +119,11 @@ export function makeModulePages(moduleName, navTitleKey) {
             actions.innerHTML = `${btnBack}`;
           }
 
-          // handlers for future actions
-          actions.addEventListener("click", (e) => {
+          actions.onclick = (e) => {
             const b = e.target?.closest("button[data-act]");
             if (!b) return;
-            // пока заглушка
-            setError(root, "Action is not implemented yet");
-          });
+            setError(root, safeT("common.notImplemented", "Action is not implemented yet"));
+          };
         }
 
         appShell.markActiveNav();

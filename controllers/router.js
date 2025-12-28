@@ -1,33 +1,11 @@
 // controllers/router.js
 import { i18n } from "./i18n.js";
+import { hasPerm } from "./rbac.js";
 
 const routes = new Map();
 let started = false;
 let currentRoute = null;
 let onNeedShell = null;
-
-// events: beforeRender, afterRender, error
-const listeners = {
-  beforeRender: [],
-  afterRender: [],
-  error: [],
-};
-
-function emit(type, payload) {
-  (listeners[type] || []).forEach((fn) => {
-    try { fn(payload); } catch (_) {}
-  });
-}
-
-function on(type, fn) {
-  if (!listeners[type]) listeners[type] = [];
-  listeners[type].push(fn);
-  return () => {
-    const arr = listeners[type];
-    const idx = arr.indexOf(fn);
-    if (idx >= 0) arr.splice(idx, 1);
-  };
-}
 
 function parseHash() {
   const h = window.location.hash || "";
@@ -49,39 +27,53 @@ function setDocumentTitle(titleKey) {
   document.title = page ? `${appName} — ${page}` : appName;
 }
 
-function hasPerm(permKey) {
-  if (!permKey) return true;
-  const perms = window.APP?.perms || [];
-  if (!Array.isArray(perms)) return false;
-  if (perms.includes("*")) return true;
-  return perms.includes(permKey);
+function inferPermKeyByPath(path) {
+  // path like "/tasks", "/tasks/view", "/settings/edit"
+  const seg = (path || "/main").split("/").filter(Boolean); // ["tasks","view"]
+  const mod = seg[0] || "main";
+  const sub = seg[1] || "index";
+
+  if (mod === "main") return null;     // main всегда можно
+  if (mod === "login") return null;
+
+  if (mod === "settings") {
+    if (sub === "new" || sub === "edit") return "settings.edit";
+    return "settings.view"; // index/view
+  }
+
+  const action =
+    sub === "view" ? "view" :
+    sub === "new"  ? "new"  :
+    sub === "edit" ? "edit" :
+    "index";
+
+  return `${mod}.${action}`;
 }
 
-async function fetchViewHtml(viewUrl) {
-  // html файлы твоего фронта. Без кэша, чтобы сразу видеть обновления.
-  const res = await fetch(viewUrl, { cache: "no-store" });
-  if (!res.ok) throw new Error(`View load failed: ${res.status} ${viewUrl}`);
-  return await res.text();
-}
-
-function getOutlet(def) {
-  // outlet задаётся appShell-ом (pageHost), иначе рендерим в #app
-  return window.APP.outlet || document.getElementById("app");
+function hasAccess(def, path) {
+  // если permKey задан явно — используем его, иначе вычисляем по path
+  const key = def?.permKey || inferPermKeyByPath(path);
+  return hasPerm(key);
 }
 
 function clearShellIfNeeded(def) {
-  if (!def.shell) {
-    const root = document.getElementById("app");
-    if (root) root.innerHTML = "";
-    window.APP.outlet = null;
-  } else {
+  if (def.shell) {
     onNeedShell && onNeedShell();
+    return;
   }
+  const root = document.getElementById("app");
+  if (root) root.innerHTML = "";
+  window.APP.outlet = null;
 }
 
 function renderError(outlet, msg) {
   const safe = String(msg || "Error");
-  outlet.innerHTML = `<div class="card" style="padding:14px;border:1px solid var(--border);background:var(--panel)">${safe}</div>`;
+  outlet.innerHTML = `
+    <div class="card" style="padding:14px">
+      <div class="caps" style="letter-spacing:.10em;font-size:12px">error</div>
+      <div style="margin-top:6px">${safe}</div>
+    </div>
+  `;
   i18n.apply(outlet);
 }
 
@@ -90,88 +82,56 @@ async function render() {
   const def = routes.get(path) || routes.get("/main");
   if (!def) return;
 
-  // auth guard (UI)
+  // auth guard
   const user = window.APP?.user || null;
   if (def.requiresAuth && !user) {
     go("#/login");
     return;
   }
 
-  // RBAC guard (UI)
-  if (def.requiresAuth && def.permKey && !hasPerm(def.permKey)) {
-    // если нет прав — кидаем на main
+  // rbac guard
+  if (def.requiresAuth && !hasAccess(def, path)) {
     go("#/main");
     return;
   }
 
-  // shell/no-shell
   clearShellIfNeeded(def);
 
-  const outlet = getOutlet(def);
-  if (!outlet) return;
-
   setDocumentTitle(def.titleKey);
+
+  const outlet = window.APP.outlet || document.getElementById("app");
+  if (!outlet) return;
 
   const ctx = {
     path,
     query,
     user: window.APP?.user || null,
     perms: window.APP?.perms || [],
-    lang: window.APP?.lang || "ru",
+    lang: i18n.lang || "ru",
     titleKey: def.titleKey,
     outlet,
-    route: def,
   };
 
-  emit("beforeRender", { def, ctx });
-
   try {
-    // handler must return "page" object: {load, calc, render, mount}
-    // или можно вернуть сразу module с этими функциями (export {load,calc,render,mount})
     const page = def.handler ? await def.handler(ctx) : null;
     if (!page) {
       outlet.innerHTML = `<div class="card" style="padding:14px">No page</div>`;
       i18n.apply(outlet);
       currentRoute = { def, ctx };
-      emit("afterRender", { def, ctx });
       return;
     }
 
-    // 1) если указан viewUrl — сначала загружаем HTML в outlet
-    if (def.viewUrl) {
-      const htmlView = await fetchViewHtml(def.viewUrl);
-      outlet.innerHTML = htmlView;
-      i18n.apply(outlet);
-    }
-
-    // 2) load/calc
     const data = page.load ? await page.load(ctx) : null;
     const vm = page.calc ? page.calc(ctx, data) : data;
 
-    // 3) render:
-    // - если render вернул строку с HTML (не пустую) — заменим outlet
-    // - если render ничего не вернул / вернул "" — считаем что он обновил DOM поверх viewUrl
-    let html = "";
-    if (page.render) html = page.render(ctx, vm);
+    const html = page.render ? page.render(ctx, vm) : "";
+    outlet.innerHTML = html || `<div class="card" style="padding:14px">No content</div>`;
+    i18n.apply(outlet);
 
-    if (typeof html === "string" && html.trim()) {
-      outlet.innerHTML = html;
-      i18n.apply(outlet);
-    } else {
-      // если def.viewUrl не было — и render пустой, то покажем "No content"
-      if (!def.viewUrl) {
-        outlet.innerHTML = `<div class="card" style="padding:14px">No content</div>`;
-        i18n.apply(outlet);
-      }
-    }
-
-    // 4) mount listeners
     if (page.mount) page.mount(ctx, vm);
 
     currentRoute = { def, ctx };
-    emit("afterRender", { def, ctx });
   } catch (e) {
-    emit("error", { def, ctx, error: e });
     renderError(outlet, e?.message || "Render error");
     currentRoute = { def, ctx };
   }
@@ -183,9 +143,6 @@ function start(opts = {}) {
   onNeedShell = opts.onNeedShell || null;
 
   window.addEventListener("hashchange", () => render());
-
-  // если ты меняешь язык и кидаешь событие — обновляем текущую страницу
-  window.addEventListener("gsoft:lang", () => refresh());
 
   if (!window.location.hash) {
     window.location.hash = opts.defaultRoute || "#/main";
@@ -211,4 +168,4 @@ function refresh() {
   render();
 }
 
-export const router = { start, register, go, refresh, on };
+export const router = { start, register, go, refresh };

@@ -22,7 +22,6 @@ function getRoleKey(user) {
     user?.role ??
     (user?.role_id === 1 ? "admin" : "") ??
     (user?.is_admin ? "admin" : "");
-
   return (v ?? "").toString();
 }
 
@@ -34,20 +33,19 @@ function roleLabel(roleKey) {
   return roleKey || "";
 }
 
-/** Menu visibility: module.index permission */
 function canSeeNav(item) {
   const user = window.APP?.user || null;
   const rk = getRoleKey(user).toLowerCase();
+
+  if (item.path === "/main") return true; // ✅ main всегда виден
 
   // fallback if perms not loaded but admin
   if (rk === "admin" && (window.APP?.perms || []).length === 0) return true;
 
   const module = item.path.replace("/", "");
-  if (module === "main") return hasPerm("main.index");
   return hasPerm(`${module}.index`);
 }
 
-/** ✅ Use your /icons/*.svg */
 function iconSpan(file, extraClass = "ico navIcon") {
   return `<span class="${extraClass}" style="--ico-url:url('./icons/${file}')"></span>`;
 }
@@ -57,7 +55,7 @@ function navConfig() {
     { path: "/main", key: "nav.main", iconFile: "asosiy.svg" },
     { path: "/tasks", key: "nav.tasks", iconFile: "tasks.svg" },
     { path: "/projects", key: "nav.projects", iconFile: "projects.svg" },
-    { path: "/courses", key: "nav.courses", iconFile: "courses.svg" },
+    { path: "/courses", key: "nav.courses", iconFile: "cources.svg" }, // ✅ FIX
     { path: "/course_catalog", key: "nav.course_catalog", iconFile: "catalog.svg" },
     { path: "/clients", key: "nav.clients", iconFile: "clients.svg" },
     { path: "/settings", key: "nav.settings", iconFile: "settings.svg" },
@@ -127,7 +125,7 @@ function ensure() {
         </div>
 
         <div class="headerRight">
-          ${renderLangSeg(window.APP?.lang || "ru")}
+          ${renderLangSeg(i18n.lang || "ru")}
 
           <div class="userChip">
             <div class="col" style="gap:1px;min-width:0">
@@ -156,6 +154,7 @@ function ensure() {
     if (!btn) return;
     const lang = btn.getAttribute("data-lang");
     i18n.setLang(lang);
+    window.APP.lang = i18n.lang;
 
     seg.querySelectorAll("button[data-lang]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-lang") === i18n.lang);
