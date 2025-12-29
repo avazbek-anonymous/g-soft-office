@@ -1,77 +1,23 @@
-<!-- view/settings/new.html -->
-<div id="settingsNew" class="sf-root">
-  <div class="sf-head">
-    <div class="sf-title">
-      <div class="sf-h1"><span data-i18n="common.new">New</span> · <span data-i18n="settings.title">Settings</span></div>
-      <div class="sf-h2" id="sfDictTitle"></div>
+<div class="page settings">
+  <div class="row pageHead" style="justify-content:space-between;align-items:flex-end;gap:10px">
+    <div class="col" style="gap:3px;min-width:0">
+      <div class="pageTitle caps" data-slot="title"></div>
+      <div class="muted" data-slot="subtitle"></div>
     </div>
-    <div class="sf-actions">
-      <button class="sf-btn ghost" id="sfBackBtn" type="button" data-i18n="common.back">Back</button>
-    </div>
+    <div class="row" data-slot="actions" style="gap:8px;flex-wrap:wrap"></div>
   </div>
 
-  <div id="sfError" class="sf-error" style="display:none"></div>
-
-  <form id="sfForm" class="sf-panel">
-    <div class="sf-row">
-      <label class="sf-lbl" data-i18n="common.name">Name</label>
-      <input class="sf-in" id="sfName" required />
-    </div>
-
-    <div class="sf-row">
-      <label class="sf-lbl" data-i18n="common.color">Color</label>
-      <input class="sf-in" id="sfColor" placeholder="#00E5FF" />
-    </div>
-
-    <div class="sf-row">
-      <label class="sf-lbl" data-i18n="common.sort">Sort</label>
-      <input class="sf-in" id="sfSort" type="number" value="0" />
-    </div>
-
-    <div class="sf-rowChecks">
-      <label class="sf-check">
-        <input type="checkbox" id="sfActive" checked />
-        <span data-i18n="common.active">Active</span>
-      </label>
-
-      <label class="sf-check">
-        <input type="checkbox" id="sfDefault" />
-        <span data-i18n="common.default">Default</span>
-      </label>
-    </div>
-
-    <div class="sf-row" id="sfFinalTypeRow" style="display:none">
-      <label class="sf-lbl" data-i18n="settings.finalType">Final type</label>
-      <select class="sf-in" id="sfFinalType">
-        <option value="">—</option>
-        <option value="success">success</option>
-        <option value="cancel">cancel</option>
-      </select>
-    </div>
-
-    <div class="sf-footer">
-      <button class="sf-btn" type="submit" data-i18n="common.save">Save</button>
-      <button class="sf-btn ghost" type="button" id="sfCancelBtn" data-i18n="common.cancel">Cancel</button>
-    </div>
-  </form>
+  <div data-slot="error" class="inlineError"></div>
+  <div data-slot="content"></div>
 </div>
 
 <style>
-  .sf-root{display:flex;flex-direction:column;gap:12px}
-  .sf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
-  .sf-h1{font-weight:800;letter-spacing:.06em;text-transform:uppercase}
-  .sf-h2{color:var(--muted);font-size:12px;margin-top:2px}
-  .sf-panel{border:1px solid var(--border);border-radius:16px;background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:10px}
-  .sf-row{display:flex;flex-direction:column;gap:6px}
-  .sf-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-  .sf-in{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.18);color:var(--text);outline:none}
-  .sf-in:focus{border-color:rgba(0,229,255,.35);box-shadow:0 0 18px rgba(0,229,255,.12)}
-  .sf-rowChecks{display:flex;gap:16px;flex-wrap:wrap}
-  .sf-check{display:flex;align-items:center;gap:8px;color:var(--muted)}
-  .sf-check input{accent-color:var(--accent2)}
-  .sf-footer{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
-  .sf-btn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer}
-  .sf-btn:hover{border-color:rgba(0,229,255,.35)}
-  .sf-btn.ghost{background:transparent}
-  .sf-error{padding:10px 12px;border-radius:14px;border:1px solid rgba(255,77,79,.45);background:rgba(255,77,79,.08);color:rgba(255,255,255,.92)}
+  .page.settings{display:flex;flex-direction:column;gap:10px}
+  .pageTitle{font-size:18px;letter-spacing:.10em}
+  .inlineError{display:none;padding:10px 12px;border:1px solid var(--danger);border-radius:12px;background:rgba(255,0,0,.06);color:var(--text)}
+  .inlineError.show{display:block}
+  .st-formCard{padding:12px}
+  .st-formGrid{display:flex;flex-direction:column;gap:12px}
+  .st-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .st-check{display:flex;gap:8px;align-items:center;font-size:13px}
 </style>

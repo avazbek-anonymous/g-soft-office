@@ -1,145 +1,50 @@
-<!-- view/settings/index.html -->
-<div id="settingsIndex" class="st-root">
-  <div class="st-head">
-    <div class="st-title">
-      <div class="st-h1" data-i18n="settings.title">Settings</div>
-      <div class="st-h2" data-i18n="settings.subtitle">Dictionaries</div>
+<div class="page settings">
+  <div class="row pageHead" style="justify-content:space-between;align-items:flex-end;gap:10px">
+    <div class="col" style="gap:3px;min-width:0">
+      <div class="pageTitle caps" data-slot="title"></div>
+      <div class="muted" data-slot="subtitle"></div>
     </div>
-
-    <div class="st-tools">
-      <div class="st-searchWrap">
-        <input id="stSearch" class="st-input" type="search" placeholder="Search..." data-i18n-ph="common.search" />
-      </div>
-
-      <label class="st-toggle">
-        <input id="stShowArchived" type="checkbox" />
-        <span data-i18n="settings.showArchived">Show archived</span>
-      </label>
-
-      <button id="stNewBtn" class="st-btn">
-        <span>+</span>
-        <span data-i18n="common.new">New</span>
-      </button>
-    </div>
+    <div class="row" data-slot="actions" style="gap:8px;flex-wrap:wrap"></div>
   </div>
 
-  <div class="st-grid">
-    <section class="st-panel">
-      <div class="st-panelHead">
-        <div class="st-panelTitle" data-i18n="settings.dicts">Dicts</div>
-      </div>
-      <div id="stDictList" class="st-dicts"></div>
-      <div id="stDictEmpty" class="st-empty" style="display:none" data-i18n="settings.noDict">
-        Pick a dict
-      </div>
-    </section>
-
-    <section class="st-panel">
-      <div class="st-panelHead">
-        <div class="st-panelTitle">
-          <span data-i18n="settings.items">Items</span>
-          <span class="st-pill" id="stDictKeyPill"></span>
-        </div>
-        <div class="st-mini" id="stCount"></div>
-      </div>
-
-      <div id="stError" class="st-error" style="display:none"></div>
-
-      <div class="st-tableWrap">
-        <table class="st-table">
-          <thead>
-            <tr>
-              <th data-i18n="common.name">Name</th>
-              <th style="width:120px" data-i18n="common.color">Color</th>
-              <th style="width:90px" data-i18n="common.sort">Sort</th>
-              <th style="width:90px" data-i18n="common.active">Active</th>
-              <th style="width:110px" data-i18n="common.default">Default</th>
-              <th style="width:240px" data-i18n="common.actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="stItemsBody"></tbody>
-        </table>
-      </div>
-
-      <div id="stNoData" class="st-empty" style="display:none" data-i18n="common.noData">
-        No data
-      </div>
-    </section>
-  </div>
+  <div data-slot="error" class="inlineError"></div>
+  <div data-slot="content"></div>
 </div>
 
 <style>
-  /* Jarvis-ish, но только vars */
-  .st-root{display:flex;flex-direction:column;gap:12px}
-  .st-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
-  .st-title .st-h1{font-weight:800;letter-spacing:.06em;text-transform:uppercase}
-  .st-title .st-h2{color:var(--muted);font-size:12px;margin-top:2px}
+  .page.settings{display:flex;flex-direction:column;gap:10px}
+  .pageTitle{font-size:18px;letter-spacing:.10em}
+  .inlineError{display:none;padding:10px 12px;border:1px solid var(--danger);border-radius:12px;background:rgba(255,0,0,.06);color:var(--text)}
+  .inlineError.show{display:block}
 
-  .st-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .st-searchWrap{min-width:220px}
-  .st-input{
-    width:100%;
-    padding:10px 12px;
-    border-radius:12px;
-    border:1px solid var(--border);
-    background:var(--panel);
-    color:var(--text);
-    outline:none;
-  }
-  .st-input:focus{border-color:rgba(0,229,255,.35);box-shadow:0 0 18px rgba(0,229,255,.12)}
-
-  .st-toggle{display:flex;align-items:center;gap:8px;color:var(--muted);user-select:none}
-  .st-toggle input{accent-color:var(--accent2)}
-
-  .st-btn{
-    display:inline-flex;align-items:center;gap:10px;
-    padding:10px 12px;border-radius:12px;
-    border:1px solid var(--border);background:var(--panel);color:var(--text);
-    cursor:pointer;transition:transform 180ms ease, border-color 180ms ease, background 180ms ease;
-  }
-  .st-btn:hover{transform:translateY(-1px);border-color:rgba(0,229,255,.35);background:rgba(255,255,255,.06)}
-  .st-grid{display:grid;grid-template-columns:320px 1fr;gap:12px}
-  .st-panel{
-    border:1px solid var(--border);
-    border-radius:16px;
-    background:var(--panel);
-    padding:12px;
-  }
-  .st-panelHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-  .st-panelTitle{font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:12px}
-  .st-mini{color:var(--muted);font-size:12px}
-  .st-dicts{display:flex;flex-direction:column;gap:6px}
-  .st-dict{
-    display:flex;align-items:center;justify-content:space-between;gap:10px;
-    padding:10px 10px;border-radius:12px;border:1px solid transparent;
-    cursor:pointer;color:var(--text);
-    transition:background 180ms ease, border-color 180ms ease, transform 180ms ease;
-  }
-  .st-dict:hover{background:rgba(255,255,255,.05);border-color:var(--border);transform:translateY(-1px)}
-  .st-dict.active{background:rgba(255,255,255,.06);border-color:rgba(0,229,255,.35);box-shadow:0 0 18px rgba(0,229,255,.12)}
-  .st-dict small{color:var(--muted)}
-  .st-pill{
-    display:inline-flex;align-items:center;justify-content:center;
-    padding:2px 10px;border-radius:999px;margin-left:8px;
-    border:1px solid rgba(0,229,255,.25);
-    color:rgba(0,229,255,.9);
-    font-size:11px;
-  }
-
-  .st-tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border)}
-  .st-table{width:100%;border-collapse:collapse;background:rgba(0,0,0,.20)}
-  .st-table th,.st-table td{padding:10px 10px;border-bottom:1px solid rgba(255,255,255,.08);font-size:13px}
-  .st-table th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-  .st-rowActions{display:flex;gap:8px;flex-wrap:wrap}
-  .st-a{
-    display:inline-flex;align-items:center;gap:8px;
-    padding:7px 10px;border-radius:12px;border:1px solid var(--border);
-    background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;text-decoration:none;
-  }
-  .st-a:hover{border-color:rgba(0,229,255,.35)}
-  .st-a.danger:hover{border-color:rgba(255,77,79,.6)}
-  .st-swatch{width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.18);display:inline-block}
-  .st-empty{padding:14px;color:var(--muted);text-align:center}
-  .st-error{padding:10px 12px;border-radius:14px;border:1px solid rgba(255,77,79,.45);background:rgba(255,77,79,.08);color:rgba(255,255,255,.92)}
+  .st-grid{display:grid;grid-template-columns:260px 1fr;gap:12px}
   @media (max-width: 980px){.st-grid{grid-template-columns:1fr}}
+  .st-left{padding:12px}
+  .st-right{padding:12px}
+  .st-leftHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .st-dictList{display:flex;flex-direction:column;gap:8px}
+  .st-dictBtn{width:100%;text-align:left;border:1px solid var(--stroke2);background:rgba(255,255,255,.03);border-radius:14px;padding:10px 10px;cursor:pointer;transition:all 180ms ease}
+  .st-dictBtn:hover{border-color:var(--accent2);box-shadow:0 0 0 1px rgba(0,229,255,.15)}
+  .st-dictBtn.active{border-color:var(--accent2);box-shadow:0 0 0 1px rgba(0,229,255,.25), 0 0 18px rgba(0,229,255,.10)}
+  .st-dictTitle{font-weight:700}
+  .st-dictKey{font-size:12px}
+
+  .st-top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+  .st-search{min-width:260px;flex:1}
+  .st-check{display:flex;gap:8px;align-items:center;font-size:13px}
+  .st-meta{margin-top:8px;margin-bottom:8px;font-size:13px}
+  .st-tableWrap{position:relative}
+  .st-table{width:100%;border-collapse:separate;border-spacing:0}
+  .st-table th,.st-table td{padding:10px 10px;border-bottom:1px solid var(--stroke2);vertical-align:middle}
+  .st-table th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .st-table .c{text-align:center;white-space:nowrap}
+  .st-link{color:var(--text);text-decoration:none;border-bottom:1px dashed rgba(0,229,255,.25)}
+  .st-link:hover{border-bottom-color:rgba(0,229,255,.55)}
+  .st-swatch{display:inline-block;width:14px;height:14px;border-radius:6px;border:1px solid var(--stroke2)}
+  .st-badge{display:inline-flex;align-items:center;justify-content:center;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--stroke2);background:rgba(255,255,255,.03)}
+  .st-badge.ok{border-color:rgba(0,255,160,.35);box-shadow:0 0 16px rgba(0,255,160,.07) inset}
+  .st-badge.warn{border-color:rgba(255,200,0,.35);box-shadow:0 0 16px rgba(255,200,0,.07) inset}
+  .st-badge.danger{border-color:rgba(255,60,60,.35);box-shadow:0 0 16px rgba(255,60,60,.07) inset}
+  tr.isDel td{opacity:.65}
+  .st-empty{padding:18px 12px;text-align:center;border:1px dashed var(--stroke2);border-radius:14px;margin-top:12px}
 </style>
