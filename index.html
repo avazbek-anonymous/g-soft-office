@@ -1,577 +1,215 @@
 <!doctype html>
-<html lang="ru" data-theme="dark">
-
+<html lang="uz" data-lang="uz" data-theme="dark" data-eye="0">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
   <title>G-SOFT</title>
 
+  <link rel="icon" href="/assets/icon/asosiy.svg" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
+
   <style>
-    /* =========================
-       JARVIS x GEKTO (Stage 1)
-       Colors ONLY via CSS vars
-       ========================= */
-
-    :root {
-      --bg: #060b12;
-      --panel: rgba(255, 255, 255, 0.05);
-      --panel2: rgba(255, 255, 255, 0.035);
-      --stroke: rgba(255, 255, 255, 0.10);
-      --stroke2: rgba(255, 255, 255, 0.06);
-
-      --text: rgba(255, 255, 255, 0.92);
-      --muted: rgba(255, 255, 255, 0.62);
-
-      /* Brand / glow */
-      --accent: #37d67a;
-      --accent2: #27d7ff;
-
-      --danger: #ff4d6d;
-      --success: #37d67a;
-      --warning: #ffb020;
-
-      --shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-      --radius: 16px;
-
-      --gridA: rgba(255, 255, 255, 0.03);
-      --gridB: rgba(255, 255, 255, 0.015);
-
-      --glowA: 0 0 0.6rem rgba(39, 215, 255, 0.28);
-      --glowB: 0 0 1.1rem rgba(55, 214, 122, 0.18);
-
-      --t150: 150ms;
-      --t200: 200ms;
-      --t250: 250ms;
-    }
-
-    [data-theme="light"] {
-      --bg: #f6f9ff;
-      --panel: rgba(0, 0, 0, 0.04);
-      --panel2: rgba(0, 0, 0, 0.03);
-      --stroke: rgba(0, 0, 0, 0.12);
-      --stroke2: rgba(0, 0, 0, 0.08);
-
-      --text: rgba(0, 0, 0, 0.90);
-      --muted: rgba(0, 0, 0, 0.60);
-
-      --gridA: rgba(0, 0, 0, 0.04);
-      --gridB: rgba(0, 0, 0, 0.02);
-    }
-
-    html,
-    body {
-      height: 100%;
-    }
-
-    body {
-      margin: 0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-    }
-
-    /* subtle tech grid */
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background:
-        linear-gradient(to right, var(--gridA) 1px, transparent 1px) 0 0 / 36px 36px,
-        linear-gradient(to bottom, var(--gridB) 1px, transparent 1px) 0 0 / 36px 36px;
-      opacity: 0.75;
-      mix-blend-mode: screen;
-    }
-
-    /* App root */
-    #app {
-      height: 100%;
-      display: grid;
-      place-items: stretch;
-    }
-
-    /* ===== reusable UI ===== */
-    .card {
-      background: linear-gradient(180deg, var(--panel), var(--panel2));
-      border: 1px solid var(--stroke);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-
-    .btn {
-      appearance: none;
-      border: 1px solid var(--stroke);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
-      color: var(--text);
-      border-radius: 12px;
-      padding: 10px 12px;
-      cursor: pointer;
-      transition: transform var(--t150) ease, box-shadow var(--t200) ease, border-color var(--t200) ease, opacity var(--t200) ease;
-      user-select: none;
-    }
-
-    .btn:hover {
-      box-shadow: var(--glowA);
-      border-color: rgba(39, 215, 255, 0.35);
-    }
-
-    .btn:active {
-      transform: translateY(1px);
-    }
-
-    .btn.primary {
-      border-color: rgba(55, 214, 122, 0.35);
-      box-shadow: var(--glowB);
-    }
-
-    .btn.ghost {
-      background: transparent;
-    }
-
-    .btn.danger {
-      border-color: rgba(255, 77, 109, 0.35);
-    }
-
-    .btn:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .input {
-      width: 100%;
-      padding: 11px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--stroke2);
-      background: rgba(0, 0, 0, 0.20);
-      color: var(--text);
-      outline: none;
-      transition: box-shadow var(--t200) ease, border-color var(--t200) ease;
-    }
-
-    .input:focus {
-      border-color: rgba(39, 215, 255, 0.35);
-      box-shadow: var(--glowA);
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    .caps {
-      letter-spacing: .10em;
-      text-transform: uppercase;
-    }
-
-    .row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .col {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    /* ===== Shell Layout ===== */
-    .shell {
-      height: 100%;
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      grid-template-rows: 64px 1fr;
-      grid-template-areas:
-        "sidebar header"
-        "sidebar main";
-      gap: 12px;
-      padding: 12px;
-      box-sizing: border-box;
-    }
-
-    .sidebar {
-      grid-area: sidebar;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .sidebar::after {
-      content: "";
-      position: absolute;
-      inset: -1px;
-      pointer-events: none;
-      border-radius: var(--radius);
-      box-shadow: 0 0 24px rgba(39, 215, 255, 0.10);
-      opacity: 0.8;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 10px 12px;
-      border-bottom: 1px solid var(--stroke2);
-      margin-bottom: 2px;
-    }
-
-    .brandMark {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-      border: 1px solid rgba(39, 215, 255, 0.35);
-      background: rgba(39, 215, 255, 0.08);
-      box-shadow: var(--glowA);
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-    }
-
-    .brandName {
-      font-weight: 800;
-      letter-spacing: .06em;
-    }
-
-    .brandSub {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .nav {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding-top: 6px;
-    }
-
-    .navItem {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 10px;
-      border-radius: 14px;
-      border: 1px solid transparent;
-      color: var(--text);
-      text-decoration: none;
-      transition: border-color var(--t200) ease, box-shadow var(--t200) ease, background var(--t200) ease;
-    }
-
-    .navItem:hover {
-      border-color: rgba(39, 215, 255, 0.25);
-      background: rgba(39, 215, 255, 0.06);
-      box-shadow: 0 0 18px rgba(39, 215, 255, 0.12);
-    }
-
-    .navItem.active {
-      border-color: rgba(39, 215, 255, 0.40);
-      background: rgba(39, 215, 255, 0.10);
-      box-shadow: var(--glowA);
-    }
-
-    .navIcon {
-      width: 18px;
-      height: 18px;
-      opacity: 0.9;
-    }
-
-    .navLabel {
-      font-weight: 650;
-      font-size: 14px;
-    }
-
-    .header {
-      grid-area: header;
-      padding: 10px 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .header::before {
-      content: "";
-      position: absolute;
-      left: -40px;
-      top: 50%;
-      width: 180px;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(39, 215, 255, 0.55), transparent);
-      opacity: .7;
-    }
-
-    .headerTitle {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .headerTitle .t1 {
-      font-weight: 800;
-      letter-spacing: .10em;
-      text-transform: uppercase;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .headerTitle .t2 {
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .headerRight {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /* segmented language */
-    .seg {
-      display: flex;
-      border: 1px solid var(--stroke2);
-      border-radius: 14px;
-      overflow: hidden;
-      background: rgba(0, 0, 0, 0.16);
-    }
-
-    .seg button {
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      padding: 8px 10px;
-      cursor: pointer;
-      transition: background var(--t200) ease, color var(--t200) ease, box-shadow var(--t200) ease;
-      font-weight: 750;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      font-size: 12px;
-    }
-
-    .seg button.active {
-      color: var(--text);
-      background: rgba(39, 215, 255, 0.12);
-      box-shadow: var(--glowA);
-    }
-
-    .userChip {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      border-radius: 14px;
-      border: 1px solid var(--stroke2);
-      background: rgba(255, 255, 255, 0.03);
-      max-width: 340px;
-    }
-
-    .userChip .name {
-      font-weight: 750;
-      font-size: 13px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 180px;
-    }
-
-    .userChip .role {
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .main {
-      grid-area: main;
-      overflow: auto;
-      padding: 2px;
-    }
-
-    .mainInner {
-      padding: 12px;
-      box-sizing: border-box;
-      min-height: calc(100% - 24px);
-    }
-
-    /* ===== Auth page ===== */
-    .authWrap {
-      height: 100%;
-      display: grid;
-      place-items: center;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-
-    .authPanel {
-      width: min(520px, 94vw);
-      padding: 18px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .authPanel::before {
-      content: "";
-      position: absolute;
-      inset: -120px -80px auto auto;
-      width: 260px;
-      height: 260px;
-      background: radial-gradient(circle, rgba(39, 215, 255, 0.18), transparent 60%);
-      filter: blur(2px);
-      pointer-events: none;
-    }
-
-    .authHead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--stroke2);
-    }
-
-    .authTitle {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      min-width: 0;
-    }
-
-    .authTitle h1 {
-      margin: 0;
-      font-size: 16px;
-      letter-spacing: .10em;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .authTitle p {
-      margin: 4px 0 0;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field label {
-      font-size: 12px;
-      color: var(--muted);
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-
-    .errorLine {
-      display: none;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 77, 109, 0.35);
-      background: rgba(255, 77, 109, 0.10);
-      color: var(--text);
-    }
-
-    .errorLine.show {
-      display: block;
-    }
-
-    /* ===== Toast ===== */
-    .toastHost {
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      z-index: 9999;
-      pointer-events: none;
-    }
-
-    .toast {
-      pointer-events: none;
-      max-width: min(420px, 92vw);
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--stroke);
-      background: linear-gradient(180deg, var(--panel), var(--panel2));
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-
-    .toast.danger {
-      border-color: rgba(255, 77, 109, 0.35);
-    }
-
-    .toast.success {
-      border-color: rgba(55, 214, 122, 0.35);
-    }
-
-    .toast.warning {
-      border-color: rgba(255, 176, 32, 0.35);
-    }
-
-    .toast .t1 {
-      font-weight: 800;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      font-size: 12px;
-    }
-
-    .toast .t2 {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    /* Icon from /icons/*.svg via mask (inherits currentColor) */
-    .ico {
-      width: 25px;
-      height: 25px;
-      display: inline-block;
-      flex: 0 0 auto;
-      background: currentColor;
-      -webkit-mask: var(--ico-url) center / contain no-repeat;
-      mask: var(--ico-url) center / contain no-repeat;
-      opacity: .95;
-    }
-
-    .navItem .ico {
-      margin-right: 10px;
-    }
-
-    .btn .ico {
-      width: 16px;
-      height: 16px;
-      opacity: .9;
-    }
-
-    .btn .btnRow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
+    /* Минимальный safe-base, чтобы не было горизонтального скролла даже без style.css */
+    html, body { height: 100%; }
+    body { margin: 0; overflow-x: hidden; }
   </style>
 </head>
 
-<body>
-  <div id="app"></div>
-  <div id="toastHost" class="toastHost"></div>
+<body class="page page-app">
+  <noscript>
+    <div style="padding:16px;font-family:system-ui">
+      JavaScript yoqilgan bo‘lishi kerak.
+    </div>
+  </noscript>
 
-  <!-- Boot entry -->
-  <script type="module" src="./controllers/app.js"></script>
+  <!-- MOBILE BACKDROP for sidebar -->
+  <div id="backdrop" class="backdrop" hidden></div>
+
+  <div class="app-shell">
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="sidebar" aria-label="Navigation">
+      <div class="sidebar__top">
+        <a class="brand brand--sidebar" href="#/main" data-nav="main">
+          <img class="brand__logo" src="/assets/icon/asosiy.svg" alt="G-SOFT" />
+          <div class="brand__text">
+            <div class="brand__name">G-SOFT</div>
+            <div class="brand__sub muted" data-i18n="app_subtitle">Boshqaruv tizimi</div>
+          </div>
+        </a>
+
+        <!-- Collapse button (desktop) -->
+        <button class="icon-btn sidebar__collapse" type="button" id="sidebarCollapse" aria-label="Collapse sidebar">
+          <span class="burger-lines"></span>
+        </button>
+      </div>
+
+      <nav class="nav">
+        <a class="nav__item" href="#/main" data-route="main">
+          <img class="nav__icon" src="/assets/icon/asosiy.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_main">Asosiy</span>
+        </a>
+
+        <a class="nav__item" href="#/tasks" data-route="tasks">
+          <img class="nav__icon" src="/assets/icon/tasks.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_tasks">Vazifalar</span>
+        </a>
+
+        <a class="nav__item" href="#/projects" data-route="projects">
+          <img class="nav__icon" src="/assets/icon/projects.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_projects">Loyihalar</span>
+        </a>
+
+        <a class="nav__item" href="#/courses" data-route="courses">
+          <img class="nav__icon" src="/assets/icon/courses.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_courses">Kurslar</span>
+        </a>
+
+        <a class="nav__item" href="#/clients" data-route="clients">
+          <img class="nav__icon" src="/assets/icon/clients.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_clients">Klientlar</span>
+        </a>
+
+        <!-- admin only -->
+        <a class="nav__item" href="#/settings" data-route="settings" data-role-only="admin">
+          <img class="nav__icon" src="/assets/icon/settings.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_settings">Sozlamalar</span>
+        </a>
+
+        <a class="nav__item" href="#/users" data-route="users" data-role-only="admin">
+          <img class="nav__icon" src="/assets/icon/users.svg" alt="" />
+          <span class="nav__text" data-i18n="menu_users">Foydalanuvchilar</span>
+        </a>
+      </nav>
+
+      <!-- MOBILE SETTINGS (shown inside menu on mobile, hidden on desktop by CSS) -->
+      <div class="sidebar__mobile-settings" id="mobileSettings">
+        <div class="divider"></div>
+
+        <div class="side-section">
+          <div class="side-section__title" data-i18n="menu_profile">Profil</div>
+          <div class="side-kv">
+            <div class="side-kv__k" data-i18n="me_user">Foydalanuvchi</div>
+            <div class="side-kv__v" id="meName">—</div>
+          </div>
+          <div class="side-kv">
+            <div class="side-kv__k" data-i18n="me_role">Rol</div>
+            <div class="side-kv__v" id="meRole">—</div>
+          </div>
+        </div>
+
+        <div class="side-section">
+          <div class="side-section__title" data-i18n="menu_interface">Interfeys</div>
+
+          <div class="side-row">
+            <div class="side-row__label" data-i18n="ui_lang">Til</div>
+            <div class="seg" role="group" aria-label="Language">
+              <button class="seg__btn" type="button" data-lang-btn="uz">UZ</button>
+              <button class="seg__btn" type="button" data-lang-btn="ru">RU</button>
+              <button class="seg__btn" type="button" data-lang-btn="en">EN</button>
+            </div>
+          </div>
+
+          <div class="side-row">
+            <div class="side-row__label" data-i18n="ui_theme">Rejim</div>
+            <button class="icon-btn" type="button" id="themeToggle" aria-label="Theme">
+              <img src="/assets/icon/dark.svg" alt="" />
+            </button>
+          </div>
+
+          <div class="side-row">
+            <div class="side-row__label" data-i18n="ui_eye">Ko‘z himoyasi</div>
+            <button class="icon-btn" type="button" id="eyeToggle" aria-label="Eye protection">
+              <img src="/assets/icon/eye.svg" alt="" />
+            </button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="btn btn-ghost w-100" type="button" id="logoutBtnMobile">
+          <span data-i18n="logout">Chiqish</span>
+        </button>
+      </div>
+
+      <div class="sidebar__bottom">
+        <div class="small muted sidebar__hint" data-i18n="sidebar_hint">
+          Menyu ustiga olib borsangiz ochiladi
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="app-main">
+      <!-- HEADER -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <button class="icon-btn topbar__burger" type="button" id="sidebarBurger" aria-label="Open menu">
+            <span class="burger-lines"></span>
+          </button>
+
+          <div class="crumbs">
+            <div class="crumbs__title" id="pageTitle" data-i18n="menu_main">Asosiy</div>
+            <div class="crumbs__sub muted" id="pageSub"></div>
+          </div>
+        </div>
+
+        <div class="topbar__right">
+          <!-- Desktop header controls (hidden on mobile by CSS) -->
+          <div class="topbar__kv">
+            <div class="topbar__kv-title" data-i18n="me_user">Foydalanuvchi</div>
+            <div class="topbar__kv-value" id="meNameDesk">—</div>
+          </div>
+
+          <div class="topbar__kv">
+            <div class="topbar__kv-title" data-i18n="me_time">Vaqt</div>
+            <div class="topbar__kv-value" id="nowTashkent">—</div>
+          </div>
+
+          <div class="topbar__actions">
+            <div class="seg topbar__seg" role="group" aria-label="Language">
+              <button class="seg__btn" type="button" data-lang-btn="uz">UZ</button>
+              <button class="seg__btn" type="button" data-lang-btn="ru">RU</button>
+              <button class="seg__btn" type="button" data-lang-btn="en">EN</button>
+            </div>
+
+            <button class="icon-btn" type="button" id="themeToggleDesk" aria-label="Theme">
+              <img src="/assets/icon/dark.svg" alt="" />
+            </button>
+
+            <button class="icon-btn" type="button" id="eyeToggleDesk" aria-label="Eye protection">
+              <img src="/assets/icon/eye.svg" alt="" />
+            </button>
+
+            <button class="btn btn-ghost" type="button" id="logoutBtn">
+              <span data-i18n="logout">Chiqish</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT -->
+      <main id="viewRoot" class="view-root" role="main" aria-live="polite">
+        <!-- index.js will render pages here -->
+        <div class="page-loading" id="pageLoading">
+          <div class="spinner"></div>
+          <div class="muted" data-i18n="loading">Yuklanmoqda...</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL ROOT (blur/backdrop handled by CSS/JS) -->
+  <div id="modalRoot" class="modal-root" hidden></div>
+
+  <!-- TOASTS -->
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- CONFIRM DIALOG (optional) -->
+  <div id="confirmRoot" class="confirm-root" hidden></div>
+
+  <!-- scripts -->
+  <script src="/assets/js/lang.js"></script>
+  <script type="module" src="/assets/js/index.js"></script>
 </body>
-
 </html>
