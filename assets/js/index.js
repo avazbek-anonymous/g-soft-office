@@ -1,2513 +1,781 @@
-// /assets/js/index.js
-// G-SOFT Front (SPA in index.html) — works with your Workers API (/api/*)
-// Requires: lang.js (optional; if missing — fallback texts will show)
+/* G-SOFT Front (Part 1)
+   - Login + Shell + Router + Main page
+   - All CSS inside JS
+   - Works with existing Workers API:
+     POST  /api/auth/login {login,password}
+     POST  /api/auth/logout
+     GET   /api/auth/me
+     GET   /api/main
+     GET   /api/meta
+*/
 
 (() => {
   "use strict";
 
-  // ---------------------------
-  // Config
-  // ---------------------------
-  const LS = {
-    lang: "gsoft_lang",
-    theme: "gsoft_theme",
-    eye: "gsoft_eye",
-    sidebar: "gsoft_sidebar_collapsed",
-    apiBase: "gsoft_api_base",
+  // ===== Config =====
+  const API_BASE =
+    (window.__API_BASE && String(window.__API_BASE)) ||
+    "https://api.ofis.gekto.uz"; // как в твоём BASE
+
+  const ROUTES = [
+    { path: "/main", title: "Asosiy" },
+    { path: "/tasks", title: "Vazifalar" },
+    { path: "/projects", title: "Loyihalar" },
+    { path: "/courses", title: "Kurslar" }, // = course_leads
+    { path: "/clients", title: "Clients" },
+    { path: "/settings", title: "Sozlamalar" },
+    { path: "/users", title: "Users" },
+  ];
+
+  // ===== Styles (minimal + fast) =====
+  const STYLES = `
+:root{
+  --r:18px; --gap:12px;
+  --bg:#061a14; --bg2:#0b2b23;
+  --card:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.12);
+  --text:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.65);
+  --brand:#ffd15c;
+  --brand2:rgba(255,209,92,.18);
+  --ok:#10b981;
+  --bad:#f16262;
+  --shadow:0 18px 55px rgba(0,0,0,.35);
+  --topbarH:64px;
+  --menuBg: rgba(6,26,20,.92);
+  --menuBorder: rgba(255,255,255,.14);
+  --menuItemHover: rgba(255,255,255,.06);
+  --scrollTrack: rgba(255,255,255,.06);
+  --scrollThumb: rgba(255,209,92,.55);
+  --scrollThumb2: rgba(16,185,129,.35);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(1000px 520px at 20% 20%, rgba(255,209,92,.14), transparent 60%),
+    radial-gradient(1000px 520px at 85% 35%, rgba(16,185,129,.14), transparent 55%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+  overflow:hidden;
+}
+
+/* scroll */
+*{ scrollbar-width: thin; scrollbar-color: var(--scrollThumb) var(--scrollTrack); scrollbar-gutter: stable; }
+::-webkit-scrollbar{ width:12px; height:12px; }
+::-webkit-scrollbar-track{ background: var(--scrollTrack); border-radius:999px; }
+::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, var(--scrollThumb), var(--scrollThumb2));
+  border-radius:999px; border:3px solid transparent; background-clip: content-box;
+}
+
+/* layout */
+#app{height:100vh}
+.shell{height:100vh;display:flex;min-height:0}
+.sidebar{
+  width:74px; transition:width .22s ease;
+  border-right:1px solid var(--line);
+  background:rgba(255,255,255,.05);
+  backdrop-filter: blur(12px);
+  padding:12px 10px;
+  display:flex;flex-direction:column;gap:10px;
+  min-height:0;
+}
+.sidebar:hover{width:260px}
+
+.brand{
+  display:flex;align-items:center;gap:10px;
+  padding:10px;border-radius:16px;
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--line);
+}
+.logo{
+  width:38px;height:38px;border-radius:14px;
+  display:grid;place-items:center;
+  font-weight:1000;color:var(--brand);
+  background:var(--brand2);
+  border:1px solid rgba(255,255,255,.08);
+  flex:0 0 38px;
+}
+.brandText{
+  font-weight:1000; letter-spacing:.2px;
+  white-space:nowrap; overflow:hidden;
+  opacity:0; transform:translateX(-4px);
+  transition:opacity .16s ease, transform .16s ease;
+}
+.sidebar:hover .brandText{opacity:1; transform:translateX(0)}
+
+.nav{display:flex;flex-direction:column;gap:6px;padding-top:6px;min-height:0;overflow:auto;padding-right:4px}
+.nav a{
+  display:flex;align-items:center;gap:10px;
+  padding:10px;border-radius:16px;
+  text-decoration:none;color:var(--text);
+  border:1px solid transparent;
+}
+.nav a:hover{background:rgba(255,255,255,.06);border-color:var(--line)}
+.nav a.active{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.28)}
+.ico{width:22px;height:22px;display:grid;place-items:center;flex:0 0 22px}
+.txt{
+  white-space:nowrap; overflow:hidden;
+  opacity:0; transform:translateX(-4px);
+  transition:opacity .16s ease, transform .16s ease;
+}
+.sidebar:hover .txt{opacity:1; transform:translateX(0)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+.topbar{
+  height:var(--topbarH);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.04);
+  backdrop-filter: blur(12px);
+  flex:0 0 auto;
+}
+.topbarTitle{font-weight:1000}
+.topbarRight{display:flex;align-items:center;gap:10px}
+.badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.05);
+  color:var(--muted);
+  font-size:13px;
+}
+.btn{
+  border:none; cursor:pointer;
+  border-radius:14px;
+  padding:10px 12px;
+  font-weight:800;
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--line);
+  color:var(--text);
+}
+.btn:hover{background:rgba(255,255,255,.09)}
+.btnPrimary{
+  background: rgba(255,209,92,.14);
+  border-color: rgba(255,209,92,.28);
+  color: var(--text);
+}
+.btnDanger{
+  background: rgba(241,98,98,.14);
+  border-color: rgba(241,98,98,.28);
+}
+.content{
+  flex:1; min-height:0;
+  overflow:auto;
+  padding:14px;
+}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:20px;
+  box-shadow:var(--shadow);
+}
+.cardHd{padding:14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cardHd h3{margin:0;font-size:16px}
+.cardBd{padding:14px}
+.muted{color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{
+  padding:12px;border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.12);
+}
+.itemTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.itemTitle{font-weight:900}
+.itemMeta{color:var(--muted);font-size:12px;margin-top:6px}
+
+/* login */
+.center{
+  height:100vh;display:grid;place-items:center;padding:14px;
+}
+.loginCard{
+  width:min(520px,100%);
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:22px;
+  box-shadow:var(--shadow);
+  padding:16px;
+}
+.loginTitle{font-weight:1000;font-size:20px;margin:0 0 8px 0}
+.field{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.label{font-size:12px;color:var(--muted);font-weight:800}
+.input{
+  width:100%;
+  padding:12px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.16);
+  color:var(--text);
+  outline:none;
+}
+.input:focus{border-color: rgba(255,209,92,.45)}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:14px}
+
+/* modal */
+.modalOverlay{
+  position:fixed; inset:0; z-index:2000;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.42);
+  backdrop-filter: blur(10px);
+  padding:14px;
+}
+.modal{
+  width:min(860px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow:auto;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:22px;
+  box-shadow:var(--shadow);
+}
+.modalHd{
+  position:sticky; top:0;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:14px;
+  border-bottom:1px solid var(--line);
+  background:rgba(0,0,0,.12);
+  backdrop-filter: blur(12px);
+}
+.modalTitle{font-weight:1000}
+.iconBtn{
+  width:40px;height:40px;border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  display:grid;place-items:center;
+  cursor:pointer;
+}
+.iconBtn:hover{background:rgba(255,255,255,.09)}
+
+/* toast */
+.toastHost{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;flex-direction:column;gap:10px}
+.toast{
+  width:min(420px, calc(100vw - 28px));
+  padding:12px 12px;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.28);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.toastTitle{font-weight:1000}
+.toastText{color:var(--muted);margin-top:4px;font-size:13px}
+  `;
+
+  // ===== Helpers =====
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const h = (tag, attrs = {}, children = []) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "class") el.className = v;
+      else if (k === "html") el.innerHTML = v;
+      else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
+      else if (v === null || v === undefined) continue;
+      else el.setAttribute(k, String(v));
+    }
+    for (const c of Array.isArray(children) ? children : [children]) {
+      if (c === null || c === undefined) continue;
+      el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return el;
   };
 
-  function computeApiBase() {
-    const saved = (localStorage.getItem(LS.apiBase) || "").trim();
-    if (saved) return saved.replace(/\/+$/, "");
-
-    // If app is opened on api.* itself
-    if (location.hostname.startsWith("api.")) return `${location.origin}/api`;
-
-    // If opened on ofis.gekto.uz => api.ofis.gekto.uz
-    if (location.hostname === "ofis.gekto.uz") return `${location.protocol}//api.ofis.gekto.uz/api`;
-
-    // Localhost default (change if needed)
-    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-      return `${location.protocol}//api.ofis.gekto.uz/api`;
-    }
-
-    // Generic: api.<host>/api
-    return `${location.protocol}//api.${location.hostname}/api`;
+  function injectStyles(cssText) {
+    const st = document.createElement("style");
+    st.textContent = cssText;
+    document.head.appendChild(st);
   }
 
-  const API_BASE = computeApiBase();
-
-  // ---------------------------
-  // Small helpers
-  // ---------------------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-  const esc = (s) =>
-    String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-
-  function t(key, fallback) {
-    const api = window.GSOFT_LANG;
-    if (api && typeof api.t === "function") return api.t(key) ?? fallback ?? key;
-    return fallback ?? key;
+  function fmtDateTime(sec) {
+    if (!sec) return "—";
+    const d = new Date(Number(sec) * 1000);
+    // без локалей чтоб не прыгало: yyyy-mm-dd hh:mm
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  function applyI18n(root = document) {
-    const api = window.GSOFT_LANG;
-    if (api && typeof api.apply === "function") api.apply(root);
+  function pickTitleFromDesc(desc) {
+    const s = String(desc || "").trim();
+    if (!s) return "—";
+    const words = s.split(/\s+/).slice(0, 3).join(" ");
+    return words;
   }
 
-  function setLang(lang) {
-    localStorage.setItem(LS.lang, lang);
-    document.documentElement.setAttribute("data-lang", lang);
-    const api = window.GSOFT_LANG;
-    if (api && typeof api.setLang === "function") api.setLang(lang);
-    applyI18n();
-    syncLangButtons();
+  function secToHMS(total) {
+    total = Math.max(0, Number(total) || 0);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = Math.floor(total % 60);
+    const pad = (n) => String(n).padStart(2, "0");
+    if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+    return `${m}:${pad(s)}`;
   }
 
-  function getLang() {
-    return (
-      document.documentElement.getAttribute("data-lang") ||
-      (localStorage.getItem(LS.lang) || "uz").trim() ||
-      "uz"
-    );
-  }
+  // ===== Toasts =====
+  const Toast = {
+    host: null,
+    ensure() {
+      if (this.host) return;
+      this.host = h("div", { class: "toastHost" });
+      document.body.appendChild(this.host);
+    },
+    show(title, text, ms = 2600) {
+      this.ensure();
+      const el = h("div", { class: "toast" }, [
+        h("div", { class: "toastTitle" }, title || "Info"),
+        h("div", { class: "toastText" }, text || ""),
+      ]);
+      this.host.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = "0";
+        el.style.transform = "translateY(6px)";
+        el.style.transition = "opacity .18s ease, transform .18s ease";
+        setTimeout(() => el.remove(), 220);
+      }, ms);
+    },
+  };
 
-  function setTheme(theme) {
-    localStorage.setItem(LS.theme, theme);
-    document.documentElement.setAttribute("data-theme", theme);
-    syncThemeIcons();
-  }
+  // ===== Modal =====
+  const Modal = {
+    overlay: null,
+    open(title, contentNode) {
+      this.close();
+      this.overlay = h("div", { class: "modalOverlay" });
+      const modal = h("div", { class: "modal" });
+      const hd = h("div", { class: "modalHd" }, [
+        h("div", { class: "modalTitle" }, title || ""),
+        h("button", { class: "iconBtn", title: "Close", onclick: () => this.close() }, "✕"),
+      ]);
+      const bd = h("div", { class: "cardBd" }, contentNode);
+      modal.appendChild(hd);
+      modal.appendChild(bd);
+      this.overlay.appendChild(modal);
 
-  function getTheme() {
-    return (
-      document.documentElement.getAttribute("data-theme") ||
-      (localStorage.getItem(LS.theme) || "dark")
-    );
-  }
-
-  function setEye(on) {
-    localStorage.setItem(LS.eye, on ? "1" : "0");
-    document.documentElement.setAttribute("data-eye", on ? "1" : "0");
-  }
-
-  function getEye() {
-    return (document.documentElement.getAttribute("data-eye") || localStorage.getItem(LS.eye) || "0") === "1";
-  }
-
-  function fmtTashkent(tsSec) {
-    if (!tsSec) return "—";
-    const lang = getLang();
-    const loc = lang === "ru" ? "ru-RU" : lang === "en" ? "en-US" : "uz-UZ";
-    try {
-      return new Intl.DateTimeFormat(loc, {
-        timeZone: "Asia/Tashkent",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(tsSec * 1000));
-    } catch {
-      return new Date(tsSec * 1000).toLocaleString();
-    }
-  }
-
-  function fmtDateOnly(tsSec) {
-    if (!tsSec) return "—";
-    const lang = getLang();
-    const loc = lang === "ru" ? "ru-RU" : lang === "en" ? "en-US" : "uz-UZ";
-    try {
-      return new Intl.DateTimeFormat(loc, {
-        timeZone: "Asia/Tashkent",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date(tsSec * 1000));
-    } catch {
-      return new Date(tsSec * 1000).toLocaleDateString();
-    }
-  }
-
-  function fmtHMS(totalSec) {
-    totalSec = Math.max(0, Number(totalSec || 0));
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = Math.floor(totalSec % 60);
-    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    return `${m}:${String(s).padStart(2, "0")}`;
-  }
-
-  function qsParamInt(url, key) {
-    const v = url.searchParams.get(key);
-    if (!v) return null;
-    const n = Number(v);
-    return Number.isInteger(n) && n > 0 ? n : null;
-  }
-
-  // ---------------------------
-  // Toasts
-  // ---------------------------
-  const toastRoot = $("#toast-root");
-  function toast(msg, type = "info", ms = 2600) {
-    if (!toastRoot) return;
-    const el = document.createElement("div");
-    el.className = `toast toast--${type}`;
-    el.textContent = msg;
-    toastRoot.appendChild(el);
-    requestAnimationFrame(() => el.classList.add("is-show"));
-    setTimeout(() => {
-      el.classList.remove("is-show");
-      setTimeout(() => el.remove(), 240);
-    }, ms);
-  }
-
-  // ---------------------------
-  // Modal / Confirm
-  // ---------------------------
-  const modalRoot = $("#modalRoot");
-  const confirmRoot = $("#confirmRoot");
-
-  function openModal(contentEl, { title } = {}) {
-    if (!modalRoot) return;
-    modalRoot.hidden = false;
-    modalRoot.innerHTML = "";
-
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeModal();
-    });
-
-    const modal = document.createElement("div");
-    modal.className = "modal";
-
-    const head = document.createElement("div");
-    head.className = "modal__head";
-    head.innerHTML = `
-      <div class="modal__title">${esc(title || "")}</div>
-      <button class="icon-btn" type="button" data-x="1" aria-label="Close">✕</button>
-    `;
-    head.querySelector('[data-x="1"]').addEventListener("click", closeModal);
-
-    const body = document.createElement("div");
-    body.className = "modal__body";
-    body.appendChild(contentEl);
-
-    modal.appendChild(head);
-    modal.appendChild(body);
-    overlay.appendChild(modal);
-    modalRoot.appendChild(overlay);
-
-    document.body.classList.add("has-modal");
-    applyI18n(modalRoot);
-  }
-
-  function closeModal() {
-    if (!modalRoot) return;
-    modalRoot.hidden = true;
-    modalRoot.innerHTML = "";
-    document.body.classList.remove("has-modal");
-  }
-
-  function confirmDialog({ title, message, okText, cancelText } = {}) {
-    return new Promise((resolve) => {
-      if (!confirmRoot) return resolve(false);
-      confirmRoot.hidden = false;
-      confirmRoot.innerHTML = `
-        <div class="confirm-overlay">
-          <div class="confirm">
-            <div class="confirm__title">${esc(title || t("confirm_title", "Tasdiqlash"))}</div>
-            <div class="confirm__msg">${esc(message || "")}</div>
-            <div class="confirm__actions">
-              <button class="btn btn-ghost" type="button" data-cancel="1">${esc(cancelText || t("cancel", "Bekor"))}</button>
-              <button class="btn btn-primary" type="button" data-ok="1">${esc(okText || t("ok", "OK"))}</button>
-            </div>
-          </div>
-        </div>
-      `;
-      const overlay = $(".confirm-overlay", confirmRoot);
-      overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) done(false);
+      this.overlay.addEventListener("click", (e) => {
+        if (e.target === this.overlay) this.close();
       });
-      $('[data-cancel="1"]', confirmRoot).addEventListener("click", () => done(false));
-      $('[data-ok="1"]', confirmRoot).addEventListener("click", () => done(true));
 
-      function done(val) {
-        confirmRoot.hidden = true;
-        confirmRoot.innerHTML = "";
-        resolve(val);
-      }
-      applyI18n(confirmRoot);
-    });
-  }
+      document.body.appendChild(this.overlay);
+      document.body.style.overflow = "hidden";
+    },
+    close() {
+      if (this.overlay) this.overlay.remove();
+      this.overlay = null;
+      document.body.style.overflow = "";
+    },
+  };
 
-  // ---------------------------
-  // API client
-  // ---------------------------
-  async function apiFetch(path, { method = "GET", body, headers } = {}) {
-    const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  // ===== API client =====
+  async function apiFetch(path, opts = {}) {
+    const url = API_BASE.replace(/\/+$/, "") + path;
     const init = {
-      method,
+      method: opts.method || "GET",
+      headers: { ...(opts.headers || {}) },
       credentials: "include",
-      headers: {
-        ...(body ? { "Content-Type": "application/json" } : {}),
-        ...(headers || {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
     };
-
-    const res = await fetch(url, init);
-    const text = await res.text();
-    let json = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
+    if (opts.json !== undefined) {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(opts.json);
     }
+    const res = await fetch(url, init);
 
-    if (res.status === 401) {
-      // session expired -> login
-      location.href = "/login.html";
-      return { ok: false, status: 401, data: null };
+    let data = null;
+    const ct = res.headers.get("Content-Type") || "";
+    if (ct.includes("application/json")) {
+      try { data = await res.json(); } catch { data = null; }
+    } else {
+      data = await res.text().catch(() => "");
     }
 
     if (!res.ok) {
-      const msg = json?.error?.message || `HTTP ${res.status}`;
-      throw new Error(msg);
+      const msg =
+        (data && data.error && data.error.message) ||
+        (typeof data === "string" ? data : "") ||
+        `HTTP ${res.status}`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.payload = data;
+      throw err;
     }
-
-    return json || { ok: true };
+    return data;
   }
 
-  // ---------------------------
-  // UI controls: sidebar / theme / eye / lang / logout
-  // ---------------------------
-  const sidebar = $("#sidebar");
-  const backdrop = $("#backdrop");
-  const viewRoot = $("#viewRoot");
-  const pageTitle = $("#pageTitle");
-  const pageSub = $("#pageSub");
-
-  const meName = $("#meName");
-  const meRole = $("#meRole");
-  const meNameDesk = $("#meNameDesk");
-  const nowTashkent = $("#nowTashkent");
-
-  const logoutBtn = $("#logoutBtn");
-  const logoutBtnMobile = $("#logoutBtnMobile");
-
-  const sidebarBurger = $("#sidebarBurger");
-  const sidebarCollapse = $("#sidebarCollapse");
-
-  function setSidebarCollapsed(collapsed) {
-    localStorage.setItem(LS.sidebar, collapsed ? "1" : "0");
-    document.body.classList.toggle("sidebar-collapsed", collapsed);
-  }
-
-  function getSidebarCollapsed() {
-    return (localStorage.getItem(LS.sidebar) || "0") === "1";
-  }
-
-  function openSidebarMobile() {
-    document.body.classList.add("sidebar-open");
-    if (backdrop) backdrop.hidden = false;
-  }
-  function closeSidebarMobile() {
-    document.body.classList.remove("sidebar-open");
-    if (backdrop) backdrop.hidden = true;
-  }
-
-  function syncLangButtons() {
-    const lang = getLang();
-    $$("[data-lang-btn]").forEach((b) => {
-      b.classList.toggle("is-active", b.getAttribute("data-lang-btn") === lang);
-    });
-  }
-
-  function syncThemeIcons() {
-    // You can swap icons if you want; we just keep it simple
-    const theme = getTheme();
-    document.documentElement.dataset.theme = theme;
-  }
-
-  function bindLangButtons() {
-    $$("[data-lang-btn]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const lang = btn.getAttribute("data-lang-btn");
-        setLang(lang);
-      });
-    });
-  }
-
-  function bindThemeEye() {
-    const ids = ["themeToggle", "themeToggleDesk"];
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener("click", () => {
-        setTheme(getTheme() === "dark" ? "light" : "dark");
-      });
-    });
-
-    const eids = ["eyeToggle", "eyeToggleDesk"];
-    eids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener("click", () => {
-        setEye(!getEye());
-      });
-    });
-  }
-
-  async function logout() {
-    try {
-      await apiFetch("/auth/logout", { method: "POST" });
-    } catch {}
-    location.href = "/login.html";
-  }
-
-  function bindSidebar() {
-    if (sidebarBurger) sidebarBurger.addEventListener("click", openSidebarMobile);
-    if (backdrop) backdrop.addEventListener("click", closeSidebarMobile);
-    if (sidebarCollapse) sidebarCollapse.addEventListener("click", () => setSidebarCollapsed(!getSidebarCollapsed()));
-
-    // close on nav click (mobile)
-    $$('a.nav__item[href^="#/"]').forEach((a) => {
-      a.addEventListener("click", () => closeSidebarMobile());
-    });
-  }
-
-  if (logoutBtn) logoutBtn.addEventListener("click", logout);
-  if (logoutBtnMobile) logoutBtnMobile.addEventListener("click", logout);
-
-  // ---------------------------
-  // App state
-  // ---------------------------
-  const state = {
-    me: null,
-    meta: null,
-    cache: {
-      users: null,
-      companies: null,
-      leads: null,
-      serviceTypes: null,
-      courseTypes: null,
-      dictsLoaded: false,
+  const API = {
+    async me() {
+      const r = await apiFetch("/api/auth/me");
+      return r?.data?.user || null;
     },
-    currentRoute: null,
+    async login(login, password) {
+      const r = await apiFetch("/api/auth/login", { method: "POST", json: { login, password } });
+      return r?.data || null;
+    },
+    async logout() {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+    },
+    async meta() {
+      const r = await apiFetch("/api/meta");
+      return r?.data || null;
+    },
+    async main() {
+      const r = await apiFetch("/api/main");
+      return r?.data || { overdue: [], today: [], in_progress: null };
+    },
   };
 
-  function setMeUI(me) {
-    const name = me?.full_name || "—";
-    const role = me?.role || "—";
-    if (meName) meName.textContent = name;
-    if (meRole) meRole.textContent = role;
-    if (meNameDesk) meNameDesk.textContent = name;
-
-    // hide role-only menu
-    $$("[data-role-only]").forEach((el) => {
-      const need = el.getAttribute("data-role-only");
-      el.style.display = me?.role === need ? "" : "none";
-    });
-  }
-
-  function startClock() {
-    if (!nowTashkent) return;
-    const tick = () => {
-      const d = new Date();
-      try {
-        nowTashkent.textContent = new Intl.DateTimeFormat(getLang() === "ru" ? "ru-RU" : "uz-UZ", {
-          timeZone: "Asia/Tashkent",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }).format(d);
-      } catch {
-        nowTashkent.textContent = d.toLocaleTimeString();
-      }
-    };
-    tick();
-    setInterval(tick, 1000);
-  }
-
-  // ---------------------------
-  // Router
-  // ---------------------------
+  // ===== Router =====
   function parseHash() {
-    const raw = (location.hash || "").replace(/^#/, "");
-    if (!raw || !raw.startsWith("/")) return { route: "main", q: new URLSearchParams() };
-    const [path, query] = raw.split("?");
-    const route = (path || "/main").replace(/^\//, "").trim() || "main";
-    return { route, q: new URLSearchParams(query || "") };
-  }
-
-  function setActiveNav(route) {
-    $$("[data-route]").forEach((a) => {
-      a.classList.toggle("is-active", a.getAttribute("data-route") === route);
-    });
-  }
-
-  function setTitle(route, sub = "") {
-    const map = {
-      main: t("menu_main", "Asosiy"),
-      tasks: t("menu_tasks", "Vazifalar"),
-      projects: t("menu_projects", "Loyihalar"),
-      courses: t("menu_courses", "Kurslar"),
-      clients: t("menu_clients", "Klientlar"),
-      settings: t("menu_settings", "Sozlamalar"),
-      users: t("menu_users", "Foydalanuvchilar"),
-    };
-    if (pageTitle) pageTitle.textContent = map[route] || route;
-    if (pageSub) pageSub.textContent = sub || "";
-  }
-
-  function renderLoading() {
-    if (!viewRoot) return;
-    viewRoot.innerHTML = `
-      <div class="page-loading">
-        <div class="spinner"></div>
-        <div class="muted">${esc(t("loading", "Yuklanmoqda..."))}</div>
-      </div>
-    `;
-    applyI18n(viewRoot);
-  }
-
-  async function navigate() {
-    const { route, q } = parseHash();
-    state.currentRoute = route;
-    setActiveNav(route);
-    setTitle(route);
-
-    renderLoading();
-
-    const routes = {
-      main: () => renderMain(),
-      tasks: () => renderTasks(q),
-      projects: () => renderProjects(q),
-      courses: () => renderCourses(q),
-      clients: () => renderClients(q),
-      settings: () => renderSettings(),
-      users: () => renderUsers(),
-    };
-
-    const fn = routes[route] || routes.main;
-    try {
-      await fn();
-    } catch (e) {
-      if (viewRoot) {
-        viewRoot.innerHTML = `
-          <div class="card">
-            <div class="h2">${esc(t("error", "Xatolik"))}</div>
-            <div class="muted mt-8">${esc(String(e?.message || e))}</div>
-            <div class="mt-12">
-              <button class="btn btn-primary" type="button" id="retryBtn">${esc(t("retry", "Qayta urinish"))}</button>
-            </div>
-          </div>
-        `;
-        $("#retryBtn")?.addEventListener("click", () => navigate());
-        applyI18n(viewRoot);
+    const raw = (location.hash || "").trim();
+    if (!raw.startsWith("#/")) return { path: "/main", query: {} };
+    const s = raw.slice(2); // remove "#/"
+    const [pathPart, queryPart] = s.split("?");
+    const path = "/" + (pathPart || "main").replace(/^\/+/, "");
+    const query = {};
+    if (queryPart) {
+      for (const kv of queryPart.split("&")) {
+        const [k, v] = kv.split("=");
+        if (!k) continue;
+        query[decodeURIComponent(k)] = decodeURIComponent(v || "");
       }
     }
+    return { path, query };
+  }
+  function setHash(path, query = {}) {
+    const qs = Object.keys(query).length
+      ? "?" + Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")
+      : "";
+    location.hash = "#/" + path.replace(/^\/+/, "") + qs;
   }
 
-  window.addEventListener("hashchange", navigate);
+  // ===== App state =====
+  const App = {
+    root: null,
+    state: {
+      user: null,
+      meta: null,
+      route: { path: "/main", query: {} },
+    },
 
-  // ---------------------------
-  // Data caches (admin-friendly)
-  // ---------------------------
-  async function ensureMeta() {
-    if (state.meta) return state.meta;
-    const res = await apiFetch("/meta");
-    state.meta = res.data;
-    return state.meta;
-  }
+    async start() {
+      injectStyles(STYLES);
+      this.root = document.getElementById("app");
+      if (!this.root) throw new Error("#app not found");
 
-  async function ensureUsers() {
-    if (state.cache.users) return state.cache.users;
-    if (state.me?.role !== "admin") return [];
-    const res = await apiFetch("/users");
-    state.cache.users = res.data || [];
-    return state.cache.users;
-  }
+      // detect file mode
+      const isLoginPage = /login\.html$/i.test(location.pathname);
 
-  async function ensureClients(type) {
-    // type: "company" | "lead"
-    if (type === "company" && state.cache.companies) return state.cache.companies;
-    if (type === "lead" && state.cache.leads) return state.cache.leads;
-
-    const res = await apiFetch(`/clients?type=${encodeURIComponent(type)}`);
-    if (type === "company") state.cache.companies = res.data || [];
-    if (type === "lead") state.cache.leads = res.data || [];
-    return res.data || [];
-  }
-
-  async function ensureSettingsAllIfAdmin() {
-    if (state.cache.dictsLoaded) return;
-    if (state.me?.role !== "admin") return;
-    const res = await apiFetch("/settings/all");
-    const d = res.data || {};
-    state.cache.serviceTypes = d.service_types || [];
-    state.cache.courseTypes = d.course_types || [];
-    state.cache.dictsLoaded = true;
-
-    // Apply theme vars (optional)
-    if (d.theme?.value) applyThemeFromSettings(d.theme.value);
-  }
-
-  function applyThemeFromSettings(themeObj) {
-    // themeObj example: {mode,eye,dark{bg,text,btn},light{...}}
-    if (!themeObj || typeof themeObj !== "object") return;
-    const mode = themeObj.mode === "light" ? "light" : "dark";
-    setTheme(mode);
-    setEye(!!themeObj.eye);
-
-    const palette = themeObj[mode];
-    if (!palette) return;
-
-    const styleId = "theme-override";
-    let st = document.getElementById(styleId);
-    if (!st) {
-      st = document.createElement("style");
-      st.id = styleId;
-      document.head.appendChild(st);
-    }
-    const bg = palette.bg || "";
-    const text = palette.text || "";
-    const btn = palette.btn || "";
-    st.textContent = `
-      html[data-theme="${mode}"]{
-        ${bg ? `--bg:${bg};` : ""}
-        ${text ? `--text:${text};` : ""}
-        ${btn ? `--primary:${btn};` : ""}
-      }
-    `;
-  }
-
-  // ---------------------------
-  // Generic UI blocks
-  // ---------------------------
-  function kanbanSkeleton(columns) {
-    return `
-      <div class="kanban">
-        ${columns
-          .map(
-            (c) => `
-          <section class="kanban-col" data-col="${esc(c.key)}">
-            <header class="kanban-col__head">
-              <div class="kanban-col__title">${esc(c.title)}</div>
-              <div class="kanban-col__count" data-count="${esc(c.key)}">0</div>
-            </header>
-            <div class="kanban-col__body" data-drop="${esc(c.key)}"></div>
-          </section>
-        `
-          )
-          .join("")}
-      </div>
-    `;
-  }
-
-  function bindDnD({ onDropStatus }) {
-    $$("[data-drop]").forEach((zone) => {
-      zone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        zone.classList.add("is-over");
-      });
-      zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
-      zone.addEventListener("drop", async (e) => {
-        e.preventDefault();
-        zone.classList.remove("is-over");
-        const status = zone.getAttribute("data-drop");
-        const id = Number(e.dataTransfer.getData("text/taskId") || e.dataTransfer.getData("text/plain"));
-        if (!id || !status) return;
-        await onDropStatus(id, status);
-      });
-    });
-  }
-
-  // ---------------------------
-  // MAIN
-  // ---------------------------
-  async function renderMain() {
-    setTitle("main");
-    const res = await apiFetch("/main");
-    const data = res.data || {};
-    const overdue = data.overdue || [];
-    const today = data.today || [];
-    const inProg = data.in_progress;
-
-    if (!viewRoot) return;
-
-    viewRoot.innerHTML = `
-      <div class="grid grid-2">
-        <div class="card">
-          <div class="h2">${esc(t("main_overdue", "Muddati o‘tgan"))}</div>
-          <div class="list mt-12" id="overdueList">
-            ${overdue.length ? "" : `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="h2">${esc(t("main_today", "Bugungi"))}</div>
-          <div class="list mt-12" id="todayList">
-            ${today.length ? "" : `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`}
-          </div>
-        </div>
-      </div>
-
-      <div class="card mt-16">
-        <div class="row row-between">
-          <div>
-            <div class="h2">${esc(t("main_in_progress", "Jarayondagi"))}</div>
-            <div class="muted small mt-4">${esc(t("main_in_progress_hint", "Faqat bitta vazifa Jarayonda bo‘lishi mumkin"))}</div>
-          </div>
-        </div>
-        <div class="mt-12" id="inProgBox">
-          ${
-            inProg
-              ? `<div class="task-row" data-task-open="${esc(inProg.id)}">
-                   <div class="task-row__title">${esc(inProg.title || "")}</div>
-                   <div class="task-row__desc">${esc(inProg.description || "")}</div>
-                   <div class="task-row__meta">
-                     <span class="pill pill--blue">${esc(inProg.status)}</span>
-                     <span class="muted small">${esc(fmtDateOnly(inProg.deadline_at))}</span>
-                   </div>
-                 </div>`
-              : `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`
-          }
-        </div>
-      </div>
-    `;
-
-    const fillList = (rootId, arr) => {
-      const root = document.getElementById(rootId);
-      if (!root) return;
-      root.innerHTML = arr
-        .map(
-          (x) => `
-          <div class="task-row" data-task-open="${esc(x.id)}">
-            <div class="task-row__title">${esc(x.title || "")}</div>
-            <div class="task-row__desc">${esc(x.description || "")}</div>
-            <div class="task-row__meta">
-              <span class="pill">${esc(x.status)}</span>
-              <span class="muted small">${esc(fmtDateOnly(x.deadline_at))}</span>
-            </div>
-          </div>
-        `
-        )
-        .join("");
-    };
-
-    fillList("overdueList", overdue);
-    fillList("todayList", today);
-
-    $$("[data-task-open]").forEach((el) => {
-      el.addEventListener("click", () => openTaskModal(Number(el.getAttribute("data-task-open"))));
-    });
-
-    applyI18n(viewRoot);
-  }
-
-  // ---------------------------
-  // TASKS
-  // ---------------------------
-  const TASK_COLS = [
-    { key: "new", title: "New" },
-    { key: "pause", title: "Pauza" },
-    { key: "in_progress", title: "Jarayonda" },
-    { key: "done", title: "Done" },
-    { key: "canceled", title: "Canceled" },
-  ];
-
-  function taskCardEl(task) {
-    const el = document.createElement("div");
-    el.className = "kb-card";
-    el.draggable = true;
-    el.dataset.id = task.id;
-
-    const title = task.title || "";
-    const desc = task.description || "";
-    const deadline = task.deadline_at ? fmtDateOnly(task.deadline_at) : "—";
-    const spent = fmtHMS(task.spent_seconds || 0);
-
-    const projLine =
-      task.project_id && (task.project_company_name || task.service_name_uz || task.service_name_ru || task.service_name_en)
-        ? `${task.project_company_name || ""}${task.project_company_name && (task.service_name_uz || task.service_name_ru || task.service_name_en) ? " • " : ""}${
-            task.service_name_uz || task.service_name_ru || task.service_name_en || ""
-          }`
-        : "";
-
-    el.innerHTML = `
-      <div class="kb-card__top">
-        <div class="kb-card__title">${esc(title)}</div>
-        <div class="kb-card__badge pill">${esc(task.status)}</div>
-      </div>
-      <div class="kb-card__desc">${esc(desc)}</div>
-      ${projLine ? `<div class="kb-card__meta muted small">${esc(projLine)}</div>` : ""}
-      <div class="kb-card__bottom">
-        <div class="muted small">⏱ ${esc(spent)}</div>
-        <div class="muted small">📅 ${esc(deadline)}</div>
-      </div>
-      <div class="kb-card__foot">
-        <div class="kb-card__who">${esc(task.assignee_name || "")}</div>
-      </div>
-    `;
-
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/taskId", String(task.id));
-      e.dataTransfer.setData("text/plain", String(task.id));
-    });
-
-    el.addEventListener("click", () => openTaskModal(task.id));
-    return el;
-  }
-
-  async function renderTasks(q) {
-    setTitle("tasks");
-    if (!viewRoot) return;
-
-    const isAdmin = state.me?.role === "admin";
-    const isRop = state.me?.role === "rop";
-
-    // filters
-    const projectId = qsParamInt(new URL(location.href), "project_id") || null;
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="row row-between row-wrap">
-          <div class="h2">${esc(t("menu_tasks", "Vazifalar"))}</div>
-          <div class="row row-gap">
-            <button class="btn btn-primary" type="button" id="taskNewBtn">+ ${esc(t("new_task", "Yangi vazifa"))}</button>
-          </div>
-        </div>
-
-        <div class="filters mt-12">
-          <div class="field">
-            <label class="label">${esc(t("search", "Qidirish"))}</label>
-            <input class="input" id="taskSearch" placeholder="${esc(t("search_placeholder", "Matn..."))}" />
-          </div>
-
-          <div class="field">
-            <label class="label">${esc(t("project", "Loyiha"))}</label>
-            <select class="select" id="taskProjectSelect">
-              <option value="">${esc(t("all", "Hammasi"))}</option>
-            </select>
-          </div>
-
-          ${
-            isAdmin || isRop
-              ? `<div class="field">
-                  <label class="label">${esc(t("assignee", "Mas'ul"))}</label>
-                  <select class="select" id="taskUserSelect">
-                    <option value="">${esc(t("all", "Hammasi"))}</option>
-                  </select>
-                </div>`
-              : ""
-          }
-
-          <div class="field">
-            <label class="label">${esc(t("show_done", "Done/Canceled"))}</label>
-            <select class="select" id="taskShowDone">
-              <option value="0">${esc(t("hide", "Yashirish"))}</option>
-              <option value="1">${esc(t("show", "Ko‘rsatish"))}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-16">
-        ${kanbanSkeleton(
-          TASK_COLS.map((c) => ({
-            key: c.key,
-            title:
-              c.key === "new"
-                ? t("st_new", "Yangi")
-                : c.key === "pause"
-                ? t("st_pause", "Pauza")
-                : c.key === "in_progress"
-                ? t("st_in_progress", "Jarayonda")
-                : c.key === "done"
-                ? t("st_done", "Yakunlangan")
-                : t("st_canceled", "Bekor qilingan"),
-          }))
-        )}
-      </div>
-    `;
-
-    applyI18n(viewRoot);
-
-    // Load projects list for filter (if user has access)
-    let projects = [];
-    try {
-      const pr = await apiFetch("/projects");
-      projects = pr.data || [];
-    } catch {
-      projects = [];
-    }
-    const projectSelect = $("#taskProjectSelect");
-    if (projectSelect) {
-      projects.forEach((p) => {
-        const opt = document.createElement("option");
-        opt.value = String(p.id);
-        const label = `${p.company_name || ""}${p.company_name ? " • " : ""}${p.service_name_uz || p.service_name_ru || p.service_name_en || ""}`;
-        opt.textContent = label || `#${p.id}`;
-        projectSelect.appendChild(opt);
-      });
-      if (projectId) projectSelect.value = String(projectId);
-    }
-
-    // Users list for admin/rop filter
-    const userSelect = $("#taskUserSelect");
-    if (userSelect && (isAdmin || isRop)) {
-      const users = await ensureUsers();
-      users.forEach((u) => {
-        const opt = document.createElement("option");
-        opt.value = String(u.id);
-        opt.textContent = `${u.full_name} (${u.role})`;
-        userSelect.appendChild(opt);
-      });
-    }
-
-    const searchEl = $("#taskSearch");
-    const showDoneEl = $("#taskShowDone");
-
-    const reload = async () => {
-      const project_id = projectSelect?.value ? Number(projectSelect.value) : null;
-      const assignee_user_id = userSelect?.value ? Number(userSelect.value) : null;
-
-      const params = new URLSearchParams();
-      if (project_id) params.set("project_id", String(project_id));
-      if (assignee_user_id) params.set("assignee_user_id", String(assignee_user_id));
-
-      const res = await apiFetch(`/tasks?${params.toString()}`);
-      let items = res.data || [];
-
-      // client-side filters
-      const q = (searchEl?.value || "").trim().toLowerCase();
-      const showDone = (showDoneEl?.value || "0") === "1";
-      if (q) {
-        items = items.filter((x) => {
-          return (
-            String(x.title || "").toLowerCase().includes(q) ||
-            String(x.description || "").toLowerCase().includes(q) ||
-            String(x.assignee_name || "").toLowerCase().includes(q) ||
-            String(x.project_company_name || "").toLowerCase().includes(q)
-          );
-        });
-      }
-      if (!showDone) {
-        items = items.filter((x) => x.status !== "done" && x.status !== "canceled");
-      }
-
-      // clear columns
-      TASK_COLS.forEach((c) => {
-        const body = $(`[data-col="${c.key}"] [data-drop="${c.key}"]`);
-        if (body) body.innerHTML = "";
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = "0";
-      });
-
-      // group
-      const grouped = new Map();
-      TASK_COLS.forEach((c) => grouped.set(c.key, []));
-      items.forEach((it) => grouped.get(it.status)?.push(it));
-
-      TASK_COLS.forEach((c) => {
-        const arr = grouped.get(c.key) || [];
-        const body = $(`[data-drop="${c.key}"]`);
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = String(arr.length);
-        if (body) {
-          arr.forEach((task) => body.appendChild(taskCardEl(task)));
-        }
-      });
-
-      bindDnD({
-        onDropStatus: async (id, status) => {
-          if (status === "canceled") {
-            const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-            if (!reason) return;
-            await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status, cancel_reason: reason } });
-            toast(t("saved", "Saqlandi"), "ok");
-            await reload();
+      // try session
+      try {
+        const user = await API.me();
+        if (user) {
+          this.state.user = user;
+          if (isLoginPage) {
+            location.replace("./index.html#/main");
             return;
           }
-          await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status } });
-          toast(t("saved", "Saqlandi"), "ok");
-          await reload();
-        },
-      });
-    };
-
-    // bind filter changes
-    projectSelect?.addEventListener("change", reload);
-    userSelect?.addEventListener("change", reload);
-    showDoneEl?.addEventListener("change", reload);
-    searchEl?.addEventListener("input", () => {
-      // simple debounce
-      clearTimeout(searchEl._t);
-      searchEl._t = setTimeout(reload, 250);
-    });
-
-    $("#taskNewBtn")?.addEventListener("click", () => openTaskCreateModal({ onSaved: reload }));
-
-    await reload();
-  }
-
-  async function openTaskModal(id) {
-    const res = await apiFetch(`/tasks/${id}`);
-    const task = res.data;
-    const isAdmin = state.me?.role === "admin" || state.me?.role === "rop";
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="kv">
-        <div class="kv__row"><div class="kv__k">ID</div><div class="kv__v">#${esc(task.id)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("status", "Status"))}</div><div class="kv__v"><span class="pill">${esc(task.status)}</span></div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("assignee", "Mas'ul"))}</div><div class="kv__v">${esc(task.assignee_name || "")}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("deadline", "Deadline"))}</div><div class="kv__v">${esc(fmtDateOnly(task.deadline_at))}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("spent", "Sarflangan"))}</div><div class="kv__v">${esc(fmtHMS(task.spent_seconds || 0))}</div></div>
-      </div>
-
-      <div class="divider mt-12"></div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("title", "Sarlavha"))}</label>
-        <input class="input" id="mTaskTitle" value="${esc(task.title || "")}" />
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("description", "Izoh"))}</label>
-        <textarea class="textarea" id="mTaskDesc">${esc(task.description || "")}</textarea>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("deadline", "Deadline"))}</label>
-          <input class="input" id="mTaskDeadline" placeholder="epoch seconds" value="${esc(task.deadline_at || "")}" />
-          <div class="muted small mt-4">${esc(t("deadline_hint", "Epoch seconds (ixtiyoriy)"))}</div>
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("project_id", "Project ID"))}</label>
-          <input class="input" id="mTaskProject" placeholder="id" value="${esc(task.project_id || "")}" />
-        </div>
-      </div>
-
-      ${
-        isAdmin
-          ? `<div class="field mt-12">
-              <label class="label">${esc(t("assignee_id", "Assignee ID"))}</label>
-              <input class="input" id="mTaskAssignee" placeholder="id" value="${esc(task.assignee_user_id || "")}" />
-            </div>`
-          : ""
+          await this.ensureMeta();
+          this.renderShell();
+          this.bindRouter();
+          this.routeTo(parseHash());
+          return;
+        }
+      } catch (e) {
+        // ignore; will show login
       }
 
-      <div class="row row-between mt-16 row-wrap">
-        <div class="row row-gap">
-          <button class="btn btn-ghost" type="button" id="mTaskPause">${esc(t("to_pause", "Pauza"))}</button>
-          <button class="btn btn-primary" type="button" id="mTaskStart">${esc(t("to_in_progress", "Jarayonda"))}</button>
-          <button class="btn btn-ghost" type="button" id="mTaskDone">${esc(t("to_done", "Done"))}</button>
-          <button class="btn btn-danger" type="button" id="mTaskCancel">${esc(t("to_cancel", "Bekor"))}</button>
-        </div>
-        <div class="row row-gap">
-          <button class="btn btn-ghost" type="button" id="mTaskDelete">${esc(t("delete", "O‘chirish"))}</button>
-          <button class="btn btn-primary" type="button" id="mTaskSave">${esc(t("save", "Saqlash"))}</button>
-        </div>
-      </div>
-    `;
-
-    openModal(wrap, { title: t("task", "Vazifa") + ` #${id}` });
-
-    const save = async () => {
-      const title = $("#mTaskTitle")?.value ?? "";
-      const description = $("#mTaskDesc")?.value ?? "";
-      const deadline_at = ($("#mTaskDeadline")?.value || "").trim();
-      const project_id = ($("#mTaskProject")?.value || "").trim();
-      const assignee_user_id = ($("#mTaskAssignee")?.value || "").trim();
-
-      const body = {
-        title: title ? title : null,
-        description: description,
-        deadline_at: deadline_at ? Number(deadline_at) : null,
-        project_id: project_id ? Number(project_id) : null,
-      };
-      if (isAdmin && assignee_user_id) body.assignee_user_id = Number(assignee_user_id);
-
-      await apiFetch(`/tasks/${id}`, { method: "PUT", body });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    };
-
-    $("#mTaskSave")?.addEventListener("click", save);
-
-    $("#mTaskStart")?.addEventListener("click", async () => {
-      await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status: "in_progress" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mTaskPause")?.addEventListener("click", async () => {
-      await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status: "pause" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mTaskDone")?.addEventListener("click", async () => {
-      await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status: "done" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mTaskCancel")?.addEventListener("click", async () => {
-      const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-      if (!reason) return;
-      await apiFetch(`/tasks/${id}/move`, { method: "POST", body: { status: "canceled", cancel_reason: reason } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mTaskDelete")?.addEventListener("click", async () => {
-      const ok = await confirmDialog({
-        title: t("delete", "O‘chirish"),
-        message: t("delete_confirm", "Haqiqatan o‘chirasizmi?"),
-      });
-      if (!ok) return;
-      await apiFetch(`/tasks/${id}/delete`, { method: "POST" });
-      toast(t("deleted", "O‘chirildi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  async function openTaskCreateModal({ onSaved } = {}) {
-    const isAdmin = state.me?.role === "admin" || state.me?.role === "rop";
-    let users = [];
-    if (isAdmin) users = await ensureUsers();
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="field">
-        <label class="label">${esc(t("title", "Sarlavha"))}</label>
-        <input class="input" id="cTaskTitle" placeholder="${esc(t("optional", "ixtiyoriy"))}" />
-      </div>
-      <div class="field mt-12">
-        <label class="label">${esc(t("description", "Izoh"))}</label>
-        <textarea class="textarea" id="cTaskDesc" placeholder="..."></textarea>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("deadline", "Deadline"))}</label>
-          <input class="input" id="cTaskDeadline" placeholder="epoch seconds (optional)" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("project_id", "Project ID"))}</label>
-          <input class="input" id="cTaskProject" placeholder="id (optional)" />
-        </div>
-      </div>
-
-      ${
-        isAdmin
-          ? `<div class="field mt-12">
-              <label class="label">${esc(t("assignee", "Mas'ul"))}</label>
-              <select class="select" id="cTaskAssignee">
-                ${users
-                  .map((u) => `<option value="${esc(u.id)}">${esc(u.full_name)} (${esc(u.role)})</option>`)
-                  .join("")}
-              </select>
-            </div>`
-          : ""
+      // not logged in
+      if (!isLoginPage) {
+        // allow login inside index.html too
+        this.renderLogin();
+      } else {
+        this.renderLogin();
       }
+    },
 
-      <div class="row row-right mt-16">
-        <button class="btn btn-primary" type="button" id="cTaskCreate">${esc(t("create", "Yaratish"))}</button>
-      </div>
-      <div class="alert alert-error mt-12" id="cTaskErr" hidden></div>
-    `;
+    bindRouter() {
+      window.addEventListener("hashchange", () => this.routeTo(parseHash()));
+    },
 
-    openModal(wrap, { title: t("new_task", "Yangi vazifa") });
-
-    $("#cTaskCreate")?.addEventListener("click", async () => {
-      const title = ($("#cTaskTitle")?.value || "").trim();
-      const description = ($("#cTaskDesc")?.value || "").trim();
-      const deadline_at = ($("#cTaskDeadline")?.value || "").trim();
-      const project_id = ($("#cTaskProject")?.value || "").trim();
-      const assignee_user_id = isAdmin ? Number($("#cTaskAssignee")?.value || 0) : state.me.id;
-
-      const errEl = $("#cTaskErr");
-      const fail = (m) => {
-        if (!errEl) return;
-        errEl.hidden = false;
-        errEl.textContent = m;
-      };
-
-      if (!description) return fail(t("desc_required", "Izoh majburiy"));
-
+    async ensureMeta() {
       try {
-        await apiFetch("/tasks", {
-          method: "POST",
-          body: {
-            title: title || null,
-            description,
-            assignee_user_id,
-            deadline_at: deadline_at ? Number(deadline_at) : null,
-            project_id: project_id ? Number(project_id) : null,
+        this.state.meta = await API.meta();
+      } catch {
+        this.state.meta = null;
+      }
+    },
+
+    // ===== Render: Login =====
+    renderLogin() {
+      this.root.innerHTML = "";
+      const savedLogin = localStorage.getItem("gsoft_login") || "";
+
+      const loginInp = h("input", { class: "input", placeholder: "login", value: savedLogin });
+      const passInp = h("input", { class: "input", placeholder: "password", type: "password" });
+
+      const btn = h("button", { class: "btn btnPrimary", type: "button" }, "Kirish");
+
+      const form = h("div", { class: "loginCard" }, [
+        h("div", { class: "logo", style: "width:44px;height:44px;border-radius:16px" }, "G"),
+        h("h1", { class: "loginTitle" }, "G-SOFT"),
+        h("div", { class: "muted" }, "Tizimga kirish"),
+        h("div", { class: "field" }, [h("div", { class: "label" }, "Login"), loginInp]),
+        h("div", { class: "field" }, [h("div", { class: "label" }, "Password"), passInp]),
+        h("div", { class: "row" }, [
+          h("div", { class: "muted", style: "font-size:12px" }, `API: ${API_BASE}`),
+          btn,
+        ]),
+      ]);
+
+      const wrap = h("div", { class: "center" }, form);
+      this.root.appendChild(wrap);
+
+      const doLogin = async () => {
+        const login = String(loginInp.value || "").trim();
+        const password = String(passInp.value || "");
+        if (!login || !password) {
+          Toast.show("Xato", "Login va parolni kiriting");
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Kutilmoqda...";
+        try {
+          await API.login(login, password);
+          localStorage.setItem("gsoft_login", login);
+          location.replace("./index.html#/main");
+        } catch (e) {
+          Toast.show("Login xato", e.message || "Error");
+          btn.disabled = false;
+          btn.textContent = "Kirish";
+        }
+      };
+
+      btn.addEventListener("click", doLogin);
+      passInp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
+    },
+
+    // ===== Render: Shell =====
+    renderShell() {
+      this.root.innerHTML = "";
+
+      const sidebar = h("div", { class: "sidebar" }, [
+        h("div", { class: "brand" }, [
+          h("div", { class: "logo" }, "G"),
+          h("div", { class: "brandText" }, "G-SOFT"),
+        ]),
+        this.renderNav(),
+      ]);
+
+      const topbarTitle = h("div", { class: "topbarTitle" }, "…");
+      const userBadge = h("div", { class: "badge" }, `${this.state.user.full_name} • ${this.state.user.role}`);
+      const logoutBtn = h(
+        "button",
+        {
+          class: "btn",
+          onclick: async () => {
+            try { await API.logout(); } catch {}
+            location.replace("./login.html");
           },
-        });
-        toast(t("created", "Yaratildi"), "ok");
-        closeModal();
-        onSaved?.();
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // PROJECTS (kanban)
-  // ---------------------------
-  const PROJECT_COLS = [
-    { key: "new", title: "New" },
-    { key: "tz_given", title: "TZ" },
-    { key: "offer_given", title: "Offer" },
-    { key: "in_progress", title: "In progress" },
-    { key: "later", title: "Later" },
-    { key: "done", title: "Done" },
-    { key: "canceled", title: "Canceled" },
-  ];
-
-  function projectCardEl(p) {
-    const el = document.createElement("div");
-    el.className = "kb-card";
-    el.draggable = true;
-    el.dataset.id = p.id;
-
-    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
-    const deadline = p.deadline_at ? fmtDateOnly(p.deadline_at) : "—";
-    const meeting = p.meeting_at ? fmtDateOnly(p.meeting_at) : "—";
-    const amount = p.amount != null ? `${p.amount} ${p.currency || ""}` : "";
-
-    el.innerHTML = `
-      <div class="kb-card__top">
-        <div class="kb-card__title">${esc(p.company_name || "")}</div>
-        <div class="kb-card__badge pill">${esc(p.status)}</div>
-      </div>
-      <div class="kb-card__desc">${esc(svc)}</div>
-      <div class="kb-card__meta muted small">
-        ${esc(t("pm", "PM"))}: ${esc(p.pm_name || "")}
-      </div>
-      <div class="kb-card__bottom">
-        <div class="muted small">📍 ${esc(t("meeting", "Uchrashuv"))}: ${esc(meeting)}</div>
-        <div class="muted small">📅 ${esc(t("deadline", "Deadline"))}: ${esc(deadline)}</div>
-      </div>
-      ${amount ? `<div class="kb-card__foot"><div class="pill pill--green">${esc(amount)}</div></div>` : ""}
-    `;
-
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", String(p.id));
-      e.dataTransfer.setData("text/projectId", String(p.id));
-    });
-    el.addEventListener("click", () => openProjectModal(p.id));
-    return el;
-  }
-
-  async function renderProjects() {
-    setTitle("projects");
-    if (!viewRoot) return;
-
-    const role = state.me?.role;
-    const canCreate = role === "admin" || role === "rop" || role === "pm";
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="row row-between row-wrap">
-          <div class="h2">${esc(t("menu_projects", "Loyihalar"))}</div>
-          <div class="row row-gap">
-            ${canCreate ? `<button class="btn btn-primary" type="button" id="projectNewBtn">+ ${esc(t("new_project", "Yangi loyiha"))}</button>` : ""}
-          </div>
-        </div>
-
-        <div class="filters mt-12">
-          <div class="field">
-            <label class="label">${esc(t("search", "Qidirish"))}</label>
-            <input class="input" id="prSearch" placeholder="${esc(t("search_placeholder", "Matn..."))}" />
-          </div>
-          <div class="field">
-            <label class="label">${esc(t("show_done", "Done/Canceled"))}</label>
-            <select class="select" id="prShowDone">
-              <option value="0">${esc(t("hide", "Yashirish"))}</option>
-              <option value="1">${esc(t("show", "Ko‘rsatish"))}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-16">
-        ${kanbanSkeleton(
-          PROJECT_COLS.map((c) => ({
-            key: c.key,
-            title:
-              c.key === "new"
-                ? t("st_new", "Yangi")
-                : c.key === "tz_given"
-                ? t("st_tz", "TZ berilgan")
-                : c.key === "offer_given"
-                ? t("st_offer", "Offer berilgan")
-                : c.key === "in_progress"
-                ? t("st_in_progress", "Jarayonda")
-                : c.key === "later"
-                ? t("st_later", "Keyin")
-                : c.key === "done"
-                ? t("st_done", "Yakunlangan")
-                : t("st_canceled", "Bekor"),
-          }))
-        )}
-      </div>
-    `;
-
-    applyI18n(viewRoot);
-
-    const searchEl = $("#prSearch");
-    const showDoneEl = $("#prShowDone");
-
-    const reload = async () => {
-      const res = await apiFetch("/projects");
-      let items = res.data || [];
-
-      const q = (searchEl?.value || "").trim().toLowerCase();
-      const showDone = (showDoneEl?.value || "0") === "1";
-      if (q) {
-        items = items.filter((x) => {
-          return (
-            String(x.company_name || "").toLowerCase().includes(q) ||
-            String(x.pm_name || "").toLowerCase().includes(q) ||
-            String(x.service_name_uz || x.service_name_ru || x.service_name_en || "").toLowerCase().includes(q)
-          );
-        });
-      }
-      if (!showDone) items = items.filter((x) => x.status !== "done" && x.status !== "canceled");
-
-      PROJECT_COLS.forEach((c) => {
-        const body = $(`[data-col="${c.key}"] [data-drop="${c.key}"]`);
-        if (body) body.innerHTML = "";
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = "0";
-      });
-
-      const grouped = new Map();
-      PROJECT_COLS.forEach((c) => grouped.set(c.key, []));
-      items.forEach((it) => grouped.get(it.status)?.push(it));
-
-      PROJECT_COLS.forEach((c) => {
-        const arr = grouped.get(c.key) || [];
-        const body = $(`[data-drop="${c.key}"]`);
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = String(arr.length);
-        if (body) arr.forEach((p) => body.appendChild(projectCardEl(p)));
-      });
-
-      bindDnD({
-        onDropStatus: async (id, status) => {
-          if (status === "canceled") {
-            const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-            if (!reason) return;
-            await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status, cancel_reason: reason } });
-            toast(t("saved", "Saqlandi"), "ok");
-            await reload();
-            return;
-          }
-          await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status } });
-          toast(t("saved", "Saqlandi"), "ok");
-          await reload();
         },
-      });
-    };
-
-    searchEl?.addEventListener("input", () => {
-      clearTimeout(searchEl._t);
-      searchEl._t = setTimeout(reload, 250);
-    });
-    showDoneEl?.addEventListener("change", reload);
-    $("#projectNewBtn")?.addEventListener("click", () => toast(t("coming_soon", "Tez kunda"), "info"));
-
-    await reload();
-  }
-
-  async function openProjectModal(id) {
-    const res = await apiFetch(`/projects/${id}`);
-    const p = res.data;
-
-    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="kv">
-        <div class="kv__row"><div class="kv__k">ID</div><div class="kv__v">#${esc(p.id)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("status", "Status"))}</div><div class="kv__v"><span class="pill">${esc(p.status)}</span></div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("company", "Kompaniya"))}</div><div class="kv__v">${esc(p.company_name || "")}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("service", "Xizmat"))}</div><div class="kv__v">${esc(svc)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("pm", "PM"))}</div><div class="kv__v">${esc(p.pm_name || "")}</div></div>
-      </div>
-
-      <div class="divider mt-12"></div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("meeting", "Uchrashuv"))}</label>
-          <input class="input" id="mPrMeeting" value="${esc(p.meeting_at || "")}" placeholder="epoch seconds" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("deadline", "Deadline"))}</label>
-          <input class="input" id="mPrDeadline" value="${esc(p.deadline_at || "")}" placeholder="epoch seconds" />
-        </div>
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("comment", "Izoh"))}</label>
-        <textarea class="textarea" id="mPrComment">${esc(p.comment || "")}</textarea>
-      </div>
-
-      <div class="row row-between mt-16 row-wrap">
-        <div class="row row-gap">
-          <button class="btn btn-ghost" type="button" id="mPrLater">${esc(t("to_later", "Keyin"))}</button>
-          <button class="btn btn-primary" type="button" id="mPrStart">${esc(t("to_in_progress", "Jarayonda"))}</button>
-          <button class="btn btn-ghost" type="button" id="mPrDone">${esc(t("to_done", "Done"))}</button>
-          <button class="btn btn-danger" type="button" id="mPrCancel">${esc(t("to_cancel", "Bekor"))}</button>
-        </div>
-        <div class="row row-gap">
-          <button class="btn btn-primary" type="button" id="mPrSave">${esc(t("save", "Saqlash"))}</button>
-        </div>
-      </div>
-    `;
-
-    openModal(wrap, { title: t("project", "Loyiha") + ` #${id}` });
-
-    $("#mPrSave")?.addEventListener("click", async () => {
-      await apiFetch(`/projects/${id}`, {
-        method: "PUT",
-        body: {
-          meeting_at: ($("#mPrMeeting")?.value || "").trim() ? Number($("#mPrMeeting").value) : null,
-          deadline_at: ($("#mPrDeadline")?.value || "").trim() ? Number($("#mPrDeadline").value) : null,
-          comment: ($("#mPrComment")?.value || "").trim() || null,
-        },
-      });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mPrStart")?.addEventListener("click", async () => {
-      await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status: "in_progress" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mPrLater")?.addEventListener("click", async () => {
-      await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status: "later" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mPrDone")?.addEventListener("click", async () => {
-      await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status: "done" } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mPrCancel")?.addEventListener("click", async () => {
-      const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-      if (!reason) return;
-      await apiFetch(`/projects/${id}/move`, { method: "POST", body: { status: "canceled", cancel_reason: reason } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // COURSES (course_leads kanban) — admin/rop/sale
-  // ---------------------------
-  const COURSE_COLS = [
-    { key: "new", title: "New" },
-    { key: "need_call", title: "Need call" },
-    { key: "thinking", title: "Thinking" },
-    { key: "enrolled", title: "Enrolled" },
-    { key: "studying", title: "Studying" },
-    { key: "canceled", title: "Canceled" },
-  ];
-
-  function courseCardEl(x) {
-    const el = document.createElement("div");
-    el.className = "kb-card";
-    el.draggable = true;
-    el.dataset.id = x.id;
-
-    const amount = x.paid_amount != null ? `${x.paid_amount}` : "";
-    el.innerHTML = `
-      <div class="kb-card__top">
-        <div class="kb-card__title">${esc(x.lead_full_name || "")}</div>
-        <div class="kb-card__badge pill">${esc(x.status)}</div>
-      </div>
-      <div class="kb-card__desc">${esc(x.course_type_name || "")}</div>
-      <div class="kb-card__meta muted small">${esc(x.company_name || "")}</div>
-      ${amount ? `<div class="kb-card__foot"><div class="pill pill--green">${esc(t("paid", "Paid"))}: ${esc(amount)}</div></div>` : ""}
-    `;
-
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", String(x.id));
-      e.dataTransfer.setData("text/courseLeadId", String(x.id));
-    });
-    el.addEventListener("click", () => openCourseLeadModal(x.id));
-    return el;
-  }
-
-  async function renderCourses() {
-    setTitle("courses");
-    if (!viewRoot) return;
-
-    const role = state.me?.role;
-    if (!(role === "admin" || role === "rop" || role === "sale")) {
-      viewRoot.innerHTML = `<div class="card"><div class="h2">${esc(t("forbidden", "Ruxsat yo‘q"))}</div></div>`;
-      return;
-    }
-
-    // We can load course_types only if admin via /settings/all.
-    // If you're sale/rop and need types, easiest is: make admin open settings once OR extend API later.
-    await ensureSettingsAllIfAdmin();
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="row row-between row-wrap">
-          <div class="h2">${esc(t("menu_courses", "Kurslar"))}</div>
-          <div class="row row-gap">
-            <button class="btn btn-primary" type="button" id="courseNewBtn">+ ${esc(t("new_lead", "Yangi lead"))}</button>
-          </div>
-        </div>
-
-        <div class="filters mt-12">
-          <div class="field">
-            <label class="label">${esc(t("search", "Qidirish"))}</label>
-            <input class="input" id="crSearch" placeholder="${esc(t("search_placeholder", "Matn..."))}" />
-          </div>
-          <div class="field">
-            <label class="label">${esc(t("show_canceled", "Canceled"))}</label>
-            <select class="select" id="crShowCanceled">
-              <option value="0">${esc(t("hide", "Yashirish"))}</option>
-              <option value="1">${esc(t("show", "Ko‘rsatish"))}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-16">
-        ${kanbanSkeleton(
-          COURSE_COLS.map((c) => ({
-            key: c.key,
-            title:
-              c.key === "new"
-                ? t("st_new", "Yangi")
-                : c.key === "need_call"
-                ? t("st_need_call", "Qo‘ng‘iroq kerak")
-                : c.key === "thinking"
-                ? t("st_thinking", "O‘ylayapti")
-                : c.key === "enrolled"
-                ? t("st_enrolled", "Yozildi")
-                : c.key === "studying"
-                ? t("st_studying", "O‘qiyapti")
-                : t("st_canceled", "Bekor"),
-          }))
-        )}
-      </div>
-    `;
-
-    applyI18n(viewRoot);
-
-    const searchEl = $("#crSearch");
-    const showCanceledEl = $("#crShowCanceled");
-
-    const reload = async () => {
-      const res = await apiFetch("/course_leads");
-      let items = res.data || [];
-
-      const q = (searchEl?.value || "").trim().toLowerCase();
-      const showCanceled = (showCanceledEl?.value || "0") === "1";
-      if (q) {
-        items = items.filter((x) => {
-          return (
-            String(x.lead_full_name || "").toLowerCase().includes(q) ||
-            String(x.lead_phone1 || "").toLowerCase().includes(q) ||
-            String(x.company_name || "").toLowerCase().includes(q) ||
-            String(x.course_type_name || "").toLowerCase().includes(q)
-          );
-        });
-      }
-      if (!showCanceled) items = items.filter((x) => x.status !== "canceled");
-
-      COURSE_COLS.forEach((c) => {
-        const body = $(`[data-col="${c.key}"] [data-drop="${c.key}"]`);
-        if (body) body.innerHTML = "";
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = "0";
-      });
-
-      const grouped = new Map();
-      COURSE_COLS.forEach((c) => grouped.set(c.key, []));
-      items.forEach((it) => grouped.get(it.status)?.push(it));
-
-      COURSE_COLS.forEach((c) => {
-        const arr = grouped.get(c.key) || [];
-        const body = $(`[data-drop="${c.key}"]`);
-        const cnt = $(`[data-count="${c.key}"]`);
-        if (cnt) cnt.textContent = String(arr.length);
-        if (body) arr.forEach((x) => body.appendChild(courseCardEl(x)));
-      });
-
-      bindDnD({
-        onDropStatus: async (id, status) => {
-          if (status === "canceled") {
-            const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-            if (!reason) return;
-            await apiFetch(`/course_leads/${id}/move`, { method: "POST", body: { status, cancel_reason: reason } });
-            toast(t("saved", "Saqlandi"), "ok");
-            await reload();
-            return;
-          }
-
-          // enrolled/studying require paid_amount in API
-          if (status === "enrolled" || status === "studying") {
-            const paid = prompt(t("paid_amount_required", "Paid amount kiriting") + ":");
-            if (!paid) return;
-            await apiFetch(`/course_leads/${id}/move`, { method: "POST", body: { status, paid_amount: Number(paid) } });
-            toast(t("saved", "Saqlandi"), "ok");
-            await reload();
-            return;
-          }
-
-          await apiFetch(`/course_leads/${id}/move`, { method: "POST", body: { status } });
-          toast(t("saved", "Saqlandi"), "ok");
-          await reload();
-        },
-      });
-    };
-
-    searchEl?.addEventListener("input", () => {
-      clearTimeout(searchEl._t);
-      searchEl._t = setTimeout(reload, 250);
-    });
-    showCanceledEl?.addEventListener("change", reload);
-    $("#courseNewBtn")?.addEventListener("click", () => toast(t("coming_soon", "Tez kunda"), "info"));
-
-    await reload();
-  }
-
-  async function openCourseLeadModal(id) {
-    const res = await apiFetch(`/course_leads/${id}`);
-    const x = res.data;
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="kv">
-        <div class="kv__row"><div class="kv__k">ID</div><div class="kv__v">#${esc(x.id)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("status", "Status"))}</div><div class="kv__v"><span class="pill">${esc(x.status)}</span></div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("lead", "Lead"))}</div><div class="kv__v">${esc(x.lead_full_name || "")} (${esc(x.lead_phone1 || "")})</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("company", "Kompaniya"))}</div><div class="kv__v">${esc(x.company_name || "—")}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("course", "Kurs"))}</div><div class="kv__v">${esc(x.course_type_name || "")}</div></div>
-      </div>
-
-      <div class="divider mt-12"></div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("agreed", "Kelishilgan"))}</label>
-          <input class="input" id="mCrAgreed" value="${esc(x.agreed_amount ?? "")}" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("paid", "Paid"))}</label>
-          <input class="input" id="mCrPaid" value="${esc(x.paid_amount ?? "")}" />
-        </div>
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("comment", "Izoh"))}</label>
-        <textarea class="textarea" id="mCrComment">${esc(x.comment || "")}</textarea>
-      </div>
-
-      <div class="row row-between mt-16 row-wrap">
-        <div class="row row-gap">
-          <button class="btn btn-primary" type="button" id="mCrSave">${esc(t("save", "Saqlash"))}</button>
-        </div>
-        <div class="row row-gap">
-          <button class="btn btn-danger" type="button" id="mCrCancel">${esc(t("to_cancel", "Bekor"))}</button>
-          <button class="btn btn-ghost" type="button" id="mCrDelete">${esc(t("delete", "O‘chirish"))}</button>
-        </div>
-      </div>
-    `;
-
-    openModal(wrap, { title: t("lead", "Lead") + ` #${id}` });
-
-    $("#mCrSave")?.addEventListener("click", async () => {
-      await apiFetch(`/course_leads/${id}`, {
-        method: "PUT",
-        body: {
-          agreed_amount: ($("#mCrAgreed")?.value || "").trim() ? Number($("#mCrAgreed").value) : null,
-          paid_amount: ($("#mCrPaid")?.value || "").trim() ? Number($("#mCrPaid").value) : null,
-          comment: ($("#mCrComment")?.value || "").trim() || null,
-        },
-      });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mCrCancel")?.addEventListener("click", async () => {
-      const reason = prompt(t("cancel_reason", "Bekor qilish sababi") + ":");
-      if (!reason) return;
-      await apiFetch(`/course_leads/${id}/move`, { method: "POST", body: { status: "canceled", cancel_reason: reason } });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mCrDelete")?.addEventListener("click", async () => {
-      const ok = await confirmDialog({
-        title: t("delete", "O‘chirish"),
-        message: t("delete_confirm", "Haqiqatan o‘chirasizmi?"),
-      });
-      if (!ok) return;
-      await apiFetch(`/course_leads/${id}/delete`, { method: "POST" });
-      toast(t("deleted", "O‘chirildi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // CLIENTS
-  // ---------------------------
-  async function renderClients() {
-    setTitle("clients");
-    if (!viewRoot) return;
-
-    const role = state.me?.role;
-    if (role === "fin") {
-      viewRoot.innerHTML = `<div class="card"><div class="h2">${esc(t("forbidden", "Ruxsat yo‘q"))}</div></div>`;
-      return;
-    }
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="row row-between row-wrap">
-          <div class="h2">${esc(t("menu_clients", "Klientlar"))}</div>
-          <div class="row row-gap">
-            <button class="btn btn-primary" type="button" id="clNewBtn">+ ${esc(t("create", "Yaratish"))}</button>
-          </div>
-        </div>
-
-        <div class="tabs mt-12">
-          <button class="tab is-active" type="button" data-tab="company">${esc(t("company", "Kompaniya"))}</button>
-          <button class="tab" type="button" data-tab="lead">${esc(t("lead", "Lead"))}</button>
-        </div>
-
-        <div class="filters mt-12">
-          <div class="field">
-            <label class="label">${esc(t("search", "Qidirish"))}</label>
-            <input class="input" id="clSearch" placeholder="${esc(t("search_placeholder", "Matn..."))}" />
-          </div>
-        </div>
-      </div>
-
-      <div class="card mt-16">
-        <div class="table-wrap">
-          <table class="table" id="clTable">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>${esc(t("name", "Nomi"))}</th>
-                <th>${esc(t("phone", "Telefon"))}</th>
-                <th>${esc(t("comment", "Izoh"))}</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    `;
-    applyI18n(viewRoot);
-
-    let tab = "company";
-    const tabBtns = $$("[data-tab]");
-    tabBtns.forEach((b) =>
-      b.addEventListener("click", async () => {
-        tabBtns.forEach((x) => x.classList.toggle("is-active", x === b));
-        tab = b.getAttribute("data-tab");
-        await reload();
-      })
-    );
-
-    const searchEl = $("#clSearch");
-    const tbody = $("#clTable tbody");
-
-    const reload = async () => {
-      const res = await apiFetch(`/clients?type=${encodeURIComponent(tab)}`);
-      let rows = res.data || [];
-      const q = (searchEl?.value || "").trim().toLowerCase();
-      if (q) {
-        rows = rows.filter((x) => {
-          return (
-            String(x.company_name || "").toLowerCase().includes(q) ||
-            String(x.full_name || "").toLowerCase().includes(q) ||
-            String(x.phone1 || "").toLowerCase().includes(q)
-          );
-        });
-      }
-      tbody.innerHTML = rows
-        .map((x) => {
-          const nm = tab === "company" ? (x.company_name || x.full_name || "") : (x.full_name || "");
-          return `
-            <tr data-open="${esc(x.id)}">
-              <td>#${esc(x.id)}</td>
-              <td>${esc(nm)}</td>
-              <td>${esc(x.phone1 || "")}</td>
-              <td class="muted">${esc(x.comment || "")}</td>
-            </tr>
-          `;
-        })
-        .join("");
-
-      $$("tr[data-open]", tbody).forEach((tr) => {
-        tr.addEventListener("click", () => openClientModal(Number(tr.getAttribute("data-open"))));
-      });
-    };
-
-    searchEl?.addEventListener("input", () => {
-      clearTimeout(searchEl._t);
-      searchEl._t = setTimeout(reload, 250);
-    });
-
-    $("#clNewBtn")?.addEventListener("click", () => toast(t("coming_soon", "Tez kunda"), "info"));
-
-    await reload();
-  }
-
-  async function openClientModal(id) {
-    const res = await apiFetch(`/clients/${id}`);
-    const d = res.data;
-    const c = d.client;
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="kv">
-        <div class="kv__row"><div class="kv__k">ID</div><div class="kv__v">#${esc(c.id)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("type", "Turi"))}</div><div class="kv__v">${esc(c.type)}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("name", "Nomi"))}</div><div class="kv__v">${esc(c.company_name || c.full_name || "")}</div></div>
-        <div class="kv__row"><div class="kv__k">${esc(t("phone", "Telefon"))}</div><div class="kv__v">${esc(c.phone1 || "")}</div></div>
-        ${c.phone2 ? `<div class="kv__row"><div class="kv__k">${esc(t("phone2", "Telefon 2"))}</div><div class="kv__v">${esc(c.phone2)}</div></div>` : ""}
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("comment", "Izoh"))}</label>
-        <textarea class="textarea" id="mClComment">${esc(c.comment || "")}</textarea>
-      </div>
-
-      <div class="row row-between mt-16 row-wrap">
-        <button class="btn btn-primary" type="button" id="mClSave">${esc(t("save", "Saqlash"))}</button>
-        <button class="btn btn-danger" type="button" id="mClDelete">${esc(t("delete", "O‘chirish"))}</button>
-      </div>
-
-      ${
-        c.type === "company"
-          ? `
-        <div class="divider mt-16"></div>
-        <div class="h3">${esc(t("projects", "Loyihalar"))}</div>
-        <div class="list mt-8">
-          ${(d.projects || [])
-            .map((p) => `<div class="mini-row">#${esc(p.id)} • ${esc(p.status)} • ${esc(p.service_name_uz || p.service_name_ru || p.service_name_en || "")}</div>`)
-            .join("") || `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`}
-        </div>
-
-        <div class="divider mt-16"></div>
-        <div class="h3">${esc(t("course_leads", "Kurs leadlari"))}</div>
-        <div class="list mt-8">
-          ${(d.course_leads || [])
-            .map((x) => `<div class="mini-row">#${esc(x.id)} • ${esc(x.status)} • ${esc(x.course_type_name || "")} • ${esc(x.lead_full_name || "")}</div>`)
-            .join("") || `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`}
-        </div>
-      `
-          : ""
-      }
-    `;
-
-    openModal(wrap, { title: t("client", "Klient") + ` #${id}` });
-
-    $("#mClSave")?.addEventListener("click", async () => {
-      await apiFetch(`/clients/${id}`, {
-        method: "PUT",
-        body: { comment: ($("#mClComment")?.value || "").trim() || null },
-      });
-      toast(t("saved", "Saqlandi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    $("#mClDelete")?.addEventListener("click", async () => {
-      const ok = await confirmDialog({
-        title: t("delete", "O‘chirish"),
-        message: t("delete_confirm", "Haqiqatan o‘chirasizmi?"),
-      });
-      if (!ok) return;
-      await apiFetch(`/clients/${id}/delete`, { method: "POST" });
-      toast(t("deleted", "O‘chirildi"), "ok");
-      closeModal();
-      navigate();
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // SETTINGS (admin only)
-  // ---------------------------
-  async function renderSettings() {
-    setTitle("settings");
-    if (!viewRoot) return;
-
-    if (state.me?.role !== "admin") {
-      viewRoot.innerHTML = `<div class="card"><div class="h2">${esc(t("forbidden", "Ruxsat yo‘q"))}</div></div>`;
-      return;
-    }
-
-    const res = await apiFetch("/settings/all");
-    const d = res.data || {};
-    const theme = d.theme?.value || {};
-
-    const jsonPretty = JSON.stringify(theme, null, 2);
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="h2">${esc(t("menu_settings", "Sozlamalar"))}</div>
-        <div class="muted mt-8">${esc(t("settings_hint", "Siz bu yerda theme va spravochniklarni boshqarasiz"))}</div>
-
-        <div class="divider mt-16"></div>
-
-        <div class="h3">${esc(t("theme", "Theme"))}</div>
-        <div class="field mt-8">
-          <label class="label">${esc(t("theme_json", "Theme JSON"))}</label>
-          <textarea class="textarea textarea--mono" id="themeJson">${esc(jsonPretty)}</textarea>
-        </div>
-        <div class="row row-right mt-12">
-          <button class="btn btn-primary" type="button" id="themeSaveBtn">${esc(t("save", "Saqlash"))}</button>
-        </div>
-      </div>
-
-      <div class="card mt-16">
-        <div class="h3">${esc(t("dicts", "Spravochniklar"))}</div>
-        <div class="muted small mt-6">${esc(t("dicts_hint", "Qo‘shish/tahrirlash/o‘chirish — soft"))}</div>
-
-        <div class="grid grid-2 mt-12">
-          ${dictBlock("cities", t("cities", "Shaharlar"), d.dict_cities || [])}
-          ${dictBlock("sources", t("sources", "Manbalar"), d.dict_sources || [])}
-          ${dictBlock("spheres", t("spheres", "Soha"), d.dict_spheres || [])}
-          ${dictBlock("service_types", t("service_types", "Xizmat turlari"), d.service_types || [])}
-        </div>
-
-        <div class="divider mt-16"></div>
-
-        <div class="h3">${esc(t("course_types", "Kurs turlari"))}</div>
-        <div class="table-wrap mt-8">
-          <table class="table" id="ctTable">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>${esc(t("name", "Nomi"))}</th>
-                <th>${esc(t("start_date", "Start"))}</th>
-                <th>${esc(t("price", "Narx"))}</th>
-                <th>${esc(t("currency", "Valyuta"))}</th>
-                <th>${esc(t("sort", "Sort"))}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(d.course_types || [])
-                .map(
-                  (x) => `
-                <tr>
-                  <td>#${esc(x.id)}</td>
-                  <td>${esc(x.name)}</td>
-                  <td>${esc(x.start_date ? fmtDateOnly(x.start_date) : "—")}</td>
-                  <td>${esc(x.price ?? 0)}</td>
-                  <td>${esc(x.currency || "UZS")}</td>
-                  <td>${esc(x.sort ?? 1000)}</td>
-                  <td class="td-actions">
-                    <button class="btn btn-ghost btn-sm" data-ct-edit="${esc(x.id)}">${esc(t("edit", "Tahrir"))}</button>
-                    <button class="btn btn-ghost btn-sm" data-ct-del="${esc(x.id)}">${esc(t("delete", "O‘chirish"))}</button>
-                  </td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="row row-right mt-12">
-          <button class="btn btn-primary" type="button" id="ctAddBtn">+ ${esc(t("add", "Qo‘shish"))}</button>
-        </div>
-      </div>
-    `;
-
-    applyI18n(viewRoot);
-
-    $("#themeSaveBtn")?.addEventListener("click", async () => {
-      try {
-        const txt = $("#themeJson")?.value || "{}";
-        const obj = JSON.parse(txt);
-        await apiFetch("/settings/theme", { method: "PUT", body: obj });
-        toast(t("saved", "Saqlandi"), "ok");
-        applyThemeFromSettings(obj);
-      } catch (e) {
-        toast(String(e.message || e), "err", 3400);
-      }
-    });
-
-    // dict block handlers
-    ["cities", "sources", "spheres", "service_types"].forEach((key) => {
-      $$(`[data-dict-add="${key}"]`).forEach((b) =>
-        b.addEventListener("click", () => openDictModal({ dict: key, onSaved: () => navigate() }))
+        "Chiqish"
       );
-      $$(`[data-dict-edit="${key}"]`).forEach((b) =>
-        b.addEventListener("click", () => openDictModal({ dict: key, id: Number(b.dataset.id), onSaved: () => navigate() }))
+
+      const topbar = h("div", { class: "topbar" }, [
+        topbarTitle,
+        h("div", { class: "topbarRight" }, [userBadge, logoutBtn]),
+      ]);
+
+      const content = h("div", { class: "content", id: "view" }, "");
+      const main = h("div", { class: "main" }, [topbar, content]);
+
+      const shell = h("div", { class: "shell" }, [sidebar, main]);
+      this.root.appendChild(shell);
+
+      this._ui = { topbarTitle, content };
+    },
+
+    renderNav() {
+      const nav = h("div", { class: "nav", id: "nav" });
+      for (const r of ROUTES) {
+        const a = h(
+          "a",
+          {
+            href: `#${r.path}`,
+            "data-path": r.path,
+          },
+          [
+            h("div", { class: "ico" }, "•"),
+            h("div", { class: "txt" }, r.title),
+          ]
+        );
+        nav.appendChild(a);
+      }
+      return nav;
+    },
+
+    setActiveNav(path) {
+      const nav = $("#nav", this.root);
+      if (!nav) return;
+      for (const a of nav.querySelectorAll("a[data-path]")) {
+        const p = a.getAttribute("data-path");
+        a.classList.toggle("active", p === path);
+      }
+    },
+
+    // ===== Route handler =====
+    async routeTo(route) {
+      this.state.route = route;
+      if (!this.state.user) {
+        this.renderLogin();
+        return;
+      }
+      // ensure shell exists
+      if (!this._ui) this.renderShell();
+
+      const path = route.path || "/main";
+      this.setActiveNav(path);
+
+      const title = (ROUTES.find((x) => x.path === path)?.title) || "G-SOFT";
+      this._ui.topbarTitle.textContent = title;
+
+      if (path === "/main") return await this.renderMain();
+      if (path === "/tasks") return this.renderStub("Vazifalar (keyingi qismda)"); // Part 2
+      if (path === "/projects") return this.renderStub("Loyihalar (keyingi qismda)"); // Part 3
+      if (path === "/courses") return this.renderStub("Kurslar (keyingi qismda)"); // Part 4
+      if (path === "/clients") return this.renderStub("Clients (keyingi qismda)"); // Part 5
+      if (path === "/settings") return this.renderStub("Sozlamalar (keyingi qismda)"); // Part 6
+      if (path === "/users") return this.renderStub("Users (keyingi qismda)"); // Part 6
+
+      return this.renderStub("Not found");
+    },
+
+    renderStub(text) {
+      this._ui.content.innerHTML = "";
+      this._ui.content.appendChild(
+        h("div", { class: "card" }, [
+          h("div", { class: "cardHd" }, [h("h3", {}, "Info"), h("div", { class: "muted" }, "…")]),
+          h("div", { class: "cardBd" }, [h("div", { class: "muted" }, text)]),
+        ])
       );
-      $$(`[data-dict-del="${key}"]`).forEach((b) =>
-        b.addEventListener("click", async () => {
-          const id = Number(b.dataset.id);
-          const ok = await confirmDialog({ title: t("delete", "O‘chirish"), message: t("delete_confirm", "Haqiqatan o‘chirasizmi?") });
-          if (!ok) return;
-          await apiFetch(`/settings/${key}/${id}/delete`, { method: "POST" });
-          toast(t("deleted", "O‘chirildi"), "ok");
-          navigate();
-        })
+    },
+
+    // ===== Main page =====
+    async renderMain() {
+      this._ui.content.innerHTML = "";
+
+      const wrap = h("div", { class: "grid2" });
+
+      const cardOver = h("div", { class: "card" }, [
+        h("div", { class: "cardHd" }, [h("h3", {}, "Prosrochennye"), h("div", { class: "muted" }, "deadline")]),
+        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
+      ]);
+      const cardToday = h("div", { class: "card" }, [
+        h("div", { class: "cardHd" }, [h("h3", {}, "Bugungi vazifalar"), h("div", { class: "muted" }, "deadline")]),
+        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
+      ]);
+
+      const cardProg = h("div", { class: "card", style: "grid-column: 1 / -1;" }, [
+        h("div", { class: "cardHd" }, [h("h3", {}, "Jarayonda"), h("div", { class: "muted" }, "1 dona")]),
+        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
+      ]);
+
+      wrap.appendChild(cardOver);
+      wrap.appendChild(cardToday);
+      wrap.appendChild(cardProg);
+
+      this._ui.content.appendChild(wrap);
+
+      try {
+        const data = await API.main();
+        this.fillTasksList(cardOver, data.overdue || [], "Prosrochennye yo‘q");
+        this.fillTasksList(cardToday, data.today || [], "Bugun vazifa yo‘q");
+        this.fillInProgress(cardProg, data.in_progress || null);
+      } catch (e) {
+        Toast.show("Xato", e.message || "Main load error");
+        this.fillTasksList(cardOver, [], "Xato");
+        this.fillTasksList(cardToday, [], "Xato");
+        this.fillInProgress(cardProg, null);
+      }
+    },
+
+    fillTasksList(card, rows, emptyText) {
+      const bd = card.querySelector(".cardBd");
+      bd.innerHTML = "";
+      if (!rows || !rows.length) {
+        bd.appendChild(h("div", { class: "muted" }, emptyText));
+        return;
+      }
+      const list = h("div", { class: "list" });
+      for (const t of rows) {
+        const title = t.title ? String(t.title) : pickTitleFromDesc(t.description);
+        const meta = [
+          t.deadline_at ? `Deadline: ${fmtDateTime(t.deadline_at)}` : "Deadline: —",
+          t.project_id ? `Project: #${t.project_id}` : "Project: No PR",
+          `Status: ${t.status}`,
+        ].join(" • ");
+        const item = h("div", { class: "item" }, [
+          h("div", { class: "itemTop" }, [
+            h("div", { class: "itemTitle" }, title),
+            h(
+              "button",
+              {
+                class: "btn",
+                onclick: () => {
+                  Modal.open("Vazifa", h("div", {}, [
+                    h("div", { class: "muted" }, "Task modal (to‘liq) — Part 2 da qilamiz"),
+                    h("div", { style: "margin-top:10px" }, `#${t.id}`),
+                    h("div", { style: "margin-top:8px" }, meta),
+                  ]));
+                },
+              },
+              "Ochish"
+            ),
+          ]),
+          h("div", { class: "itemMeta" }, meta),
+        ]);
+        list.appendChild(item);
+      }
+      bd.appendChild(list);
+    },
+
+    fillInProgress(card, task) {
+      const bd = card.querySelector(".cardBd");
+      bd.innerHTML = "";
+      if (!task) {
+        bd.appendChild(h("div", { class: "muted" }, "Jarayonda vazifa yo‘q"));
+        return;
+      }
+      const title = task.title ? String(task.title) : pickTitleFromDesc(task.description);
+      bd.appendChild(
+        h("div", { class: "item" }, [
+          h("div", { class: "itemTop" }, [
+            h("div", { class: "itemTitle" }, `${title} (#${task.id})`),
+            h("button", { class: "btn btnPrimary", onclick: () => setHash("/tasks") }, "Tasks →"),
+          ]),
+          h("div", { class: "itemMeta" }, [
+            `Status: ${task.status}`,
+            task.deadline_at ? `Deadline: ${fmtDateTime(task.deadline_at)}` : "Deadline: —",
+            task.project_id ? `Project: #${task.project_id}` : "Project: No PR",
+          ].join(" • ")),
+        ])
       );
+    },
+  };
+
+  // Boot
+  document.addEventListener("DOMContentLoaded", () => {
+    App.start().catch((e) => {
+      console.error(e);
+      const root = document.getElementById("app");
+      if (root) root.textContent = "Fatal error: " + (e?.message || e);
     });
-
-    // course types
-    $("#ctAddBtn")?.addEventListener("click", () => openCourseTypeModal({ onSaved: () => navigate() }));
-        // course types (edit/delete)
-    $$("[data-ct-edit]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = Number(btn.getAttribute("data-ct-edit"));
-        openCourseTypeModal({ id, onSaved: () => navigate() });
-      });
-    });
-
-    $$("[data-ct-del]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = Number(btn.getAttribute("data-ct-del"));
-        const ok = await confirmDialog({
-          title: t("delete", "O‘chirish"),
-          message: t("delete_confirm", "Haqiqatan o‘chirasizmi?"),
-        });
-        if (!ok) return;
-        await apiFetch(`/settings/course_types/${id}/delete`, { method: "POST" });
-        toast(t("deleted", "O‘chirildi"), "ok");
-        navigate();
-      });
-    });
-  }
-
-  function dictBlock(dictKey, title, items) {
-    return `
-      <div class="card card--inner">
-        <div class="row row-between row-wrap">
-          <div class="h3">${esc(title)}</div>
-          <button class="btn btn-primary btn-sm" type="button" data-dict-add="${esc(dictKey)}">+ ${esc(t("add", "Qo‘shish"))}</button>
-        </div>
-        <div class="list mt-12">
-          ${
-            (items || []).length
-              ? (items || [])
-                  .filter((x) => !x.is_deleted)
-                  .sort((a, b) => (a.sort ?? 1000) - (b.sort ?? 1000))
-                  .map(
-                    (x) => `
-                      <div class="mini-row">
-                        <div class="mini-row__main">
-                          <div class="mini-row__title">${esc(x.name)}</div>
-                          <div class="mini-row__sub muted small">#${esc(x.id)} • sort: ${esc(x.sort ?? 1000)} ${x.color ? `• ${esc(x.color)}` : ""}</div>
-                        </div>
-                        <div class="mini-row__actions">
-                          <button class="btn btn-ghost btn-sm" type="button" data-dict-edit="${esc(dictKey)}" data-id="${esc(x.id)}">${esc(t("edit", "Tahrir"))}</button>
-                          <button class="btn btn-ghost btn-sm" type="button" data-dict-del="${esc(dictKey)}" data-id="${esc(x.id)}">${esc(t("delete", "O‘chirish"))}</button>
-                        </div>
-                      </div>
-                    `
-                  )
-                  .join("")
-              : `<div class="muted">${esc(t("empty", "Bo‘sh"))}</div>`
-          }
-        </div>
-      </div>
-    `;
-  }
-
-  function openDictModal({ dict, id = null, onSaved } = {}) {
-    const isEdit = !!id;
-    const wrap = document.createElement("div");
-
-    wrap.innerHTML = `
-      <div class="grid grid-2">
-        <div class="field">
-          <label class="label">${esc(t("name", "Nomi"))}</label>
-          <input class="input" id="dName" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("sort", "Sort"))}</label>
-          <input class="input" id="dSort" value="1000" />
-        </div>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("color", "Color"))}</label>
-          <input class="input" id="dColor" placeholder="#RRGGBB (optional)" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("active", "Active"))}</label>
-          <select class="select" id="dActive">
-            <option value="1">${esc(t("yes", "Ha"))}</option>
-            <option value="0">${esc(t("no", "Yo‘q"))}</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("final_type", "Final type"))}</label>
-        <select class="select" id="dFinalType">
-          <option value="">—</option>
-          <option value="success">success</option>
-          <option value="cancel">cancel</option>
-        </select>
-        <div class="muted small mt-4">${esc(t("final_type_hint", "Faqat statuslar uchun"))}</div>
-      </div>
-
-      <div class="row row-right mt-16">
-        <button class="btn btn-primary" type="button" id="dSave">${esc(t("save", "Saqlash"))}</button>
-      </div>
-
-      <div class="alert alert-error mt-12" id="dErr" hidden></div>
-    `;
-
-    openModal(wrap, { title: isEdit ? t("edit", "Tahrir") : t("add", "Qo‘shish") });
-
-    const errEl = $("#dErr", modalRoot);
-    const fail = (m) => {
-      if (!errEl) return;
-      errEl.hidden = false;
-      errEl.textContent = m;
-    };
-
-    (async () => {
-      if (!isEdit) return;
-      try {
-        const res = await apiFetch(`/settings/${dict}/${id}`);
-        const item = res.data;
-
-        $("#dName", modalRoot).value = item.name || "";
-        $("#dSort", modalRoot).value = String(item.sort ?? 1000);
-        $("#dColor", modalRoot).value = item.color || "";
-        $("#dActive", modalRoot).value = String(item.active ?? 1);
-        $("#dFinalType", modalRoot).value = item.final_type || "";
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    })();
-
-    $("#dSave", modalRoot)?.addEventListener("click", async () => {
-      try {
-        const name = ($("#dName", modalRoot)?.value || "").trim();
-        const sort = Number(($("#dSort", modalRoot)?.value || "1000").trim());
-        const color = ($("#dColor", modalRoot)?.value || "").trim() || null;
-        const active = Number($("#dActive", modalRoot)?.value || "1");
-        const final_type = ($("#dFinalType", modalRoot)?.value || "").trim() || null;
-
-        if (!name) return fail(t("name_required", "Nomi majburiy"));
-
-        const body = { name, sort, color, active, final_type };
-
-        if (isEdit) {
-          await apiFetch(`/settings/${dict}/${id}`, { method: "PUT", body });
-        } else {
-          await apiFetch(`/settings/${dict}`, { method: "POST", body });
-        }
-
-        toast(t("saved", "Saqlandi"), "ok");
-        closeModal();
-        onSaved?.();
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  function openCourseTypeModal({ id = null, onSaved } = {}) {
-    const isEdit = !!id;
-    const wrap = document.createElement("div");
-
-    wrap.innerHTML = `
-      <div class="grid grid-2">
-        <div class="field">
-          <label class="label">${esc(t("name", "Nomi"))}</label>
-          <input class="input" id="ctName" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("start_date", "Start date"))}</label>
-          <input class="input" id="ctStart" placeholder="epoch seconds (optional)" />
-        </div>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("price", "Narx"))}</label>
-          <input class="input" id="ctPrice" value="0" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("currency", "Valyuta"))}</label>
-          <input class="input" id="ctCurrency" value="UZS" />
-        </div>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">${esc(t("sort", "Sort"))}</label>
-          <input class="input" id="ctSort" value="1000" />
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("active", "Active"))}</label>
-          <select class="select" id="ctActive">
-            <option value="1">${esc(t("yes", "Ha"))}</option>
-            <option value="0">${esc(t("no", "Yo‘q"))}</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("note", "Izoh"))}</label>
-        <textarea class="textarea" id="ctNote"></textarea>
-      </div>
-
-      <div class="row row-right mt-16">
-        <button class="btn btn-primary" type="button" id="ctSave">${esc(t("save", "Saqlash"))}</button>
-      </div>
-
-      <div class="alert alert-error mt-12" id="ctErr" hidden></div>
-    `;
-
-    openModal(wrap, { title: isEdit ? t("edit", "Tahrir") : t("add", "Qo‘shish") });
-
-    const errEl = $("#ctErr", modalRoot);
-    const fail = (m) => {
-      if (!errEl) return;
-      errEl.hidden = false;
-      errEl.textContent = m;
-    };
-
-    (async () => {
-      if (!isEdit) return;
-      try {
-        const res = await apiFetch(`/settings/course_types/${id}`);
-        const x = res.data;
-
-        $("#ctName", modalRoot).value = x.name || "";
-        $("#ctStart", modalRoot).value = x.start_date ? String(x.start_date) : "";
-        $("#ctPrice", modalRoot).value = String(x.price ?? 0);
-        $("#ctCurrency", modalRoot).value = x.currency || "UZS";
-        $("#ctSort", modalRoot).value = String(x.sort ?? 1000);
-        $("#ctActive", modalRoot).value = String(x.active ?? 1);
-        $("#ctNote", modalRoot).value = x.note || "";
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    })();
-
-    $("#ctSave", modalRoot)?.addEventListener("click", async () => {
-      try {
-        const name = ($("#ctName", modalRoot)?.value || "").trim();
-        if (!name) return fail(t("name_required", "Nomi majburiy"));
-
-        const start_date = ($("#ctStart", modalRoot)?.value || "").trim();
-        const price = Number(($("#ctPrice", modalRoot)?.value || "0").trim());
-        const currency = ($("#ctCurrency", modalRoot)?.value || "UZS").trim();
-        const sort = Number(($("#ctSort", modalRoot)?.value || "1000").trim());
-        const active = Number($("#ctActive", modalRoot)?.value || "1");
-        const note = ($("#ctNote", modalRoot)?.value || "").trim() || null;
-
-        const body = {
-          name,
-          start_date: start_date ? Number(start_date) : null,
-          price,
-          currency,
-          sort,
-          active,
-          note,
-        };
-
-        if (isEdit) {
-          await apiFetch(`/settings/course_types/${id}`, { method: "PUT", body });
-        } else {
-          await apiFetch(`/settings/course_types`, { method: "POST", body });
-        }
-
-        toast(t("saved", "Saqlandi"), "ok");
-        closeModal();
-        onSaved?.();
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // USERS (admin)
-  // ---------------------------
-  async function renderUsers() {
-    setTitle("users");
-    if (!viewRoot) return;
-
-    if (state.me?.role !== "admin") {
-      viewRoot.innerHTML = `<div class="card"><div class="h2">${esc(t("forbidden", "Ruxsat yo‘q"))}</div></div>`;
-      return;
-    }
-
-    const res = await apiFetch("/users");
-    const users = res.data || [];
-
-    viewRoot.innerHTML = `
-      <div class="card">
-        <div class="row row-between row-wrap">
-          <div class="h2">${esc(t("menu_users", "Foydalanuvchilar"))}</div>
-          <button class="btn btn-primary" type="button" id="uAdd">+ ${esc(t("add", "Qo‘shish"))}</button>
-        </div>
-
-        <div class="table-wrap mt-12">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>${esc(t("name", "Nomi"))}</th>
-                <th>login</th>
-                <th>role</th>
-                <th>${esc(t("active", "Active"))}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${users
-                .map(
-                  (u) => `
-                <tr>
-                  <td>#${esc(u.id)}</td>
-                  <td>${esc(u.full_name || "")}</td>
-                  <td>${esc(u.login || "")}</td>
-                  <td><span class="pill">${esc(u.role || "")}</span></td>
-                  <td>${u.active ? "✅" : "—"}</td>
-                  <td class="td-actions">
-                    <button class="btn btn-ghost btn-sm" type="button" data-u-edit="${esc(u.id)}">${esc(t("edit", "Tahrir"))}</button>
-                    <button class="btn btn-ghost btn-sm" type="button" data-u-del="${esc(u.id)}">${esc(t("delete", "O‘chirish"))}</button>
-                  </td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    applyI18n(viewRoot);
-
-    $("#uAdd")?.addEventListener("click", () => openUserModal({ onSaved: () => navigate() }));
-
-    $$("[data-u-edit]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const id = Number(b.getAttribute("data-u-edit"));
-        openUserModal({ id, onSaved: () => navigate() });
-      });
-    });
-
-    $$("[data-u-del]").forEach((b) => {
-      b.addEventListener("click", async () => {
-        const id = Number(b.getAttribute("data-u-del"));
-        const ok = await confirmDialog({
-          title: t("delete", "O‘chirish"),
-          message: t("delete_confirm", "Haqiqatan o‘chirasizmi?"),
-        });
-        if (!ok) return;
-        await apiFetch(`/users/${id}/delete`, { method: "POST" });
-        toast(t("deleted", "O‘chirildi"), "ok");
-        navigate();
-      });
-    });
-  }
-
-  function openUserModal({ id = null, onSaved } = {}) {
-    const isEdit = !!id;
-    const wrap = document.createElement("div");
-
-    wrap.innerHTML = `
-      <div class="grid grid-2">
-        <div class="field">
-          <label class="label">full_name</label>
-          <input class="input" id="uName" />
-        </div>
-        <div class="field">
-          <label class="label">login</label>
-          <input class="input" id="uLogin" />
-        </div>
-      </div>
-
-      <div class="grid grid-2 mt-12">
-        <div class="field">
-          <label class="label">role</label>
-          <select class="select" id="uRole">
-            <option value="admin">admin</option>
-            <option value="rop">rop</option>
-            <option value="pm">pm</option>
-            <option value="fin">fin</option>
-            <option value="sale">sale</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="label">${esc(t("active", "Active"))}</label>
-          <select class="select" id="uActive">
-            <option value="1">${esc(t("yes", "Ha"))}</option>
-            <option value="0">${esc(t("no", "Yo‘q"))}</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field mt-12">
-        <label class="label">${esc(t("password", "Parol"))}</label>
-        <input class="input" id="uPass" placeholder="${esc(t("optional", "ixtiyoriy"))}" />
-        <div class="muted small mt-4">${esc(t("pass_hint", "Tahrirda bo‘sh qoldirsang o‘zgarmaydi"))}</div>
-      </div>
-
-      <div class="row row-right mt-16">
-        <button class="btn btn-primary" type="button" id="uSave">${esc(t("save", "Saqlash"))}</button>
-      </div>
-
-      <div class="alert alert-error mt-12" id="uErr" hidden></div>
-    `;
-
-    openModal(wrap, { title: isEdit ? t("edit", "Tahrir") : t("add", "Qo‘shish") });
-
-    const errEl = $("#uErr", modalRoot);
-    const fail = (m) => {
-      if (!errEl) return;
-      errEl.hidden = false;
-      errEl.textContent = m;
-    };
-
-    (async () => {
-      if (!isEdit) return;
-      try {
-        const res = await apiFetch(`/users/${id}`);
-        const u = res.data;
-        $("#uName", modalRoot).value = u.full_name || "";
-        $("#uLogin", modalRoot).value = u.login || "";
-        $("#uRole", modalRoot).value = u.role || "pm";
-        $("#uActive", modalRoot).value = String(u.active ?? 1);
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    })();
-
-    $("#uSave", modalRoot)?.addEventListener("click", async () => {
-      try {
-        const full_name = ($("#uName", modalRoot)?.value || "").trim();
-        const login = ($("#uLogin", modalRoot)?.value || "").trim();
-        const role = ($("#uRole", modalRoot)?.value || "pm").trim();
-        const active = Number($("#uActive", modalRoot)?.value || "1");
-        const password = ($("#uPass", modalRoot)?.value || "").trim() || null;
-
-        if (!full_name) return fail(t("name_required", "Nomi majburiy"));
-        if (!login) return fail("login required");
-
-        const body = { full_name, login, role, active, password };
-
-        if (isEdit) await apiFetch(`/users/${id}`, { method: "PUT", body });
-        else await apiFetch(`/users`, { method: "POST", body });
-
-        toast(t("saved", "Saqlandi"), "ok");
-        closeModal();
-        onSaved?.();
-      } catch (e) {
-        fail(String(e.message || e));
-      }
-    });
-
-    applyI18n(modalRoot);
-  }
-
-  // ---------------------------
-  // BOOT
-  // ---------------------------
-  async function boot() {
-    // restore UI prefs
-    setLang(getLang());
-    setTheme(getTheme());
-    setEye(getEye());
-    setSidebarCollapsed(getSidebarCollapsed());
-
-    bindLangButtons();
-    bindThemeEye();
-    bindSidebar();
-    startClock();
-
-    try {
-      const meRes = await apiFetch("/auth/me");
-      state.me = meRes.data;
-      setMeUI(state.me);
-      await ensureSettingsAllIfAdmin();
-      applyI18n();
-      await navigate();
-    } catch (e) {
-      location.href = "/login.html";
-    }
-  }
-
-  // close modal on ESC
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (confirmRoot && !confirmRoot.hidden) return;
-      if (modalRoot && !modalRoot.hidden) closeModal();
-      closeSidebarMobile();
-    }
   });
-
-  boot();
 })();
