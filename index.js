@@ -270,6 +270,145 @@ body{
 .toastText{color:var(--muted);margin-top:4px;font-size:13px}
   `;
 
+  const STYLES_TASKS = `
+/* ===== Tasks Kanban ===== */
+.tbar{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  margin-bottom:12px;
+}
+.tbar .input{height:42px}
+.tbar .sel{height:42px}
+.sel{
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.16);
+  color:var(--text);
+  outline:none;
+}
+.kwrap{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.kanban{
+  display:grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(320px, 1fr);
+  gap:12px;
+  align-items:start;
+  overflow:auto;
+  padding-bottom:8px;
+}
+.kcol{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  border-radius:22px;
+  min-height:260px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.kcolHd{
+  padding:12px 12px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.10);
+  backdrop-filter: blur(10px);
+}
+.kcolTitle{
+  font-weight:1000;
+  display:flex; align-items:center; gap:10px;
+}
+.kdot{
+  width:10px;height:10px;border-radius:999px;
+  background: var(--brand);
+  box-shadow: 0 0 0 6px rgba(255,209,92,.12);
+}
+.kcount{
+  color:var(--muted);
+  font-size:12px;
+}
+.kcolBd{
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:180px;
+}
+.kcard{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.14);
+  border-radius:18px;
+  padding:12px;
+  cursor:grab;
+  user-select:none;
+}
+.kcard:active{cursor:grabbing}
+.kcard.compact{
+  padding:10px 12px;
+}
+.ktitle{
+  font-weight:1000;
+  margin:0 0 6px 0;
+  font-size:14px;
+}
+.kdesc{
+  color:var(--muted);
+  font-size:13px;
+  white-space:pre-wrap;
+}
+.kmeta{
+  display:flex; flex-wrap:wrap; gap:8px;
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+}
+.kbadge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 9px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);
+}
+.kactions{
+  display:flex; gap:8px; flex-wrap:wrap;
+  margin-top:10px;
+}
+.kbtn{
+  height:36px;
+  padding:0 10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  cursor:pointer;
+  font-weight:900;
+}
+.kbtn:hover{background:rgba(255,255,255,.09)}
+.kbtn.primary{
+  border-color: rgba(255,209,92,.28);
+  background: rgba(255,209,92,.14);
+}
+.kbtn.danger{
+  border-color: rgba(241,98,98,.28);
+  background: rgba(241,98,98,.14);
+}
+.kdropTarget{
+  outline: 2px dashed rgba(16,185,129,.55);
+  outline-offset: -10px;
+}
+.dragGhost{
+  position:fixed;
+  z-index:4000;
+  pointer-events:none;
+  width:min(360px, calc(100vw - 28px));
+  transform: translate(-50%, -50%);
+  opacity:.92;
+}
+`;
+
+
   // ===== Helpers =====
   const $ = (sel, root = document) => root.querySelector(sel);
   const h = (tag, attrs = {}, children = []) => {
@@ -465,6 +604,7 @@ body{
 
     async start() {
       injectStyles(STYLES);
+      injectStyles(STYLES_TASKS);
       this.root = document.getElementById("app");
       if (!this.root) throw new Error("#app not found");
 
@@ -647,7 +787,7 @@ body{
       this._ui.topbarTitle.textContent = title;
 
       if (path === "/main") return await this.renderMain();
-      if (path === "/tasks") return this.renderStub("Vazifalar (keyingi qismda)"); // Part 2
+      if (path === "/tasks") return await this.renderTasks(); // Part 2
       if (path === "/projects") return this.renderStub("Loyihalar (keyingi qismda)"); // Part 3
       if (path === "/courses") return this.renderStub("Kurslar (keyingi qismda)"); // Part 4
       if (path === "/clients") return this.renderStub("Clients (keyingi qismda)"); // Part 5
@@ -769,6 +909,661 @@ body{
       );
     },
   };
+
+
+  /* =========================
+   PART 2: TASKS KANBAN
+   ========================= */
+
+// расширяем API (не ломая Part 1)
+API.tasks = {
+  list: async (filters = {}) => {
+    const qs = new URLSearchParams();
+    if (filters.assignee_user_id) qs.set("assignee_user_id", String(filters.assignee_user_id));
+    if (filters.project_id) qs.set("project_id", String(filters.project_id));
+    const q = qs.toString();
+    const r = await apiFetch("/api/tasks" + (q ? `?${q}` : ""));
+    return r?.data || [];
+  },
+  get: async (id) => {
+    const r = await apiFetch(`/api/tasks/${id}`);
+    return r?.data || null;
+  },
+  create: async (payload) => {
+    const r = await apiFetch("/api/tasks", { method: "POST", json: payload });
+    return r?.data || null;
+  },
+  update: async (id, payload) => {
+    await apiFetch(`/api/tasks/${id}`, { method: "PUT", json: payload });
+    return true;
+  },
+  move: async (id, payload) => {
+    await apiFetch(`/api/tasks/${id}/move`, { method: "POST", json: payload });
+    return true;
+  },
+  del: async (id) => {
+    await apiFetch(`/api/tasks/${id}/delete`, { method: "POST", json: {} });
+    return true;
+  },
+};
+
+API.usersTryList = async () => {
+  try {
+    const r = await apiFetch("/api/users");
+    return r?.data || [];
+  } catch {
+    return null; // forbidden/ошибка — просто нет списка
+  }
+};
+
+// utils
+function dtLocalToSec(v) {
+  if (!v) return null;
+  const ms = new Date(v).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return Math.floor(ms / 1000);
+}
+function secToDtLocal(sec) {
+  if (!sec) return "";
+  const d = new Date(Number(sec) * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function shortTitle(t) {
+  const title = (t.title && String(t.title).trim()) ? String(t.title).trim() : pickTitleFromDesc(t.description);
+  return title || "—";
+}
+function taskSearchText(t) {
+  const parts = [
+    t.id,
+    t.title,
+    t.description,
+    t.assignee_name,
+    t.project_company_name,
+    t.service_name_uz, t.service_name_ru, t.service_name_en
+  ].map(x => String(x || "").toLowerCase());
+  return parts.join(" ");
+}
+function statusLabelUz(s) {
+  const map = {
+    new: "Yangi",
+    pause: "Pauza",
+    in_progress: "Jarayonda",
+    done: "Tugatildi",
+    canceled: "Otmen",
+  };
+  return map[s] || s;
+}
+function statusDotColor(s){
+  // без хард-цветов из палитры — используем разные оттенки через opacity
+  // (быстро и без “кислоты”)
+  if (s === "new") return "var(--brand)";
+  if (s === "pause") return "rgba(255,255,255,.55)";
+  if (s === "in_progress") return "rgba(16,185,129,.9)";
+  if (s === "done") return "rgba(16,185,129,.65)";
+  if (s === "canceled") return "rgba(241,98,98,.75)";
+  return "var(--brand)";
+}
+
+App.state.tasks = {
+  rows: [],
+  q: "",
+  assignee_user_id: null,
+  project_id: null,
+  users: null, // если доступно
+  loading: false,
+};
+
+App.renderTasks = async function () {
+  this._ui.content.innerHTML = "";
+
+  const S = this.state.tasks;
+
+  // toolbar
+  const qInp = h("input", { class: "input", placeholder: "Qidirish…", value: S.q });
+  const projectInp = h("input", { class: "input", placeholder: "Project ID (ixtiyoriy)", inputmode: "numeric", value: S.project_id || "" });
+
+  const reloadBtn = h("button", { class: "btn" }, "Reload");
+  const createBtn = h("button", { class: "btn btnPrimary" }, "Create task");
+
+  let assSel = null;
+  let assWrap = null;
+
+  // load users list if admin/rop (rop может не иметь доступа — обработаем)
+  if ((this.state.user.role === "admin" || this.state.user.role === "rop") && S.users === null) {
+    S.users = await API.usersTryList(); // null если нет доступа
+  }
+
+  if (S.users && Array.isArray(S.users)) {
+    assSel = h("select", { class: "sel" });
+    assSel.appendChild(h("option", { value: "" }, "Assignee: All"));
+    for (const u of S.users.filter(x => Number(x.is_active) === 1)) {
+      assSel.appendChild(h("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+    }
+    assSel.value = S.assignee_user_id ? String(S.assignee_user_id) : "";
+    assWrap = assSel;
+  } else {
+    // если список юзеров недоступен — показываем только себя (без фильтра)
+    assWrap = h("div", { class: "badge" }, `Assignee: ${this.state.user.full_name}`);
+  }
+
+  const tbar = h("div", { class: "tbar" }, [
+    qInp,
+    projectInp,
+    assWrap,
+    reloadBtn,
+    createBtn,
+  ]);
+
+  const boardHost = h("div", { class: "kwrap" }, [
+    tbar,
+    h("div", { class: "kanban", id: "tasksKanban" }, ""),
+  ]);
+
+  this._ui.content.appendChild(boardHost);
+
+  // events
+  qInp.addEventListener("input", () => {
+    S.q = qInp.value || "";
+    this.tasksRenderBoard();
+  });
+
+  projectInp.addEventListener("change", () => {
+    const v = String(projectInp.value || "").trim();
+    S.project_id = v ? Number(v) : null;
+    this.tasksLoad(true);
+  });
+
+  if (assSel) {
+    assSel.addEventListener("change", () => {
+      const v = String(assSel.value || "").trim();
+      S.assignee_user_id = v ? Number(v) : null;
+      this.tasksLoad(true);
+    });
+  }
+
+  reloadBtn.addEventListener("click", () => this.tasksLoad(true));
+  createBtn.addEventListener("click", () => this.tasksOpenCreate());
+
+  await this.tasksLoad(false);
+};
+
+App.tasksLoad = async function (force) {
+  const S = this.state.tasks;
+  if (S.loading) return;
+  S.loading = true;
+
+  try {
+    const filters = {
+      assignee_user_id: S.assignee_user_id,
+      project_id: S.project_id,
+    };
+    const rows = await API.tasks.list(filters);
+    S.rows = Array.isArray(rows) ? rows : [];
+    this.tasksRenderBoard();
+  } catch (e) {
+    Toast.show("Xato", e.message || "Tasks load error");
+    S.rows = [];
+    this.tasksRenderBoard();
+  } finally {
+    S.loading = false;
+  }
+};
+
+App.tasksRenderBoard = function () {
+  const host = $("#tasksKanban", this.root);
+  if (!host) return;
+
+  const S = this.state.tasks;
+  const q = String(S.q || "").trim().toLowerCase();
+
+  const rows = (S.rows || []).filter(t => {
+    if (!q) return true;
+    return taskSearchText(t).includes(q);
+  });
+
+  const groups = {
+    new: [],
+    pause: [],
+    in_progress: [],
+    done: [],
+    canceled: [],
+  };
+  for (const t of rows) {
+    const s = t.status || "new";
+    (groups[s] || (groups[s] = [])).push(t);
+  }
+
+  host.innerHTML = "";
+
+  const statuses = ["new", "pause", "in_progress", "done", "canceled"];
+
+  for (const st of statuses) {
+    const col = h("div", { class: "kcol", "data-status": st }, [
+      h("div", { class: "kcolHd" }, [
+        h("div", { class: "kcolTitle" }, [
+          h("span", { class: "kdot", style: `background:${statusDotColor(st)}; box-shadow: 0 0 0 6px rgba(255,255,255,.06);` }),
+          h("span", {}, statusLabelUz(st)),
+        ]),
+        h("div", { class: "kcount" }, String((groups[st] || []).length)),
+      ]),
+      h("div", { class: "kcolBd" }, ""),
+    ]);
+
+    // Desktop drag&drop
+    const body = col.querySelector(".kcolBd");
+    col.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      col.classList.add("kdropTarget");
+    });
+    col.addEventListener("dragleave", () => col.classList.remove("kdropTarget"));
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      col.classList.remove("kdropTarget");
+      const id = Number(e.dataTransfer?.getData("text/plain") || 0);
+      if (!id) return;
+      await this.tasksMove(id, st);
+    });
+
+    // render cards
+    for (const t of (groups[st] || [])) {
+      const compact = (st === "done" || st === "canceled");
+      const title = shortTitle(t);
+
+      const desc = compact
+        ? (st === "canceled" ? (t.cancel_reason ? `Sabab: ${t.cancel_reason}` : "") : "")
+        : String(t.description || "").trim();
+
+      const deadline = t.deadline_at ? `DL: ${fmtDateTime(t.deadline_at)}` : "DL: —";
+      const spent = `Spent: ${secToHMS(t.spent_seconds || 0)}`;
+
+      const company = t.project_company_name ? t.project_company_name : "No PR";
+      const service = (t.service_name_uz || t.service_name_ru || t.service_name_en) ? (t.service_name_uz || t.service_name_ru || t.service_name_en) : "";
+
+      const openBtn = h("button", { class: "kbtn primary", type: "button" }, "Open");
+
+      const card = h("div", {
+        class: "kcard" + (compact ? " compact" : ""),
+        draggable: "true",
+        "data-id": String(t.id),
+        "data-status": String(t.status),
+      }, [
+        h("div", { class: "ktitle" }, title + ` (#${t.id})`),
+        desc ? h("div", { class: "kdesc" }, desc) : null,
+        h("div", { class: "kmeta" }, [
+          h("span", { class: "kbadge" }, `👤 ${t.assignee_name || "—"}`),
+          h("span", { class: "kbadge" }, `🏢 ${company}`),
+          service ? h("span", { class: "kbadge" }, `🧩 ${service}`) : null,
+          h("span", { class: "kbadge" }, deadline),
+          h("span", { class: "kbadge" }, spent),
+        ]),
+        h("div", { class: "kactions" }, [openBtn]),
+      ]);
+
+      // only Open button opens modal (карточка кликом не открывается)
+      openBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.tasksOpenView(t.id);
+      });
+
+      // Desktop dragstart
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", String(t.id));
+        e.dataTransfer.effectAllowed = "move";
+      });
+
+      // Mobile “hold & drag”
+      this._bindTouchDrag(card);
+
+      body.appendChild(card);
+    }
+
+    host.appendChild(col);
+  }
+};
+
+// Mobile drag helper (pointer)
+App._bindTouchDrag = function (cardEl) {
+  let pressTimer = null;
+  let dragging = false;
+  let ghost = null;
+  let startX = 0, startY = 0;
+
+  const cleanup = () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+    dragging = false;
+    if (ghost) ghost.remove();
+    ghost = null;
+    for (const c of $$(".kcol", this.root)) c.classList.remove("kdropTarget");
+  };
+
+  const onMove = (e) => {
+    if (!dragging || !ghost) return;
+    e.preventDefault();
+    const x = e.clientX, y = e.clientY;
+    ghost.style.left = x + "px";
+    ghost.style.top = y + "px";
+
+    const el = document.elementFromPoint(x, y);
+    const col = el ? el.closest(".kcol") : null;
+    for (const c of $$(".kcol", this.root)) c.classList.toggle("kdropTarget", c === col);
+  };
+
+  const onUp = async (e) => {
+    if (!dragging) { cleanup(); return; }
+    e.preventDefault();
+
+    const x = e.clientX, y = e.clientY;
+    const el = document.elementFromPoint(x, y);
+    const col = el ? el.closest(".kcol") : null;
+    const status = col ? col.getAttribute("data-status") : null;
+
+    const id = Number(cardEl.getAttribute("data-id") || 0);
+
+    cleanup();
+
+    if (id && status) {
+      await this.tasksMove(id, status);
+    }
+  };
+
+  cardEl.addEventListener("pointerdown", (e) => {
+    // не трогаем мышь — там норм HTML5 drag
+    if (e.pointerType === "mouse") return;
+
+    // если нажали на кнопку — не начинаем drag
+    if (e.target && (e.target.closest("button") || e.target.closest("input") || e.target.closest("select"))) return;
+
+    startX = e.clientX; startY = e.clientY;
+
+    pressTimer = setTimeout(() => {
+      dragging = true;
+      ghost = cardEl.cloneNode(true);
+      ghost.classList.add("dragGhost");
+      ghost.style.left = startX + "px";
+      ghost.style.top = startY + "px";
+      document.body.appendChild(ghost);
+
+      cardEl.setPointerCapture(e.pointerId);
+      cardEl.addEventListener("pointermove", onMove, { passive: false });
+      cardEl.addEventListener("pointerup", onUp, { passive: false });
+      cardEl.addEventListener("pointercancel", onUp, { passive: false });
+    }, 180);
+  });
+
+  cardEl.addEventListener("pointerup", () => cleanup());
+  cardEl.addEventListener("pointercancel", () => cleanup());
+};
+
+App.tasksMove = async function (id, targetStatus) {
+  const S = this.state.tasks;
+  const t = (S.rows || []).find(x => Number(x.id) === Number(id));
+  if (!t) return;
+
+  // permission for start
+  if (targetStatus === "in_progress") {
+    const canStart = (this.state.user.role === "admin" || this.state.user.role === "rop" || Number(t.assignee_user_id) === Number(this.state.user.id));
+    if (!canStart) {
+      Toast.show("Ruxsat yo‘q", "Faqat mas’ul odam start qila oladi");
+      return;
+    }
+  }
+
+  // cancel needs reason
+  let cancel_reason = null;
+  if (targetStatus === "canceled") {
+    const body = h("div", {}, [
+      h("div", { class: "muted" }, "Otmen uchun sabab kiriting:"),
+      (() => {
+        const inp = h("textarea", { class: "input", style:"min-height:110px", placeholder:"Sabab..." });
+        inp.value = t.cancel_reason ? String(t.cancel_reason) : "";
+        return inp;
+      })(),
+      h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
+        h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
+        h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
+          const ta = $("textarea", Modal.overlay);
+          const reason = String(ta?.value || "").trim();
+          if (!reason) { Toast.show("Xato", "Sabab majburiy"); return; }
+          cancel_reason = reason;
+          Modal.close();
+          await this._tasksMoveCommit(id, targetStatus, cancel_reason);
+        } }, "Otmen"),
+      ]),
+    ]);
+    Modal.open("Cancel task", body);
+    return; // commit внутри модалки
+  }
+
+  await this._tasksMoveCommit(id, targetStatus, cancel_reason);
+};
+
+App._tasksMoveCommit = async function (id, targetStatus, cancel_reason) {
+  const S = this.state.tasks;
+  const t = (S.rows || []).find(x => Number(x.id) === Number(id));
+  if (!t) return;
+
+  try {
+    await API.tasks.move(id, { status: targetStatus, ...(cancel_reason ? { cancel_reason } : {}) });
+
+    const now = Math.floor(Date.now()/1000);
+
+    // local optimistic update + in_progress uniqueness (backend pausing others)
+    if (targetStatus === "in_progress") {
+      for (const x of S.rows) {
+        if (Number(x.assignee_user_id) === Number(t.assignee_user_id) && x.status === "in_progress" && Number(x.id) !== Number(id)) {
+          x.status = "pause";
+          x.updated_at = now;
+        }
+      }
+    }
+    t.status = targetStatus;
+    t.cancel_reason = (targetStatus === "canceled") ? (cancel_reason || t.cancel_reason || "") : null;
+    t.updated_at = now;
+
+    this.tasksRenderBoard();
+    Toast.show("OK", `Moved → ${statusLabelUz(targetStatus)}`);
+  } catch (e) {
+    Toast.show("Xato", e.message || "Move error");
+  }
+};
+
+App.tasksOpenCreate = function () {
+  const S = this.state.tasks;
+  const isAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
+  const users = (S.users && Array.isArray(S.users)) ? S.users.filter(x => Number(x.is_active) === 1) : null;
+
+  const titleInp = h("input", { class:"input", placeholder:"Title (ixtiyoriy)" });
+  const descInp = h("textarea", { class:"input", placeholder:"Description (majburiy)" });
+  const dlInp = h("input", { class:"input", type:"datetime-local" });
+  const prInp = h("input", { class:"input", inputmode:"numeric", placeholder:"Project ID (ixtiyoriy)" });
+
+  let assSel = null;
+  if (isAdminOrRop && users) {
+    assSel = h("select", { class:"sel" });
+    for (const u of users) assSel.appendChild(h("option", { value:String(u.id) }, `${u.full_name} (${u.role})`));
+    assSel.value = String(this.state.user.id);
+  }
+
+  const body = h("div", {}, [
+    h("div", { class:"grid2" }, [
+      h("div", {}, [h("div",{class:"label"},"Title"), titleInp]),
+      h("div", {}, [h("div",{class:"label"},"Deadline"), dlInp]),
+    ]),
+    h("div", { class:"field" }, [h("div",{class:"label"},"Description"), descInp]),
+    h("div", { class:"grid2" }, [
+      h("div", {}, [h("div",{class:"label"},"Project ID"), prInp]),
+      h("div", {}, [
+        h("div",{class:"label"},"Assignee"),
+        assSel ? assSel : h("div",{class:"badge"}, this.state.user.full_name)
+      ]),
+    ]),
+    h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
+      h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
+      h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
+        const description = String(descInp.value || "").trim();
+        if (!description) { Toast.show("Xato", "Description majburiy"); return; }
+
+        const payload = {
+          title: String(titleInp.value || "").trim() || null,
+          description,
+          deadline_at: dtLocalToSec(dlInp.value),
+          project_id: String(prInp.value || "").trim() ? Number(prInp.value) : null,
+          assignee_user_id: assSel ? Number(assSel.value) : Number(App.state.user.id),
+        };
+
+        try {
+          await API.tasks.create(payload);
+          Modal.close();
+          Toast.show("OK", "Task created");
+          await App.tasksLoad(true);
+        } catch (e) {
+          Toast.show("Xato", e.message || "Create error");
+        }
+      }}, "Saqlash"),
+    ]),
+  ]);
+
+  Modal.open("Create task", body);
+};
+
+App.tasksOpenView = async function (id) {
+  try {
+    const t = await API.tasks.get(id);
+    if (!t) { Toast.show("Xato", "Task not found"); return; }
+
+    const canAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
+    const canStart = canAdminOrRop || Number(t.assignee_user_id) === Number(this.state.user.id);
+    const canEdit = canAdminOrRop || Number(t.created_by) === Number(this.state.user.id);
+    const canDelete = canEdit;
+
+    const title = shortTitle(t);
+    const service = (t.service_name_uz || t.service_name_ru || t.service_name_en) ? (t.service_name_uz || t.service_name_ru || t.service_name_en) : "";
+    const company = t.project_company_name ? t.project_company_name : "No PR";
+
+    const info = h("div", {}, [
+      h("div", { class:"card", style:"box-shadow:none" }, [
+        h("div", { class:"cardHd" }, [h("h3", {}, `${title} (#${t.id})`), h("div", { class:"muted" }, statusLabelUz(t.status))]),
+        h("div", { class:"cardBd" }, [
+          h("div", { class:"muted" }, `Assignee: ${t.assignee_name || "—"}`),
+          h("div", { class:"muted", style:"margin-top:6px" }, `Created by: ${t.created_by_name || "—"}`),
+          h("div", { class:"muted", style:"margin-top:6px" }, `Project: ${company} ${service ? "• " + service : ""}`),
+          h("div", { class:"muted", style:"margin-top:6px" }, `Deadline: ${t.deadline_at ? fmtDateTime(t.deadline_at) : "—"}`),
+          h("div", { class:"muted", style:"margin-top:6px" }, `Spent: ${secToHMS(t.spent_seconds || 0)}`),
+          t.cancel_reason ? h("div", { class:"muted", style:"margin-top:6px" }, `Cancel reason: ${t.cancel_reason}`) : null,
+          h("hr"),
+          h("div", { class:"kdesc" }, String(t.description || "").trim() || "—"),
+        ]),
+      ]),
+    ]);
+
+    const btnRow = h("div", { style:"display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:10px" });
+
+    const startBtn = h("button", { class:"btn btnPrimary", type:"button" }, "Start");
+    const pauseBtn = h("button", { class:"btn", type:"button" }, "Pause");
+    const doneBtn  = h("button", { class:"btn", type:"button" }, "Done");
+    const cancelBtn= h("button", { class:"btn btnDanger", type:"button" }, "Cancel");
+    const editBtn  = h("button", { class:"btn", type:"button" }, "Edit");
+    const delBtn   = h("button", { class:"btn btnDanger", type:"button" }, "Delete");
+
+    if (canStart) btnRow.appendChild(startBtn);
+    btnRow.appendChild(pauseBtn);
+    btnRow.appendChild(doneBtn);
+    btnRow.appendChild(cancelBtn);
+    if (canEdit) btnRow.appendChild(editBtn);
+    if (canDelete) btnRow.appendChild(delBtn);
+
+    startBtn.addEventListener("click", async () => { Modal.close(); await this.tasksMove(t.id, "in_progress"); });
+    pauseBtn.addEventListener("click", async () => { Modal.close(); await this.tasksMove(t.id, "pause"); });
+    doneBtn.addEventListener("click",  async () => { Modal.close(); await this.tasksMove(t.id, "done"); });
+    cancelBtn.addEventListener("click",async () => { Modal.close(); await this.tasksMove(t.id, "canceled"); });
+
+    editBtn.addEventListener("click", () => this.tasksOpenEdit(t));
+    delBtn.addEventListener("click", async () => {
+      const body = h("div", {}, [
+        h("div",{class:"muted"},`Delete task #${t.id}?`),
+        h("div",{style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px"},[
+          h("button",{class:"btn",type:"button",onclick:()=>Modal.close()},"Bekor"),
+          h("button",{class:"btn btnDanger",type:"button",onclick:async ()=>{
+            try{
+              await API.tasks.del(t.id);
+              Modal.close();
+              Toast.show("OK","Deleted");
+              await App.tasksLoad(true);
+            }catch(e){
+              Toast.show("Xato", e.message || "Delete error");
+            }
+          }},"Delete"),
+        ])
+      ]);
+      Modal.open("Delete", body);
+    });
+
+    const wrap = h("div", {}, [info, btnRow]);
+    Modal.open("Task", wrap);
+
+  } catch (e) {
+    Toast.show("Xato", e.message || "Task load error");
+  }
+};
+
+App.tasksOpenEdit = function (taskFull) {
+  const S = this.state.tasks;
+  const canAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
+  const users = (S.users && Array.isArray(S.users)) ? S.users.filter(x => Number(x.is_active) === 1) : null;
+
+  const titleInp = h("input", { class:"input", value: String(taskFull.title || "") });
+  const descInp  = h("textarea", { class:"input" }, String(taskFull.description || ""));
+  const dlInp    = h("input", { class:"input", type:"datetime-local", value: secToDtLocal(taskFull.deadline_at) });
+  const prInp    = h("input", { class:"input", inputmode:"numeric", value: taskFull.project_id ? String(taskFull.project_id) : "" });
+
+  let assSel = null;
+  if (canAdminOrRop && users) {
+    assSel = h("select", { class:"sel" });
+    for (const u of users) assSel.appendChild(h("option", { value:String(u.id) }, `${u.full_name} (${u.role})`));
+    assSel.value = String(taskFull.assignee_user_id);
+  }
+
+  const body = h("div", {}, [
+    h("div", { class:"grid2" }, [
+      h("div", {}, [h("div",{class:"label"},"Title"), titleInp]),
+      h("div", {}, [h("div",{class:"label"},"Deadline"), dlInp]),
+    ]),
+    h("div", { class:"field" }, [h("div",{class:"label"},"Description"), descInp]),
+    h("div", { class:"grid2" }, [
+      h("div", {}, [h("div",{class:"label"},"Project ID"), prInp]),
+      h("div", {}, [h("div",{class:"label"},"Assignee"), assSel ? assSel : h("div",{class:"badge"}, taskFull.assignee_name || "—")]),
+    ]),
+    h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
+      h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
+      h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
+        const description = String(descInp.value || "").trim();
+        if (!description) { Toast.show("Xato","Description majburiy"); return; }
+
+        const payload = {
+          title: String(titleInp.value || "").trim() || null,
+          description,
+          deadline_at: dtLocalToSec(dlInp.value),
+          project_id: String(prInp.value || "").trim() ? Number(prInp.value) : null,
+        };
+        if (assSel) payload.assignee_user_id = Number(assSel.value);
+
+        try {
+          await API.tasks.update(taskFull.id, payload);
+          Modal.close();
+          Toast.show("OK","Saved");
+          await App.tasksLoad(true);
+        } catch (e) {
+          Toast.show("Xato", e.message || "Save error");
+        }
+      }}, "Saqlash"),
+    ]),
+  ]);
+
+  Modal.open("Edit task", body);
+};
+
 
   // Boot
   document.addEventListener("DOMContentLoaded", () => {
