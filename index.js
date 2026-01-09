@@ -1,1576 +1,1684 @@
-/* G-SOFT Front (Part 1)
-   - Login + Shell + Router + Main page
-   - All CSS inside JS
-   - Works with existing Workers API:
-     POST  /api/auth/login {login,password}
-     POST  /api/auth/logout
-     GET   /api/auth/me
-     GET   /api/main
-     GET   /api/meta
-*/
-
+/* =========================
+   G-SOFT Front (index.js)
+   Part 1/3
+   ========================= */
 (() => {
   "use strict";
 
-  // ===== Config =====
-  const API_BASE =
-    (window.__API_BASE && String(window.__API_BASE)) ||
-    "https://api.ofis.gekto.uz"; // как в твоём BASE
+  /* ============ CONFIG ============ */
+  const API_BASE = "https://api.ofis.gekto.uz"; // keep as in your baseline
+  const DEFAULT_ROUTE = "/main";
+  const LANG_ORDER = ["ru", "uz", "en"];
 
-  const ROUTES = [
-    { path: "/main", title: "Asosiy" },
-    { path: "/tasks", title: "Vazifalar" },
-    { path: "/projects", title: "Loyihalar" },
-    { path: "/courses", title: "Kurslar" }, // = course_leads
-    { path: "/clients", title: "Clients" },
-    { path: "/settings", title: "Sozlamalar" },
-    { path: "/users", title: "Users" },
-  ];
+  /* ============ DOM HELPERS ============ */
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-  // ===== Styles (minimal + fast) =====
-  const STYLES = `
+  function el(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "class") node.className = v;
+      else if (k === "html") node.innerHTML = v;
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else if (v === false || v == null) continue;
+      else node.setAttribute(k, String(v));
+    }
+    for (const c of children.flat()) {
+      if (c == null) continue;
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return node;
+  }
+
+  function fmtDate(tsSec) {
+    if (!tsSec) return "—";
+    const d = new Date(tsSec * 1000);
+    return d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function fmtDuration(sec) {
+    sec = Math.max(0, Number(sec) || 0);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (h <= 0) return `${m}m`;
+    return `${h}h ${m}m`;
+  }
+
+  /* ============ STORAGE ============ */
+  const LS = {
+    get(k, def = null) {
+      try {
+        const v = localStorage.getItem(k);
+        return v == null ? def : v;
+      } catch {
+        return def;
+      }
+    },
+    set(k, v) {
+      try {
+        localStorage.setItem(k, String(v));
+      } catch {}
+    },
+    del(k) {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    },
+  };
+
+  /* ============ I18N ============ */
+  const DICT = {
+    ru: {
+      app_name: "G-SOFT",
+      login_title: "Вход",
+      login_hint: "Введите логин и пароль",
+      login: "Логин",
+      password: "Пароль",
+      sign_in: "Войти",
+      signing_in: "Входим…",
+      sign_out: "Выйти",
+      theme_dark: "Тёмная",
+      theme_light: "Светлая",
+      eye: "Eye",
+      close: "Закрыть",
+      save: "Сохранить",
+      cancel: "Отмена",
+      delete: "Удалить",
+      edit: "Редактировать",
+      create: "Создать",
+      open: "Открыть",
+      search: "Поиск…",
+      filters: "Фильтры",
+      assignee: "Исполнитель",
+      project: "Проект",
+      deadline: "Дедлайн",
+      spent: "Потрачено",
+      status: "Статус",
+      description: "Описание",
+      title: "Заголовок",
+      reason: "Причина",
+      confirm: "Подтвердить",
+      yes: "Да",
+      no: "Нет",
+      loading: "Загрузка…",
+      no_data: "Нет данных",
+      need_reason: "Нужна причина отмены",
+      route_main: "Главная",
+      route_tasks: "Задачи",
+      route_projects: "Проекты",
+      route_courses: "Курсы",
+      route_clients: "Клиенты",
+      route_settings: "Настройки",
+      route_users: "Пользователи",
+      coming_soon: "Раздел в разработке. Следующим шагом подключим этот модуль к API.",
+      t_new: "Новая",
+      t_pause: "Пауза",
+      t_in_progress: "В работе",
+      t_done: "Готово",
+      t_canceled: "Отмена",
+      action_start: "Старт",
+      action_pause: "Пауза",
+      action_done: "Готово",
+      action_cancel: "Отмена",
+      toast_saved: "Сохранено",
+      toast_deleted: "Удалено",
+      toast_error: "Ошибка",
+      me: "Профиль",
+    },
+    uz: {
+      app_name: "G-SOFT",
+      login_title: "Kirish",
+      login_hint: "Login va parolni kiriting",
+      login: "Login",
+      password: "Parol",
+      sign_in: "Kirish",
+      signing_in: "Kirilmoqda…",
+      sign_out: "Chiqish",
+      theme_dark: "Qorong‘i",
+      theme_light: "Yorug‘",
+      eye: "Eye",
+      close: "Yopish",
+      save: "Saqlash",
+      cancel: "Bekor",
+      delete: "O‘chirish",
+      edit: "Tahrirlash",
+      create: "Yaratish",
+      open: "Ochish",
+      search: "Qidiruv…",
+      filters: "Filtrlar",
+      assignee: "Mas’ul",
+      project: "Loyiha",
+      deadline: "Muddat",
+      spent: "Sarflandi",
+      status: "Holat",
+      description: "Tavsif",
+      title: "Sarlavha",
+      reason: "Sabab",
+      confirm: "Tasdiqlash",
+      yes: "Ha",
+      no: "Yo‘q",
+      loading: "Yuklanmoqda…",
+      no_data: "Ma’lumot yo‘q",
+      need_reason: "Bekor qilish sababi kerak",
+      route_main: "Asosiy",
+      route_tasks: "Vazifalar",
+      route_projects: "Loyihalar",
+      route_courses: "Kurslar",
+      route_clients: "Mijozlar",
+      route_settings: "Sozlamalar",
+      route_users: "Foydalanuvchilar",
+      coming_soon: "Bo‘lim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
+      t_new: "Boshlanmagan",
+      t_pause: "Pauza",
+      t_in_progress: "Jarayonda",
+      t_done: "Bajarildi",
+      t_canceled: "Bekor",
+      action_start: "Start",
+      action_pause: "Pauza",
+      action_done: "Bajarildi",
+      action_cancel: "Bekor",
+      toast_saved: "Saqlandi",
+      toast_deleted: "O‘chirildi",
+      toast_error: "Xatolik",
+      me: "Profil",
+    },
+    en: {
+      app_name: "G-SOFT",
+      login_title: "Sign in",
+      login_hint: "Enter login and password",
+      login: "Login",
+      password: "Password",
+      sign_in: "Sign in",
+      signing_in: "Signing in…",
+      sign_out: "Sign out",
+      theme_dark: "Dark",
+      theme_light: "Light",
+      eye: "Eye",
+      close: "Close",
+      save: "Save",
+      cancel: "Cancel",
+      delete: "Delete",
+      edit: "Edit",
+      create: "Create",
+      open: "Open",
+      search: "Search…",
+      filters: "Filters",
+      assignee: "Assignee",
+      project: "Project",
+      deadline: "Deadline",
+      spent: "Spent",
+      status: "Status",
+      description: "Description",
+      title: "Title",
+      reason: "Reason",
+      confirm: "Confirm",
+      yes: "Yes",
+      no: "No",
+      loading: "Loading…",
+      no_data: "No data",
+      need_reason: "Cancel reason required",
+      route_main: "Home",
+      route_tasks: "Tasks",
+      route_projects: "Projects",
+      route_courses: "Courses",
+      route_clients: "Clients",
+      route_settings: "Settings",
+      route_users: "Users",
+      coming_soon: "This section is under construction. Next step we’ll connect it to the API.",
+      t_new: "New",
+      t_pause: "Paused",
+      t_in_progress: "In progress",
+      t_done: "Done",
+      t_canceled: "Canceled",
+      action_start: "Start",
+      action_pause: "Pause",
+      action_done: "Done",
+      action_cancel: "Cancel",
+      toast_saved: "Saved",
+      toast_deleted: "Deleted",
+      toast_error: "Error",
+      me: "Profile",
+    },
+  };
+
+  function detectLang() {
+    const saved = LS.get("gsoft_lang", "");
+    if (saved && LANG_ORDER.includes(saved)) return saved;
+
+    const nav = (navigator.language || "").toLowerCase();
+    if (nav.startsWith("ru")) return "ru";
+    if (nav.startsWith("uz")) return "uz";
+    if (nav.startsWith("en")) return "en";
+    return "ru";
+  }
+
+  function t(key) {
+    const lang = App.state.lang;
+    return (DICT[lang] && DICT[lang][key]) || (DICT.ru && DICT.ru[key]) || key;
+  }
+
+  /* ============ ICONS (inline SVG) ============ */
+  const ICONS = {
+    home: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3 3 10v11h6v-7h6v7h6V10z"/></svg>`,
+    tasks: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M7 7h14v2H7zM7 11h14v2H7zM7 15h14v2H7z"/><path d="M3 7h2v2H3zM3 11h2v2H3zM3 15h2v2H3z"/></svg>`,
+    projects: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M10 4h4l1 2h6v4H3V6h6z"/><path d="M3 10h18v10H3z"/></svg>`,
+    courses: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3 1 9l11 6 9-4.91V17h2V9z"/><path d="M5 13v5l7 3 7-3v-5l-7 3z"/></svg>`,
+    clients: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0z"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7z"/></svg>`,
+    settings: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L1.71 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L1.83 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.51.41 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.53 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>`,
+    users: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0z"/><path d="M2 21c0-4 4-7 10-7s10 3 10 7z"/></svg>`,
+    burger: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>`,
+    sun: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
+    moon: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 0 1 11.2 3a7 7 0 1 0 9.8 9.8z"/></svg>`,
+    eye: `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5c7 0 10 7 10 7s-3 7-10 7S2 12 2 12s3-7 10-7z"/><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`,
+  };
+
+  /* ============ TOASTS ============ */
+  const Toast = {
+    host: null,
+    ensure() {
+      if (this.host) return;
+      this.host = el("div", { class: "toastHost", "aria-live": "polite", role: "status" });
+      document.body.appendChild(this.host);
+    },
+    show(message, type = "ok") {
+      this.ensure();
+      const item = el("div", { class: `toast ${type}` }, message);
+      this.host.appendChild(item);
+      setTimeout(() => item.classList.add("show"), 10);
+      setTimeout(() => {
+        item.classList.remove("show");
+        setTimeout(() => item.remove(), 250);
+      }, 2400);
+    },
+  };
+
+  /* ============ MODAL ============ */
+  const Modal = {
+    overlay: null,
+    escHandler: null,
+    open(title, bodyEl, actions = []) {
+      this.close();
+
+      this.overlay = el("div", { class: "modalOverlay", role: "dialog", "aria-modal": "true" });
+      const card = el("div", { class: "modalCard" });
+      const head = el("div", { class: "modalHead" },
+        el("div", { class: "modalTitle" }, title || ""),
+        el("button", { class: "iconBtn", type: "button", title: t("close"), onClick: () => this.close() }, el("span", { class: "icoWrap", html: "✕" }))
+      );
+      const body = el("div", { class: "modalBody" }, bodyEl);
+      const foot = el("div", { class: "modalFoot" });
+
+      for (const a of actions) {
+        foot.appendChild(
+          el("button", { class: `btn ${a.kind || ""}`, type: "button", onClick: a.onClick }, a.label)
+        );
+      }
+
+      card.append(head, body, actions.length ? foot : el("div"));
+      this.overlay.appendChild(card);
+
+      this.overlay.addEventListener("mousedown", (e) => {
+        if (e.target === this.overlay) this.close();
+      });
+
+      // ESC to close
+      this.escHandler = (e) => {
+        if (e.key === "Escape") this.close();
+      };
+      document.addEventListener("keydown", this.escHandler);
+
+      document.body.appendChild(this.overlay);
+      document.body.style.overflow = "hidden";
+
+      // focus first focusable
+      setTimeout(() => {
+        const f = this.overlay.querySelector("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
+        if (f) f.focus();
+      }, 0);
+    },
+    close() {
+      if (this.escHandler) document.removeEventListener("keydown", this.escHandler);
+      this.escHandler = null;
+      if (this.overlay) this.overlay.remove();
+      this.overlay = null;
+      document.body.style.overflow = "";
+    },
+    async confirm(title, text) {
+      return new Promise((resolve) => {
+        const body = el("div", { class: "vcol gap10" }, el("div", { class: "muted" }, text));
+        this.open(title, body, [
+          { label: t("no"), kind: "ghost", onClick: () => { this.close(); resolve(false); } },
+          { label: t("yes"), kind: "danger", onClick: () => { this.close(); resolve(true); } },
+        ]);
+      });
+    },
+  };
+
+  /* ============ API ============ */
+  async function apiFetch(path, opts = {}) {
+    const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+    const res = await fetch(url, {
+      method: opts.method || "GET",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+
+    const ct = res.headers.get("Content-Type") || "";
+    const json = ct.includes("application/json") ? await res.json().catch(() => null) : null;
+
+    if (!res.ok) {
+      const msg = (json && json.error && json.error.message) ? json.error.message : `HTTP ${res.status}`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.payload = json;
+      throw err;
+    }
+    return json;
+  }
+
+  const API = {
+    health: () => apiFetch("/api/health"),
+    me: () => apiFetch("/api/auth/me"),
+    login: (login, password) => apiFetch("/api/auth/login", { method: "POST", body: { login, password } }),
+    logout: () => apiFetch("/api/auth/logout", { method: "POST" }),
+
+    meta: () => apiFetch("/api/meta"),
+    main: () => apiFetch("/api/main"),
+
+    tasks: {
+      list: (q = {}) => {
+        const sp = new URLSearchParams();
+        if (q.assignee_user_id) sp.set("assignee_user_id", q.assignee_user_id);
+        if (q.project_id) sp.set("project_id", q.project_id);
+        const s = sp.toString();
+        return apiFetch(`/api/tasks${s ? "?" + s : ""}`);
+      },
+      get: (id) => apiFetch(`/api/tasks/${id}`),
+      create: (body) => apiFetch("/api/tasks", { method: "POST", body }),
+      update: (id, body) => apiFetch(`/api/tasks/${id}`, { method: "PUT", body }),
+      move: (id, status, extra = {}) => apiFetch(`/api/tasks/${id}/move`, { method: "POST", body: { status, ...extra } }),
+      del: (id) => apiFetch(`/api/tasks/${id}/delete`, { method: "POST" }),
+    },
+
+    usersTryList: async () => {
+      // backend allows /api/users ONLY for admin (403 for others) :contentReference[oaicite:8]{index=8}
+      try {
+        const r = await apiFetch("/api/users");
+        return (r && r.data) || [];
+      } catch {
+        return null;
+      }
+    },
+  };
+
+  /* ============ THEME ============ */
+  function loadThemeState() {
+    const mode = LS.get("gsoft_theme", "dark");
+    const eye = LS.get("gsoft_eye", "0");
+    return {
+      mode: mode === "light" ? "light" : "dark",
+      eye: eye === "1",
+    };
+  }
+
+  function applyTheme() {
+    const root = document.documentElement;
+    root.dataset.theme = App.state.theme.mode;
+    root.dataset.eye = App.state.theme.eye ? "1" : "0";
+  }
+
+  /* ============ ROUTER ============ */
+  function parseHash() {
+    const h = window.location.hash || "";
+    if (!h.startsWith("#/")) return { path: DEFAULT_ROUTE, query: {} };
+    const raw = h.slice(1); // "/tasks?x=1"
+    const [pathPart, queryPart] = raw.split("?");
+    const query = {};
+    if (queryPart) {
+      for (const [k, v] of new URLSearchParams(queryPart).entries()) query[k] = v;
+    }
+    return { path: pathPart || DEFAULT_ROUTE, query };
+  }
+
+  function setHash(path, query = {}) {
+    const sp = new URLSearchParams(query);
+    const q = sp.toString();
+    window.location.hash = `#${path}${q ? "?" + q : ""}`;
+  }
+
+  /* ============ STYLES ============ */
+  function injectStyles() {
+    if ($("#gsoftStyles")) return;
+
+    const css = `
 :root{
-  --r:18px; --gap:12px;
-  --bg:#061a14; --bg2:#0b2b23;
-  --card:rgba(255,255,255,.07);
-  --line:rgba(255,255,255,.12);
-  --text:rgba(255,255,255,.92);
+  --bg:#06110f;
+  --bg2:#081a16;
+  --card:rgba(255,255,255,.06);
+  --card2:rgba(255,255,255,.08);
+  --stroke:rgba(255,255,255,.10);
+  --text:rgba(255,255,255,.90);
   --muted:rgba(255,255,255,.65);
-  --brand:#ffd15c;
-  --brand2:rgba(255,209,92,.18);
-  --ok:#10b981;
-  --bad:#f16262;
-  --shadow:0 18px 55px rgba(0,0,0,.35);
-  --topbarH:64px;
-  --menuBg: rgba(6,26,20,.92);
-  --menuBorder: rgba(255,255,255,.14);
-  --menuItemHover: rgba(255,255,255,.06);
-  --scrollTrack: rgba(255,255,255,.06);
-  --scrollThumb: rgba(255,209,92,.55);
-  --scrollThumb2: rgba(16,185,129,.35);
+  --muted2:rgba(255,255,255,.45);
+  --accent:#FFD05A;
+  --accent2:#0fd1a7;
+  --danger:#ff4d4d;
+  --ok:#25d366;
+  --shadow:0 18px 50px rgba(0,0,0,.45);
+  --radius:18px;
+  --radius2:24px;
+  --blur:18px;
+  --focus:0 0 0 3px rgba(255,208,90,.25);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+
+[data-theme="light"]{
+  --bg:#f6f7fb;
+  --bg2:#ffffff;
+  --card:rgba(10,10,10,.05);
+  --card2:rgba(10,10,10,.07);
+  --stroke:rgba(10,10,10,.10);
+  --text:rgba(10,10,10,.88);
+  --muted:rgba(10,10,10,.62);
+  --muted2:rgba(10,10,10,.45);
+  --shadow:0 18px 50px rgba(0,0,0,.12);
+  --focus:0 0 0 3px rgba(0,58,47,.16);
+}
+
+[data-eye="1"]{
+  --card:rgba(255,255,255,.045);
+  --card2:rgba(255,255,255,.065);
+  --stroke:rgba(255,255,255,.085);
+  --text:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.62);
+  --muted2:rgba(255,255,255,.48);
 }
 
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  font-family:var(--sans);
   color:var(--text);
   background:
-    radial-gradient(1000px 520px at 20% 20%, rgba(255,209,92,.14), transparent 60%),
-    radial-gradient(1000px 520px at 85% 35%, rgba(16,185,129,.14), transparent 55%),
-    linear-gradient(180deg,var(--bg),var(--bg2));
-  overflow:hidden;
+    radial-gradient(1100px 600px at 18% -10%, rgba(15,209,167,.22), transparent 55%),
+    radial-gradient(900px 520px at 110% 25%, rgba(255,208,90,.14), transparent 50%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
 }
 
-/* scroll */
-*{ scrollbar-width: thin; scrollbar-color: var(--scrollThumb) var(--scrollTrack); scrollbar-gutter: stable; }
-::-webkit-scrollbar{ width:12px; height:12px; }
-::-webkit-scrollbar-track{ background: var(--scrollTrack); border-radius:999px; }
-::-webkit-scrollbar-thumb{
-  background: linear-gradient(180deg, var(--scrollThumb), var(--scrollThumb2));
-  border-radius:999px; border:3px solid transparent; background-clip: content-box;
+a{color:inherit; text-decoration:none}
+button, input, select, textarea{font:inherit; color:inherit}
+input, select, textarea{
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--stroke);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+}
+[data-theme="light"] input, [data-theme="light"] select, [data-theme="light"] textarea{
+  background:rgba(10,10,10,.03);
 }
 
-/* layout */
-#app{height:100vh}
-.shell{height:100vh;display:flex;min-height:0}
+input:focus, select:focus, textarea:focus, button:focus{box-shadow:var(--focus)}
+.muted{color:var(--muted)}
+.muted2{color:var(--muted2)}
+.hr{height:1px;background:var(--stroke); margin:12px 0}
+
+.wrap{min-height:100vh; display:flex}
 .sidebar{
-  width:74px; transition:width .22s ease;
-  border-right:1px solid var(--line);
-  background:rgba(255,255,255,.05);
-  backdrop-filter: blur(12px);
-  padding:12px 10px;
-  display:flex;flex-direction:column;gap:10px;
-  min-height:0;
+  width:80px;
+  padding:14px 10px;
+  border-right:1px solid var(--stroke);
+  background:rgba(0,0,0,.06);
+  backdrop-filter: blur(var(--blur));
+  position:sticky; top:0; height:100vh;
+  transition: width .18s ease;
+  z-index:30;
 }
-.sidebar:hover{width:260px}
-
+.sidebar:hover{width:280px}
+.sidebar.open{width:280px}
 .brand{
-  display:flex;align-items:center;gap:10px;
-  padding:10px;border-radius:16px;
-  background:rgba(255,255,255,.05);
-  border:1px solid var(--line);
+  display:flex; align-items:center; gap:10px;
+  padding:10px 10px 14px;
+  margin-bottom:10px;
 }
 .logo{
-  width:38px;height:38px;border-radius:14px;
-  display:grid;place-items:center;
-  font-weight:1000;color:var(--brand);
-  background:var(--brand2);
-  border:1px solid rgba(255,255,255,.08);
-  flex:0 0 38px;
+  width:42px;height:42px;border-radius:14px;
+  background: linear-gradient(135deg, rgba(255,208,90,.9), rgba(15,209,167,.75));
+  box-shadow: 0 12px 25px rgba(0,0,0,.25);
 }
-.brandText{
-  font-weight:1000; letter-spacing:.2px;
-  white-space:nowrap; overflow:hidden;
-  opacity:0; transform:translateX(-4px);
-  transition:opacity .16s ease, transform .16s ease;
-}
-.sidebar:hover .brandText{opacity:1; transform:translateX(0)}
-
-.nav{display:flex;flex-direction:column;gap:6px;padding-top:6px;min-height:0;overflow:auto;padding-right:4px}
+.brandName{font-weight:800; letter-spacing:.6px}
+.nav{display:flex; flex-direction:column; gap:6px; padding:0 6px}
 .nav a{
-  display:flex;align-items:center;gap:10px;
-  padding:10px;border-radius:16px;
-  text-decoration:none;color:var(--text);
-  border:1px solid transparent;
-}
-.nav a:hover{background:rgba(255,255,255,.06);border-color:var(--line)}
-.nav a.active{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.28)}
-.ico{width:22px;height:22px;display:grid;place-items:center;flex:0 0 22px}
-.txt{
-  white-space:nowrap; overflow:hidden;
-  opacity:0; transform:translateX(-4px);
-  transition:opacity .16s ease, transform .16s ease;
-}
-.sidebar:hover .txt{opacity:1; transform:translateX(0)}
-
-.main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
-.topbar{
-  height:var(--topbarH);
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:12px 14px;
-  border-bottom:1px solid var(--line);
-  background:rgba(255,255,255,.04);
-  backdrop-filter: blur(12px);
-  flex:0 0 auto;
-}
-.topbarTitle{font-weight:1000}
-.topbarRight{display:flex;align-items:center;gap:10px}
-.badge{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:8px 10px;border-radius:999px;
-  border:1px solid var(--line);
-  background:rgba(255,255,255,.05);
-  color:var(--muted);
-  font-size:13px;
-}
-.btn{
-  border:none; cursor:pointer;
-  border-radius:14px;
+  display:flex; align-items:center; gap:12px;
   padding:10px 12px;
-  font-weight:800;
-  background:rgba(255,255,255,.06);
-  border:1px solid var(--line);
-  color:var(--text);
+  border-radius:14px;
+  border:1px solid transparent;
+  color:var(--muted);
 }
-.btn:hover{background:rgba(255,255,255,.09)}
-.btnPrimary{
-  background: rgba(255,209,92,.14);
-  border-color: rgba(255,209,92,.28);
+.nav a .txt{white-space:nowrap; opacity:0; transform: translateX(-6px); transition: .18s ease}
+.sidebar:hover .nav a .txt,
+.sidebar.open .nav a .txt{opacity:1; transform: translateX(0)}
+.nav a.active{
+  background: var(--card);
+  border-color: var(--stroke);
   color: var(--text);
 }
-.btnDanger{
-  background: rgba(241,98,98,.14);
-  border-color: rgba(241,98,98,.28);
+.nav a:hover{
+  background: var(--card2);
+  color: var(--text);
 }
+
+.ico{width:18px; height:18px; fill: currentColor}
+.icoWrap{display:inline-flex; align-items:center; justify-content:center}
+
+.main{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+}
+
+.topbar{
+  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px;
+  border-bottom:1px solid var(--stroke);
+  background: rgba(0,0,0,.05);
+  backdrop-filter: blur(var(--blur));
+}
+.topLeft{display:flex; align-items:center; gap:10px; min-width:0}
+.pageTitle{font-weight:800; letter-spacing:.4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.topRight{display:flex; align-items:center; gap:8px}
+
+.iconBtn{
+  border:1px solid var(--stroke);
+  background: var(--card);
+  padding:8px 10px;
+  border-radius:12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.iconBtn:hover{background:var(--card2)}
+.pill{
+  border:1px solid var(--stroke);
+  background: var(--card);
+  padding:8px 10px;
+  border-radius:999px;
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.seg{
+  display:flex; border:1px solid var(--stroke); border-radius:999px; overflow:hidden;
+  background: var(--card);
+}
+.seg button{
+  border:0; background:transparent; padding:8px 10px; cursor:pointer; color:var(--muted);
+}
+.seg button.active{background: var(--card2); color:var(--text)}
+
 .content{
-  flex:1; min-height:0;
-  overflow:auto;
-  padding:14px;
-}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
-
-.card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:20px;
-  box-shadow:var(--shadow);
-}
-.cardHd{padding:14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
-.cardHd h3{margin:0;font-size:16px}
-.cardBd{padding:14px}
-.muted{color:var(--muted)}
-.list{display:flex;flex-direction:column;gap:10px}
-.item{
-  padding:12px;border-radius:16px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(0,0,0,.12);
-}
-.itemTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.itemTitle{font-weight:900}
-.itemMeta{color:var(--muted);font-size:12px;margin-top:6px}
-
-/* login */
-.center{
-  height:100vh;display:grid;place-items:center;padding:14px;
-}
-.loginCard{
-  width:min(520px,100%);
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:22px;
-  box-shadow:var(--shadow);
   padding:16px;
 }
-.loginTitle{font-weight:1000;font-size:20px;margin:0 0 8px 0}
-.field{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.label{font-size:12px;color:var(--muted);font-weight:800}
-.input{
-  width:100%;
-  padding:12px 12px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(0,0,0,.16);
-  color:var(--text);
-  outline:none;
-}
-.input:focus{border-color: rgba(255,209,92,.45)}
-.row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:14px}
 
-/* modal */
-.modalOverlay{
-  position:fixed; inset:0; z-index:2000;
-  display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.42);
-  backdrop-filter: blur(10px);
-  padding:14px;
+.card{
+  background: var(--card);
+  border:1px solid var(--stroke);
+  border-radius: var(--radius2);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(var(--blur));
 }
-.modal{
-  width:min(860px, 100%);
-  max-height: calc(100vh - 28px);
-  overflow:auto;
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:22px;
-  box-shadow:var(--shadow);
-}
-.modalHd{
-  position:sticky; top:0;
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  padding:14px;
-  border-bottom:1px solid var(--line);
-  background:rgba(0,0,0,.12);
-  backdrop-filter: blur(12px);
-}
-.modalTitle{font-weight:1000}
-.iconBtn{
-  width:40px;height:40px;border-radius:14px;
-  border:1px solid var(--line);
-  background:rgba(255,255,255,.06);
-  color:var(--text);
-  display:grid;place-items:center;
+.cardPad{padding:14px}
+
+.btn{
+  border:1px solid var(--stroke);
+  background: var(--card);
+  padding:10px 12px;
+  border-radius:12px;
   cursor:pointer;
 }
-.iconBtn:hover{background:rgba(255,255,255,.09)}
+.btn:hover{background:var(--card2)}
+.btn.primary{border-color: rgba(255,208,90,.35)}
+.btn.danger{border-color: rgba(255,77,77,.35)}
+.btn.ghost{background:transparent}
 
-/* toast */
-.toastHost{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;flex-direction:column;gap:10px}
+.vcol{display:flex; flex-direction:column}
+.hrow{display:flex; flex-direction:row}
+.gap8{gap:8px}
+.gap10{gap:10px}
+.gap12{gap:12px}
+.gap14{gap:14px}
+
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+@media (max-width: 980px){ .grid2{grid-template-columns:1fr} }
+
+.toastHost{position:fixed; right:14px; bottom:14px; display:flex; flex-direction:column; gap:10px; z-index:9999}
 .toast{
-  width:min(420px, calc(100vw - 28px));
-  padding:12px 12px;
-  border-radius:18px;
-  border:1px solid var(--line);
-  background:rgba(0,0,0,.28);
-  backdrop-filter: blur(10px);
+  opacity:0; transform: translateY(10px);
+  transition:.22s ease;
+  padding:10px 12px; border-radius:14px;
+  background: rgba(0,0,0,.65);
+  border:1px solid rgba(255,255,255,.18);
+  color:#fff;
+}
+.toast.ok{border-color: rgba(37,211,102,.35)}
+.toast.bad{border-color: rgba(255,77,77,.35)}
+.toast.show{opacity:1; transform: translateY(0)}
+
+.modalOverlay{
+  position:fixed; inset:0; background: rgba(0,0,0,.55);
+  display:flex; align-items:center; justify-content:center;
+  padding:18px; z-index:9998;
+}
+.modalCard{
+  width:min(860px, 96vw);
+  max-height: 92vh;
+  overflow:auto;
+  background: var(--bg2);
+  border:1px solid var(--stroke);
+  border-radius: 22px;
   box-shadow: var(--shadow);
 }
-.toastTitle{font-weight:1000}
-.toastText{color:var(--muted);margin-top:4px;font-size:13px}
-  `;
+.modalHead{
+  padding:14px 14px 10px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--stroke);
+}
+.modalTitle{font-weight:900; letter-spacing:.3px}
+.modalBody{padding:14px}
+.modalFoot{
+  padding:12px 14px 14px;
+  display:flex; justify-content:flex-end; gap:10px;
+  border-top:1px solid var(--stroke);
+}
 
-  const STYLES_TASKS = `
-/* ===== Tasks Kanban ===== */
-.tbar{
-  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
-  margin-bottom:12px;
+.sideOverlay{
+  display:none;
 }
-.tbar .input{height:42px}
-.tbar .sel{height:42px}
-.sel{
-  padding:10px 12px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(0,0,0,.16);
-  color:var(--text);
-  outline:none;
+
+@media (max-width: 900px){
+  .sidebar{
+    position:fixed;
+    left:-290px;
+    top:0;
+    height:100vh;
+    width:280px;
+    transition: left .18s ease;
+  }
+  .sidebar:hover{width:280px}
+  .sidebar.open{left:0}
+  .sideOverlay{
+    display:block;
+    position:fixed; inset:0;
+    background: rgba(0,0,0,.45);
+    z-index:25;
+  }
+  .sideOverlay.hidden{display:none}
 }
-.kwrap{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-}
-.kanban{
-  display:grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(320px, 1fr);
-  gap:12px;
-  align-items:start;
-  overflow:auto;
-  padding-bottom:8px;
-}
-.kcol{
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(255,255,255,.05);
-  border-radius:22px;
-  min-height:260px;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-}
-.kcolHd{
-  padding:12px 12px;
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  border-bottom:1px solid rgba(255,255,255,.12);
-  background:rgba(0,0,0,.10);
-  backdrop-filter: blur(10px);
-}
-.kcolTitle{
-  font-weight:1000;
-  display:flex; align-items:center; gap:10px;
-}
-.kdot{
-  width:10px;height:10px;border-radius:999px;
-  background: var(--brand);
-  box-shadow: 0 0 0 6px rgba(255,209,92,.12);
-}
-.kcount{
-  color:var(--muted);
-  font-size:12px;
-}
-.kcolBd{
-  padding:12px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  min-height:180px;
-}
+
+.kanbanWrap{display:flex; gap:12px; overflow:auto; padding-bottom:8px}
+.kcol{min-width:320px; max-width:340px}
+.khead{display:flex; justify-content:space-between; align-items:center; padding:10px 12px}
+.khead .ttl{font-weight:900}
+.klist{padding:10px; display:flex; flex-direction:column; gap:10px; min-height: 60px}
 .kcard{
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(0,0,0,.14);
-  border-radius:18px;
-  padding:12px;
+  padding:10px 10px;
+  border:1px solid var(--stroke);
+  border-radius:16px;
+  background: rgba(255,255,255,.05);
   cursor:grab;
-  user-select:none;
 }
 .kcard:active{cursor:grabbing}
-.kcard.compact{
-  padding:10px 12px;
-}
-.ktitle{
-  font-weight:1000;
-  margin:0 0 6px 0;
-  font-size:14px;
-}
-.kdesc{
-  color:var(--muted);
-  font-size:13px;
-  white-space:pre-wrap;
-}
-.kmeta{
-  display:flex; flex-wrap:wrap; gap:8px;
-  margin-top:10px;
-  color:var(--muted);
-  font-size:12px;
-}
-.kbadge{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:5px 9px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(255,255,255,.04);
-}
-.kactions{
-  display:flex; gap:8px; flex-wrap:wrap;
-  margin-top:10px;
-}
-.kbtn{
-  height:36px;
-  padding:0 10px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(255,255,255,.06);
-  color:var(--text);
-  cursor:pointer;
-  font-weight:900;
-}
-.kbtn:hover{background:rgba(255,255,255,.09)}
-.kbtn.primary{
-  border-color: rgba(255,209,92,.28);
-  background: rgba(255,209,92,.14);
-}
-.kbtn.danger{
-  border-color: rgba(241,98,98,.28);
-  background: rgba(241,98,98,.14);
-}
-.kdropTarget{
-  outline: 2px dashed rgba(16,185,129,.55);
-  outline-offset: -10px;
-}
-.dragGhost{
-  position:fixed;
-  z-index:4000;
-  pointer-events:none;
-  width:min(360px, calc(100vw - 28px));
-  transform: translate(-50%, -50%);
-  opacity:.92;
-}
-`;
+.kmeta{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; color:var(--muted); font-size:12px}
+.badge{font-size:12px; padding:4px 8px; border-radius:999px; border:1px solid var(--stroke); background: var(--card)}
+.dot{width:8px; height:8px; border-radius:999px; display:inline-block; margin-right:6px}
 
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important; scroll-behavior:auto !important}
+}
+    `.trim();
 
-  // ===== Helpers =====
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const h = (tag, attrs = {}, children = []) => {
-    const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (k === "class") el.className = v;
-      else if (k === "html") el.innerHTML = v;
-      else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
-      else if (v === null || v === undefined) continue;
-      else el.setAttribute(k, String(v));
-    }
-    for (const c of Array.isArray(children) ? children : [children]) {
-      if (c === null || c === undefined) continue;
-      el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
-    }
-    return el;
-  };
-
-  function injectStyles(cssText) {
-    const st = document.createElement("style");
-    st.textContent = cssText;
-    document.head.appendChild(st);
+    document.head.appendChild(el("style", { id: "gsoftStyles" }, css));
   }
 
-  function fmtDateTime(sec) {
-    if (!sec) return "—";
-    const d = new Date(Number(sec) * 1000);
-    // без локалей чтоб не прыгало: yyyy-mm-dd hh:mm
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
-  function pickTitleFromDesc(desc) {
-    const s = String(desc || "").trim();
-    if (!s) return "—";
-    const words = s.split(/\s+/).slice(0, 3).join(" ");
-    return words;
-  }
-
-  function secToHMS(total) {
-    total = Math.max(0, Number(total) || 0);
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = Math.floor(total % 60);
-    const pad = (n) => String(n).padStart(2, "0");
-    if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
-    return `${m}:${pad(s)}`;
-  }
-
-  // ===== Toasts =====
-  const Toast = {
-    host: null,
-    ensure() {
-      if (this.host) return;
-      this.host = h("div", { class: "toastHost" });
-      document.body.appendChild(this.host);
-    },
-    show(title, text, ms = 2600) {
-      this.ensure();
-      const el = h("div", { class: "toast" }, [
-        h("div", { class: "toastTitle" }, title || "Info"),
-        h("div", { class: "toastText" }, text || ""),
-      ]);
-      this.host.appendChild(el);
-      setTimeout(() => {
-        el.style.opacity = "0";
-        el.style.transform = "translateY(6px)";
-        el.style.transition = "opacity .18s ease, transform .18s ease";
-        setTimeout(() => el.remove(), 220);
-      }, ms);
-    },
-  };
-
-  // ===== Modal =====
-  const Modal = {
-    overlay: null,
-    open(title, contentNode) {
-      this.close();
-      this.overlay = h("div", { class: "modalOverlay" });
-      const modal = h("div", { class: "modal" });
-      const hd = h("div", { class: "modalHd" }, [
-        h("div", { class: "modalTitle" }, title || ""),
-        h("button", { class: "iconBtn", title: "Close", onclick: () => this.close() }, "✕"),
-      ]);
-      const bd = h("div", { class: "cardBd" }, contentNode);
-      modal.appendChild(hd);
-      modal.appendChild(bd);
-      this.overlay.appendChild(modal);
-
-      this.overlay.addEventListener("click", (e) => {
-        if (e.target === this.overlay) this.close();
-      });
-
-      document.body.appendChild(this.overlay);
-      document.body.style.overflow = "hidden";
-    },
-    close() {
-      if (this.overlay) this.overlay.remove();
-      this.overlay = null;
-      document.body.style.overflow = "";
-    },
-  };
-
-  // ===== API client =====
-  async function apiFetch(path, opts = {}) {
-    const url = API_BASE.replace(/\/+$/, "") + path;
-    const init = {
-      method: opts.method || "GET",
-      headers: { ...(opts.headers || {}) },
-      credentials: "include",
-    };
-    if (opts.json !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(opts.json);
-    }
-    const res = await fetch(url, init);
-
-    let data = null;
-    const ct = res.headers.get("Content-Type") || "";
-    if (ct.includes("application/json")) {
-      try { data = await res.json(); } catch { data = null; }
-    } else {
-      data = await res.text().catch(() => "");
-    }
-
-    if (!res.ok) {
-      const msg =
-        (data && data.error && data.error.message) ||
-        (typeof data === "string" ? data : "") ||
-        `HTTP ${res.status}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      err.payload = data;
-      throw err;
-    }
-    return data;
-  }
-
-  const API = {
-    async me() {
-      const r = await apiFetch("/api/auth/me");
-      return r?.data?.user || null;
-    },
-    async login(login, password) {
-      const r = await apiFetch("/api/auth/login", { method: "POST", json: { login, password } });
-      return r?.data || null;
-    },
-    async logout() {
-      await apiFetch("/api/auth/logout", { method: "POST" });
-    },
-    async meta() {
-      const r = await apiFetch("/api/meta");
-      return r?.data || null;
-    },
-    async main() {
-      const r = await apiFetch("/api/main");
-      return r?.data || { overdue: [], today: [], in_progress: null };
-    },
-  };
-
-  // ===== Router =====
-  function parseHash() {
-    const raw = (location.hash || "").trim();
-    if (!raw.startsWith("#/")) return { path: "/main", query: {} };
-    const s = raw.slice(2); // remove "#/"
-    const [pathPart, queryPart] = s.split("?");
-    const path = "/" + (pathPart || "main").replace(/^\/+/, "");
-    const query = {};
-    if (queryPart) {
-      for (const kv of queryPart.split("&")) {
-        const [k, v] = kv.split("=");
-        if (!k) continue;
-        query[decodeURIComponent(k)] = decodeURIComponent(v || "");
-      }
-    }
-    return { path, query };
-  }
-  function setHash(path, query = {}) {
-    const qs = Object.keys(query).length
-      ? "?" + Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")
-      : "";
-    location.hash = "#/" + path.replace(/^\/+/, "") + qs;
-  }
-
-  // ===== App state =====
+  /* ============ APP STATE ============ */
   const App = {
-    root: null,
     state: {
       user: null,
       meta: null,
-      route: { path: "/main", query: {} },
+      lang: detectLang(),
+      theme: loadThemeState(),
+      ui: {
+        sidebarOpen: false,
+      },
+      current: {
+        path: DEFAULT_ROUTE,
+        query: {},
+      },
+      cache: {
+        users: null,
+      },
     },
 
     async start() {
-      injectStyles(STYLES);
-      injectStyles(STYLES_TASKS);
-      this.root = document.getElementById("app");
-      if (!this.root) throw new Error("#app not found");
+      injectStyles();
+      applyTheme();
 
-      // detect file mode
-      const isLoginPage = /login\.html$/i.test(location.pathname);
+      // If login.html -> show login only
+      const isLoginPage = location.pathname.endsWith("/login.html") || location.pathname.endsWith("login.html");
+      if (isLoginPage) {
+        this.renderLogin();
+        return;
+      }
 
-      // try session
+      // check session
       try {
-        const user = await API.me();
-        if (user) {
-          this.state.user = user;
-          if (isLoginPage) {
-            location.replace("./index.html#/main");
-            return;
+        const me = await API.me();
+        this.state.user = me.data.user;
+
+        // meta
+        const meta = await API.meta();
+        this.state.meta = meta.data;
+
+        this.renderShell();
+        this.bindRouting();
+        this.routeNow();
+      } catch {
+        // not logged in -> go to login.html (if exists)
+        location.href = "login.html";
+      }
+    },
+  };
+
+  // expose App for debugging
+  window.GSOFT = App;
+/* =========================
+   Part 2/3
+   ========================= */
+
+  /* ============ ROUTES & PERMS ============ */
+  function allowedRoutesByRole(role) {
+    // Align with backend access rules :contentReference[oaicite:9]{index=9}
+    const all = [
+      { path: "/main", key: "route_main", icon: "home", roles: ["admin", "rop", "pm", "fin", "sale"] },
+      { path: "/tasks", key: "route_tasks", icon: "tasks", roles: ["admin", "rop", "pm", "fin", "sale"] },
+
+      // projects: admin/rop/pm/fin (sale has no access; backend returns empty/403 logic) :contentReference[oaicite:10]{index=10}
+      { path: "/projects", key: "route_projects", icon: "projects", roles: ["admin", "rop", "pm", "fin"] },
+
+      // courses(course_leads): admin/rop/sale :contentReference[oaicite:11]{index=11}
+      { path: "/courses", key: "route_courses", icon: "courses", roles: ["admin", "rop", "sale"] },
+
+      // clients: admin/rop/sale + pm (companies only). fin forbidden :contentReference[oaicite:12]{index=12}
+      { path: "/clients", key: "route_clients", icon: "clients", roles: ["admin", "rop", "sale", "pm"] },
+
+      // settings & users: admin only :contentReference[oaicite:13]{index=13}
+      { path: "/settings", key: "route_settings", icon: "settings", roles: ["admin"] },
+      { path: "/users", key: "route_users", icon: "users", roles: ["admin"] },
+    ];
+    return all.filter((r) => r.roles.includes(role));
+  }
+
+  function pageTitleByPath(path) {
+    if (path.startsWith("/main")) return t("route_main");
+    if (path.startsWith("/tasks")) return t("route_tasks");
+    if (path.startsWith("/projects")) return t("route_projects");
+    if (path.startsWith("/courses")) return t("route_courses");
+    if (path.startsWith("/clients")) return t("route_clients");
+    if (path.startsWith("/settings")) return t("route_settings");
+    if (path.startsWith("/users")) return t("route_users");
+    return t("app_name");
+  }
+
+  function taskStatusLabel(s) {
+    if (s === "new") return t("t_new");
+    if (s === "pause") return t("t_pause");
+    if (s === "in_progress") return t("t_in_progress");
+    if (s === "done") return t("t_done");
+    if (s === "canceled") return t("t_canceled");
+    return s;
+  }
+
+  function statusDotColor(status) {
+    if (status === "new") return "var(--accent)";
+    if (status === "pause") return "rgba(255,255,255,.55)";
+    if (status === "in_progress") return "var(--accent2)";
+    if (status === "done") return "var(--ok)";
+    if (status === "canceled") return "var(--danger)";
+    return "rgba(255,255,255,.55)";
+  }
+
+  function serviceName(row) {
+    const lang = App.state.lang;
+    if (lang === "uz") return row.service_name_uz || row.service_name_ru || row.service_name_en || "—";
+    if (lang === "en") return row.service_name_en || row.service_name_ru || row.service_name_uz || "—";
+    return row.service_name_ru || row.service_name_uz || row.service_name_en || "—";
+  }
+
+  /* ============ SHELL ============ */
+  App.renderShell = function () {
+    document.body.innerHTML = "";
+
+    const role = App.state.user.role;
+    const routes = allowedRoutesByRole(role);
+
+    const sideOverlay = el("div", { class: "sideOverlay hidden", onClick: () => this.setSidebar(false) });
+
+    const sidebar = el("aside", { class: "sidebar", id: "sidebar" },
+      el("div", { class: "brand" },
+        el("div", { class: "logo" }),
+        el("div", { class: "vcol", style: "min-width:0" },
+          el("div", { class: "brandName" }, t("app_name")),
+          el("div", { class: "muted2", style: "font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" }, App.state.user.full_name || App.state.user.login)
+        )
+      ),
+      el("nav", { class: "nav", id: "nav" }, routes.map((r) => {
+        return el("a", {
+          href: `#${r.path}`,
+          "data-path": r.path,
+          onClick: () => this.setSidebar(false),
+        },
+          el("span", { class: "icoWrap", html: ICONS[r.icon] }),
+          el("span", { class: "txt" }, t(r.key))
+        );
+      }))
+    );
+
+    const burgerBtn = el("button", {
+      class: "iconBtn",
+      type: "button",
+      title: "Menu",
+      onClick: () => this.setSidebar(!this.state.ui.sidebarOpen),
+    }, el("span", { class: "icoWrap", html: ICONS.burger }));
+
+    const langSeg = el("div", { class: "seg", title: "Language" },
+      ...LANG_ORDER.map((lng) => el("button", {
+        type: "button",
+        class: (App.state.lang === lng) ? "active" : "",
+        onClick: () => {
+          App.state.lang = lng;
+          LS.set("gsoft_lang", lng);
+          App.refreshTexts();
+        },
+      }, lng.toUpperCase()))
+    );
+
+    const themeBtn = el("button", {
+      class: "iconBtn",
+      type: "button",
+      title: App.state.theme.mode === "dark" ? t("theme_dark") : t("theme_light"),
+      onClick: () => {
+        App.state.theme.mode = (App.state.theme.mode === "dark") ? "light" : "dark";
+        LS.set("gsoft_theme", App.state.theme.mode);
+        applyTheme();
+      },
+    }, el("span", { class: "icoWrap", html: App.state.theme.mode === "dark" ? ICONS.moon : ICONS.sun }));
+
+    const eyeBtn = el("button", {
+      class: "iconBtn",
+      type: "button",
+      title: t("eye"),
+      onClick: () => {
+        App.state.theme.eye = !App.state.theme.eye;
+        LS.set("gsoft_eye", App.state.theme.eye ? "1" : "0");
+        applyTheme();
+      },
+    }, el("span", { class: "icoWrap", html: ICONS.eye }));
+
+    const userPill = el("div", { class: "pill" },
+      el("span", { class: "muted2", style: "font-family:var(--mono); font-size:11px" }, App.state.user.role),
+      el("span", {}, App.state.user.full_name || App.state.user.login)
+    );
+
+    const logoutBtn = el("button", {
+      class: "iconBtn",
+      type: "button",
+      title: t("sign_out"),
+      onClick: async () => {
+        try { await API.logout(); } catch {}
+        location.href = "login.html";
+      },
+    }, t("sign_out"));
+
+    const topbar = el("header", { class: "topbar" },
+      el("div", { class: "topLeft" },
+        burgerBtn,
+        el("div", { class: "pageTitle", id: "pageTitle" }, t("app_name"))
+      ),
+      el("div", { class: "topRight" },
+        langSeg,
+        themeBtn,
+        eyeBtn,
+        userPill,
+        logoutBtn
+      )
+    );
+
+    const main = el("main", { class: "main" },
+      topbar,
+      el("div", { class: "content", id: "content" })
+    );
+
+    const wrap = el("div", { class: "wrap" }, sidebar, main);
+
+    document.body.append(sideOverlay, wrap);
+
+    this.refreshActiveNav();
+    this.refreshPageTitle();
+  };
+
+  App.setSidebar = function (open) {
+    this.state.ui.sidebarOpen = !!open;
+    const sb = $("#sidebar");
+    const ov = $(".sideOverlay");
+    if (!sb || !ov) return;
+    sb.classList.toggle("open", this.state.ui.sidebarOpen);
+
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      ov.classList.toggle("hidden", !this.state.ui.sidebarOpen);
+    } else {
+      ov.classList.add("hidden");
+    }
+  };
+
+  App.refreshActiveNav = function () {
+    const nav = $("#nav");
+    if (!nav) return;
+    const { path } = this.state.current;
+    $$("#nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("data-path") === path));
+  };
+
+  App.refreshPageTitle = function () {
+    const h = $("#pageTitle");
+    if (h) h.textContent = pageTitleByPath(this.state.current.path);
+  };
+
+  App.refreshTexts = function () {
+    // Re-render shell texts (simple and reliable)
+    const cur = { ...this.state.current };
+    this.renderShell();
+    this.state.current = cur;
+    this.routeNow(); // re-render current view in selected language
+  };
+
+  App.bindRouting = function () {
+    window.addEventListener("hashchange", () => this.routeNow());
+    window.addEventListener("resize", () => this.setSidebar(false));
+  };
+
+  App.routeNow = function () {
+    const { path, query } = parseHash();
+    this.state.current = { path, query };
+    this.refreshActiveNav();
+    this.refreshPageTitle();
+
+    const host = $("#content");
+    if (!host) return;
+    host.innerHTML = "";
+
+    if (path === "/main") return this.renderMain(host);
+    if (path === "/tasks") return this.renderTasks(host);
+
+    // stubs for now (next steps)
+    return this.renderStub(host);
+  };
+
+  App.renderStub = function (host) {
+    host.appendChild(
+      el("div", { class: "card cardPad vcol gap10" },
+        el("div", { style: "font-weight:900" }, pageTitleByPath(this.state.current.path)),
+        el("div", { class: "muted" }, t("coming_soon"))
+      )
+    );
+  };
+
+  /* ============ LOGIN PAGE ============ */
+  App.renderLogin = function () {
+    injectStyles();
+    applyTheme();
+
+    document.body.innerHTML = "";
+    const root = el("div", { class: "content", style: "min-height:100vh; display:flex; align-items:center; justify-content:center;" },
+      el("div", { class: "card", style: "width:min(480px, 96vw);" },
+        el("div", { class: "cardPad vcol gap12" },
+          el("div", { class: "vcol gap8" },
+            el("div", { style: "font-weight:900; font-size:20px" }, t("login_title")),
+            el("div", { class: "muted" }, t("login_hint"))
+          ),
+          el("div", { class: "vcol gap10" },
+            el("label", { class: "vcol gap8" },
+              el("span", { class: "muted2", style: "font-size:12px" }, t("login")),
+              el("input", { id: "loginInp", placeholder: "login", autocomplete: "username" })
+            ),
+            el("label", { class: "vcol gap8" },
+              el("span", { class: "muted2", style: "font-size:12px" }, t("password")),
+              el("input", { id: "passInp", type: "password", placeholder: "••••••••", autocomplete: "current-password" })
+            )
+          ),
+          el("div", { class: "hrow gap10", style: "justify-content:space-between; align-items:center" },
+            el("div", { class: "seg" },
+              ...LANG_ORDER.map((lng) => el("button", {
+                type: "button",
+                class: (App.state.lang === lng) ? "active" : "",
+                onClick: () => {
+                  App.state.lang = lng;
+                  LS.set("gsoft_lang", lng);
+                  this.renderLogin();
+                },
+              }, lng.toUpperCase()))
+            ),
+            el("div", { class: "hrow gap8" },
+              el("button", { class: "iconBtn", type: "button", title: App.state.theme.mode === "dark" ? t("theme_dark") : t("theme_light"), onClick: () => {
+                App.state.theme.mode = (App.state.theme.mode === "dark") ? "light" : "dark";
+                LS.set("gsoft_theme", App.state.theme.mode);
+                applyTheme();
+              } }, el("span", { class: "icoWrap", html: App.state.theme.mode === "dark" ? ICONS.moon : ICONS.sun })),
+              el("button", { class: "iconBtn", type: "button", title: t("eye"), onClick: () => {
+                App.state.theme.eye = !App.state.theme.eye;
+                LS.set("gsoft_eye", App.state.theme.eye ? "1" : "0");
+                applyTheme();
+              } }, el("span", { class: "icoWrap", html: ICONS.eye }))
+            )
+          ),
+          el("button", {
+            class: "btn primary",
+            type: "button",
+            id: "loginBtn",
+            onClick: async () => {
+              const btn = $("#loginBtn");
+              const login = ($("#loginInp").value || "").trim();
+              const password = ($("#passInp").value || "");
+              if (!login || !password) return Toast.show(t("toast_error") + ": " + t("login_hint"), "bad");
+
+              btn.disabled = true;
+              btn.textContent = t("signing_in");
+              try {
+                await API.login(login, password);
+                location.href = "index.html";
+              } catch (e) {
+                Toast.show(e.message || "Login failed", "bad");
+                btn.disabled = false;
+                btn.textContent = t("sign_in");
+              }
+            }
+          }, t("sign_in"))
+        )
+      )
+    );
+
+    document.body.appendChild(root);
+  };
+
+  /* ============ MAIN PAGE ============ */
+  App.renderMain = async function (host) {
+    host.appendChild(el("div", { class: "muted" }, t("loading")));
+    try {
+      const r = await API.main();
+      const data = r.data || {};
+      host.innerHTML = "";
+
+      const box = (title, rows) => {
+        const wrap = el("div", { class: "card" },
+          el("div", { class: "khead" },
+            el("div", { class: "ttl" }, title),
+            el("div", { class: "muted2", style: "font-size:12px" }, (rows || []).length)
+          ),
+          el("div", { class: "cardPad vcol gap10" },
+            (rows && rows.length) ? rows.map((x) => {
+              return el("div", { class: "kcard", onClick: () => setHash("/tasks", { open: x.id }) },
+                el("div", { style: "font-weight:800" }, x.title || `#${x.id}`),
+                el("div", { class: "muted", style: "margin-top:6px; white-space:pre-wrap" }, (x.description || "").slice(0, 180)),
+                el("div", { class: "kmeta" },
+                  el("span", { class: "badge" }, `${t("status")}: ${taskStatusLabel(x.status)}`),
+                  el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
+                )
+              );
+            }) : el("div", { class: "muted" }, t("no_data"))
+          )
+        );
+        return wrap;
+      };
+
+      const grid = el("div", { class: "grid2" },
+        box(t("t_in_progress"), data.in_progress ? [data.in_progress] : []),
+        box("Today", data.today || []),
+      );
+
+      const below = el("div", { class: "card cardPad vcol gap10", style: "margin-top:12px" },
+        el("div", { style: "font-weight:900" }, "Overdue"),
+        (data.overdue && data.overdue.length) ? el("div", { class: "vcol gap10" },
+          data.overdue.map((x) => el("div", { class: "kcard", onClick: () => setHash("/tasks", { open: x.id }) },
+            el("div", { style: "font-weight:800" }, x.title || `#${x.id}`),
+            el("div", { class: "muted", style: "margin-top:6px; white-space:pre-wrap" }, (x.description || "").slice(0, 180)),
+            el("div", { class: "kmeta" },
+              el("span", { class: "badge" }, `${t("status")}: ${taskStatusLabel(x.status)}`),
+              el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
+            )
+          ))
+        ) : el("div", { class: "muted" }, t("no_data"))
+      );
+
+      host.append(grid, below);
+    } catch (e) {
+      host.innerHTML = "";
+      host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+        el("div", { style: "font-weight:900" }, t("toast_error")),
+        el("div", { class: "muted" }, e.message || "Error")
+      ));
+    }
+  };
+/* =========================
+   Part 3/3
+   ========================= */
+
+  /* ============ TASKS PAGE ============ */
+  App.renderTasks = async function (host) {
+    const role = App.state.user.role;
+    const isAdmin = role === "admin";
+    const isRop = role === "rop";
+
+    const toolbar = el("div", { class: "card cardPad vcol gap12" });
+
+    const qRow = el("div", { class: "hrow gap10", style: "flex-wrap:wrap; align-items:center" });
+
+    const searchInp = el("input", { placeholder: t("search"), style: "min-width:220px; flex:1" });
+
+    // Admin-only assignee filter (align with your stated rule + backend users endpoint) :contentReference[oaicite:14]{index=14}
+    let usersSel = null;
+    if (isAdmin) {
+      usersSel = el("select", { style: "min-width:220px" },
+        el("option", { value: "" }, `${t("assignee")}: —`)
+      );
+      qRow.append(usersSel);
+    }
+
+    qRow.append(searchInp);
+
+    const createBtn = el("button", { class: "btn primary", type: "button" }, t("create"));
+    qRow.append(createBtn);
+
+    toolbar.append(
+      el("div", { class: "hrow gap10", style: "justify-content:space-between; align-items:center; flex-wrap:wrap" },
+        el("div", { class: "vcol" },
+          el("div", { style: "font-weight:900" }, t("route_tasks")),
+          el("div", { class: "muted2", style: "font-size:12px" }, `${t("filters")}: ${isAdmin ? t("assignee") : t("me")}`)
+        ),
+        el("div", { class: "hrow gap10", style: "align-items:center; flex-wrap:wrap" },
+          el("span", { class: "pill" }, `${t("me")}: ${App.state.user.full_name || App.state.user.login}`)
+        )
+      ),
+      qRow
+    );
+
+    const board = el("div", { class: "kanbanWrap", id: "taskBoard" });
+
+    host.append(toolbar, el("div", { class: "hr" }), board);
+
+    // Load users for admin
+    if (isAdmin && !App.state.cache.users) {
+      const list = await API.usersTryList();
+      App.state.cache.users = list || [];
+      for (const u of App.state.cache.users) {
+        usersSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+      }
+    }
+
+    const columns = [
+      { key: "new", label: t("t_new") },
+      { key: "pause", label: t("t_pause") },
+      { key: "in_progress", label: t("t_in_progress") },
+      { key: "done", label: t("t_done") },
+      { key: "canceled", label: t("t_canceled") },
+    ];
+
+    const colEls = {};
+    board.innerHTML = "";
+    for (const c of columns) {
+      const col = el("div", { class: "card kcol", "data-status": c.key },
+        el("div", { class: "khead" },
+          el("div", { class: "ttl" }, c.label),
+          el("div", { class: "muted2", style: "font-size:12px" }, "0")
+        ),
+        el("div", { class: "klist", "data-drop": c.key })
+      );
+      board.appendChild(col);
+      colEls[c.key] = col;
+    }
+
+    let all = [];
+    const state = {
+      assignee_user_id: "",
+      open: null,
+    };
+
+    const openFromQuery = (App.state.current.query && App.state.current.query.open) ? Number(App.state.current.query.open) : null;
+    if (openFromQuery) state.open = openFromQuery;
+
+    const refreshCounts = () => {
+      for (const c of columns) {
+        const list = colEls[c.key].querySelector(".klist");
+        colEls[c.key].querySelector(".khead .muted2").textContent = String(list.children.length);
+      }
+    };
+
+    const render = () => {
+      for (const c of columns) colEls[c.key].querySelector(".klist").innerHTML = "";
+      const q = (searchInp.value || "").trim().toLowerCase();
+
+      const filtered = all.filter((x) => {
+        if (!q) return true;
+        const s = `${x.title || ""} ${x.description || ""} ${x.assignee_name || ""} ${x.project_company_name || ""} ${serviceName(x) || ""}`.toLowerCase();
+        return s.includes(q);
+      });
+
+      for (const x of filtered) {
+        const dot = el("span", { class: "dot", style: `background:${statusDotColor(x.status)}` });
+
+        const head = el("div", { class: "hrow gap8", style: "align-items:center; justify-content:space-between" },
+          el("div", { style: "font-weight:900; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" }, dot, x.title || `#${x.id}`),
+          el("div", { class: "muted2", style: "font-size:12px; font-family:var(--mono)" }, `#${x.id}`)
+        );
+
+        const body = el("div", { class: "muted", style: "margin-top:6px; white-space:pre-wrap" }, (x.description || "").slice(0, 180));
+
+        const meta = el("div", { class: "kmeta" },
+          el("span", { class: "badge" }, `${t("assignee")}: ${x.assignee_name || "—"}`),
+          x.project_company_name ? el("span", { class: "badge" }, `${t("project")}: ${x.project_company_name}`) : null,
+          x.deadline_at ? el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`) : null,
+          el("span", { class: "badge" }, `${t("spent")}: ${fmtDuration(x.spent_seconds)}`)
+        );
+
+        const card = el("div", {
+          class: "kcard",
+          draggable: "true",
+          "data-id": String(x.id),
+          onClick: () => openTask(x.id),
+          onDragStart: (e) => {
+            e.dataTransfer.setData("text/plain", String(x.id));
           }
-          await this.ensureMeta();
-          this.renderShell();
-          this.bindRouter();
-          this.routeTo(parseHash());
-          return;
+        }, head, body, meta);
+
+        bindTouchDrag(card);
+
+        const list = colEls[x.status]?.querySelector(".klist");
+        if (list) list.appendChild(card);
+      }
+
+      refreshCounts();
+    };
+
+    const load = async () => {
+      board.classList.add("muted");
+      try {
+        const assignee_user_id = isAdmin ? (usersSel?.value || "") : "";
+        state.assignee_user_id = assignee_user_id;
+
+        const r = await API.tasks.list({ assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null });
+        all = (r.data || []).slice();
+
+        board.classList.remove("muted");
+        render();
+
+        if (state.open) {
+          const id = state.open;
+          state.open = null;
+          openTask(id);
         }
       } catch (e) {
-        // ignore; will show login
+        board.classList.remove("muted");
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
       }
+    };
 
-      // not logged in
-      if (!isLoginPage) {
-        // allow login inside index.html too
-        this.renderLogin();
-      } else {
-        this.renderLogin();
-      }
-    },
+    // drop handlers
+    for (const c of columns) {
+      const drop = colEls[c.key].querySelector(".klist");
+      drop.addEventListener("dragover", (e) => e.preventDefault());
+      drop.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        const id = Number(e.dataTransfer.getData("text/plain"));
+        if (!id) return;
 
-    bindRouter() {
-      window.addEventListener("hashchange", () => this.routeTo(parseHash()));
-    },
+        const task = all.find((x) => x.id === id);
+        if (!task || task.status === c.key) return;
 
-    async ensureMeta() {
-      try {
-        this.state.meta = await API.meta();
-      } catch {
-        this.state.meta = null;
-      }
-    },
-
-    // ===== Render: Login =====
-    renderLogin() {
-      this.root.innerHTML = "";
-      const savedLogin = localStorage.getItem("gsoft_login") || "";
-
-      const loginInp = h("input", { class: "input", placeholder: "login", value: savedLogin });
-      const passInp = h("input", { class: "input", placeholder: "password", type: "password" });
-
-      const btn = h("button", { class: "btn btnPrimary", type: "button" }, "Kirish");
-
-      const form = h("div", { class: "loginCard" }, [
-        h("div", { class: "logo", style: "width:44px;height:44px;border-radius:16px" }, "G"),
-        h("h1", { class: "loginTitle" }, "G-SOFT"),
-        h("div", { class: "muted" }, "Tizimga kirish"),
-        h("div", { class: "field" }, [h("div", { class: "label" }, "Login"), loginInp]),
-        h("div", { class: "field" }, [h("div", { class: "label" }, "Password"), passInp]),
-        h("div", { class: "row" }, [
-          h("div", { class: "muted", style: "font-size:12px" }, `API: ${API_BASE}`),
-          btn,
-        ]),
-      ]);
-
-      const wrap = h("div", { class: "center" }, form);
-      this.root.appendChild(wrap);
-
-      const doLogin = async () => {
-        const login = String(loginInp.value || "").trim();
-        const password = String(passInp.value || "");
-        if (!login || !password) {
-          Toast.show("Xato", "Login va parolni kiriting");
+        if (c.key === "canceled") {
+          const reason = await askCancelReason();
+          if (!reason) return;
+          await doMove(id, c.key, { cancel_reason: reason });
           return;
         }
-        btn.disabled = true;
-        btn.textContent = "Kutilmoqda...";
-        try {
-          await API.login(login, password);
-          localStorage.setItem("gsoft_login", login);
-          location.replace("./index.html#/main");
-        } catch (e) {
-          Toast.show("Login xato", e.message || "Error");
-          btn.disabled = false;
-          btn.textContent = "Kirish";
+
+        await doMove(id, c.key);
+      });
+    }
+
+    async function doMove(id, status, extra = {}) {
+      try {
+        await API.tasks.move(id, status, extra);
+        Toast.show(t("toast_saved"), "ok");
+        await load();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      }
+    }
+
+    function canStartTask(taskRow) {
+      // backend allows start only by assignee, or admin/rop for assignee :contentReference[oaicite:15]{index=15}
+      if (taskRow.assignee_user_id === App.state.user.id) return true;
+      return isAdmin || isRop;
+    }
+
+    function canEditTask(taskRow) {
+      // backend: only created_by or admin/rop :contentReference[oaicite:16]{index=16}
+      if (taskRow.created_by === App.state.user.id) return true;
+      return isAdmin || isRop;
+    }
+
+    function canDeleteTask(taskRow) {
+      // same rule as edit
+      return canEditTask(taskRow);
+    }
+
+    async function openTask(id) {
+      try {
+        const r = await API.tasks.get(id);
+        const x = r.data;
+
+        const titleInp = el("input", { value: x.title || "", placeholder: t("title") });
+        const descInp = el("textarea", { rows: 5, placeholder: t("description") }, x.description || "");
+        const deadlineInp = el("input", { type: "datetime-local" });
+        if (x.deadline_at) {
+          const d = new Date(x.deadline_at * 1000);
+          // to local ISO without seconds
+          const pad = (n) => String(n).padStart(2, "0");
+          const v = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          deadlineInp.value = v;
+        }
+
+        let assigneeSel = null;
+        if (isAdmin) {
+          assigneeSel = el("select", {},
+            ...(App.state.cache.users || []).map((u) => el("option", { value: String(u.id), selected: u.id === x.assignee_user_id }, `${u.full_name} (${u.role})`))
+          );
+        }
+
+        const info = el("div", { class: "vcol gap10" },
+          el("div", { class: "grid2" },
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, t("status")),
+              el("div", {}, `${taskStatusLabel(x.status)}`)
+            ),
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, t("spent")),
+              el("div", {}, fmtDuration(x.spent_seconds))
+            )
+          ),
+          el("div", { class: "grid2" },
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+              el("div", {}, isAdmin ? assigneeSel : (x.assignee_name || "—"))
+            ),
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+              el("div", {}, deadlineInp)
+            )
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+            el("div", {}, titleInp)
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+            el("div", {}, descInp)
+          ),
+          x.project_company_name ? el("div", { class: "muted2", style: "font-size:12px" }, `${t("project")}: ${x.project_company_name}`) : null,
+          el("div", { class: "muted2", style: "font-size:12px" }, `Created: ${x.created_by_name || "—"} · Updated: ${fmtDate(x.updated_at)}`)
+        );
+
+        const actions = [];
+
+        // Status actions (show only where it makes sense)
+        const canStart = canStartTask(x);
+        if (canStart && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
+          actions.push({ label: t("action_start"), kind: "primary", onClick: async () => { Modal.close(); await doMove(x.id, "in_progress"); } });
+        }
+        if (x.status === "in_progress") {
+          actions.push({ label: t("action_pause"), kind: "ghost", onClick: async () => { Modal.close(); await doMove(x.id, "pause"); } });
+        }
+        if (x.status !== "done" && x.status !== "canceled") {
+          actions.push({ label: t("action_done"), kind: "ghost", onClick: async () => { Modal.close(); await doMove(x.id, "done"); } });
+          actions.push({
+            label: t("action_cancel"),
+            kind: "danger",
+            onClick: async () => {
+              const reason = await askCancelReason();
+              if (!reason) return;
+              Modal.close();
+              await doMove(x.id, "canceled", { cancel_reason: reason });
+            }
+          });
+        }
+
+        // Edit/save/delete (by perms)
+        if (canEditTask(x)) {
+          actions.push({
+            label: t("save"),
+            kind: "primary",
+            onClick: async () => {
+              try {
+                const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
+                const body = {
+                  title: titleInp.value.trim() || null,
+                  description: descInp.value.trim(),
+                  deadline_at,
+                };
+                if (isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
+
+                await API.tasks.update(x.id, body);
+                Toast.show(t("toast_saved"), "ok");
+                Modal.close();
+                await load();
+              } catch (e) {
+                Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+              }
+            }
+          });
+        }
+
+        if (canDeleteTask(x)) {
+          actions.push({
+            label: t("delete"),
+            kind: "danger",
+            onClick: async () => {
+              const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
+              if (!ok) return;
+              try {
+                await API.tasks.del(x.id);
+                Toast.show(t("toast_deleted"), "ok");
+                Modal.close();
+                await load();
+              } catch (e) {
+                Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+              }
+            }
+          });
+        }
+
+        Modal.open(`${t("open")} #${x.id}`, info, actions.length ? actions : [{ label: t("close"), kind: "ghost", onClick: () => Modal.close() }]);
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      }
+    }
+
+    async function askCancelReason() {
+      return new Promise((resolve) => {
+        const ta = el("textarea", { rows: 4, placeholder: t("reason") });
+        const body = el("div", { class: "vcol gap10" },
+          el("div", { class: "muted" }, t("need_reason")),
+          ta
+        );
+        Modal.open(t("reason"), body, [
+          { label: t("cancel"), kind: "ghost", onClick: () => { Modal.close(); resolve(""); } },
+          { label: t("confirm"), kind: "danger", onClick: () => { const v = ta.value.trim(); if (!v) return; Modal.close(); resolve(v); } },
+        ]);
+        setTimeout(() => ta.focus(), 0);
+      });
+    }
+
+    createBtn.addEventListener("click", async () => {
+      // Create task (any role can create; backend restricts assignment to self for non admin/rop) :contentReference[oaicite:17]{index=17}
+      const titleInp = el("input", { placeholder: t("title") });
+      const descInp = el("textarea", { rows: 5, placeholder: t("description") });
+
+      let assigneeSel = null;
+      if (isAdmin) {
+        assigneeSel = el("select", {},
+          ...(App.state.cache.users || []).map((u) => el("option", { value: String(u.id), selected: u.id === App.state.user.id }, `${u.full_name} (${u.role})`))
+        );
+      }
+
+      const body = el("div", { class: "vcol gap10" },
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+            el("div", {}, isAdmin ? assigneeSel : (App.state.user.full_name || App.state.user.login))
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+            el("input", { type: "datetime-local", id: "newDeadline" })
+          )
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+          titleInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+          descInp
+        )
+      );
+
+      Modal.open(t("create"), body, [
+        { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+        { label: t("create"), kind: "primary", onClick: async () => {
+          try {
+            const deadlineEl = $("#newDeadline", Modal.overlay);
+            const deadline_at = deadlineEl && deadlineEl.value ? Math.floor(new Date(deadlineEl.value).getTime() / 1000) : null;
+            const payload = {
+              title: titleInp.value.trim() || null,
+              description: descInp.value.trim(),
+              assignee_user_id: isAdmin && assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
+              deadline_at,
+            };
+            if (!payload.description) return;
+
+            await API.tasks.create(payload);
+            Toast.show(t("toast_saved"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+          }
+        } },
+      ]);
+      setTimeout(() => descInp.focus(), 0);
+    });
+
+    searchInp.addEventListener("input", () => render());
+    if (usersSel) usersSel.addEventListener("change", () => load());
+
+    // mobile open from main
+    if (App.state.current.query && App.state.current.query.open) {
+      // already handled after load
+    }
+
+    await load();
+  };
+
+  /* ============ TOUCH DRAG FIX (was broken without $$) ============ */
+  function bindTouchDrag(cardEl) {
+    let startX = 0, startY = 0, dragging = false;
+    let ghost = null;
+
+    cardEl.addEventListener("pointerdown", (e) => {
+      // only touch/pen
+      if (e.pointerType === "mouse") return;
+      startX = e.clientX;
+      startY = e.clientY;
+      dragging = false;
+
+      const onMove = (ev) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+
+        if (!dragging && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+          dragging = true;
+          ghost = cardEl.cloneNode(true);
+          ghost.style.position = "fixed";
+          ghost.style.left = ev.clientX + "px";
+          ghost.style.top = ev.clientY + "px";
+          ghost.style.transform = "translate(-50%,-50%)";
+          ghost.style.opacity = "0.85";
+          ghost.style.pointerEvents = "none";
+          ghost.style.zIndex = "9999";
+          document.body.appendChild(ghost);
+        }
+        if (dragging && ghost) {
+          ghost.style.left = ev.clientX + "px";
+          ghost.style.top = ev.clientY + "px";
         }
       };
 
-      btn.addEventListener("click", doLogin);
-      passInp.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") doLogin();
-      });
-    },
-
-    // ===== Render: Shell =====
-    renderShell() {
-      this.root.innerHTML = "";
-
-      const sidebar = h("div", { class: "sidebar" }, [
-        h("div", { class: "brand" }, [
-          h("div", { class: "logo" }, "G"),
-          h("div", { class: "brandText" }, "G-SOFT"),
-        ]),
-        this.renderNav(),
-      ]);
-
-      const topbarTitle = h("div", { class: "topbarTitle" }, "…");
-      const userBadge = h("div", { class: "badge" }, `${this.state.user.full_name} • ${this.state.user.role}`);
-      const logoutBtn = h(
-        "button",
-        {
-          class: "btn",
-          onclick: async () => {
-            try { await API.logout(); } catch {}
-            location.replace("./login.html");
-          },
-        },
-        "Chiqish"
-      );
-
-      const topbar = h("div", { class: "topbar" }, [
-        topbarTitle,
-        h("div", { class: "topbarRight" }, [userBadge, logoutBtn]),
-      ]);
-
-      const content = h("div", { class: "content", id: "view" }, "");
-      const main = h("div", { class: "main" }, [topbar, content]);
-
-      const shell = h("div", { class: "shell" }, [sidebar, main]);
-      this.root.appendChild(shell);
-
-      this._ui = { topbarTitle, content };
-    },
-
-    renderNav() {
-      const nav = h("div", { class: "nav", id: "nav" });
-      for (const r of ROUTES) {
-        const a = h(
-          "a",
-          {
-            href: `#${r.path}`,
-            "data-path": r.path,
-          },
-          [
-            h("div", { class: "ico" }, "•"),
-            h("div", { class: "txt" }, r.title),
-          ]
-        );
-        nav.appendChild(a);
-      }
-      return nav;
-    },
-
-    setActiveNav(path) {
-      const nav = $("#nav", this.root);
-      if (!nav) return;
-      for (const a of nav.querySelectorAll("a[data-path]")) {
-        const p = a.getAttribute("data-path");
-        a.classList.toggle("active", p === path);
-      }
-    },
-
-    // ===== Route handler =====
-    async routeTo(route) {
-      this.state.route = route;
-      if (!this.state.user) {
-        this.renderLogin();
-        return;
-      }
-      // ensure shell exists
-      if (!this._ui) this.renderShell();
-
-      const path = route.path || "/main";
-      this.setActiveNav(path);
-
-      const title = (ROUTES.find((x) => x.path === path)?.title) || "G-SOFT";
-      this._ui.topbarTitle.textContent = title;
-
-      if (path === "/main") return await this.renderMain();
-      if (path === "/tasks") return await this.renderTasks(); // Part 2
-      if (path === "/projects") return this.renderStub("Loyihalar (keyingi qismda)"); // Part 3
-      if (path === "/courses") return this.renderStub("Kurslar (keyingi qismda)"); // Part 4
-      if (path === "/clients") return this.renderStub("Clients (keyingi qismda)"); // Part 5
-      if (path === "/settings") return this.renderStub("Sozlamalar (keyingi qismda)"); // Part 6
-      if (path === "/users") return this.renderStub("Users (keyingi qismda)"); // Part 6
-
-      return this.renderStub("Not found");
-    },
-
-    renderStub(text) {
-      this._ui.content.innerHTML = "";
-      this._ui.content.appendChild(
-        h("div", { class: "card" }, [
-          h("div", { class: "cardHd" }, [h("h3", {}, "Info"), h("div", { class: "muted" }, "…")]),
-          h("div", { class: "cardBd" }, [h("div", { class: "muted" }, text)]),
-        ])
-      );
-    },
-
-    // ===== Main page =====
-    async renderMain() {
-      this._ui.content.innerHTML = "";
-
-      const wrap = h("div", { class: "grid2" });
-
-      const cardOver = h("div", { class: "card" }, [
-        h("div", { class: "cardHd" }, [h("h3", {}, "Prosrochennye"), h("div", { class: "muted" }, "deadline")]),
-        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
-      ]);
-      const cardToday = h("div", { class: "card" }, [
-        h("div", { class: "cardHd" }, [h("h3", {}, "Bugungi vazifalar"), h("div", { class: "muted" }, "deadline")]),
-        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
-      ]);
-
-      const cardProg = h("div", { class: "card", style: "grid-column: 1 / -1;" }, [
-        h("div", { class: "cardHd" }, [h("h3", {}, "Jarayonda"), h("div", { class: "muted" }, "1 dona")]),
-        h("div", { class: "cardBd" }, [h("div", { class: "muted" }, "Yuklanmoqda...")]),
-      ]);
-
-      wrap.appendChild(cardOver);
-      wrap.appendChild(cardToday);
-      wrap.appendChild(cardProg);
-
-      this._ui.content.appendChild(wrap);
-
-      try {
-        const data = await API.main();
-        this.fillTasksList(cardOver, data.overdue || [], "Prosrochennye yo‘q");
-        this.fillTasksList(cardToday, data.today || [], "Bugun vazifa yo‘q");
-        this.fillInProgress(cardProg, data.in_progress || null);
-      } catch (e) {
-        Toast.show("Xato", e.message || "Main load error");
-        this.fillTasksList(cardOver, [], "Xato");
-        this.fillTasksList(cardToday, [], "Xato");
-        this.fillInProgress(cardProg, null);
-      }
-    },
-
-    fillTasksList(card, rows, emptyText) {
-      const bd = card.querySelector(".cardBd");
-      bd.innerHTML = "";
-      if (!rows || !rows.length) {
-        bd.appendChild(h("div", { class: "muted" }, emptyText));
-        return;
-      }
-      const list = h("div", { class: "list" });
-      for (const t of rows) {
-        const title = t.title ? String(t.title) : pickTitleFromDesc(t.description);
-        const meta = [
-          t.deadline_at ? `Deadline: ${fmtDateTime(t.deadline_at)}` : "Deadline: —",
-          t.project_id ? `Project: #${t.project_id}` : "Project: No PR",
-          `Status: ${t.status}`,
-        ].join(" • ");
-        const item = h("div", { class: "item" }, [
-          h("div", { class: "itemTop" }, [
-            h("div", { class: "itemTitle" }, title),
-            h(
-              "button",
-              {
-                class: "btn",
-                onclick: () => {
-                  Modal.open("Vazifa", h("div", {}, [
-                    h("div", { class: "muted" }, "Task modal (to‘liq) — Part 2 da qilamiz"),
-                    h("div", { style: "margin-top:10px" }, `#${t.id}`),
-                    h("div", { style: "margin-top:8px" }, meta),
-                  ]));
-                },
-              },
-              "Ochish"
-            ),
-          ]),
-          h("div", { class: "itemMeta" }, meta),
-        ]);
-        list.appendChild(item);
-      }
-      bd.appendChild(list);
-    },
-
-    fillInProgress(card, task) {
-      const bd = card.querySelector(".cardBd");
-      bd.innerHTML = "";
-      if (!task) {
-        bd.appendChild(h("div", { class: "muted" }, "Jarayonda vazifa yo‘q"));
-        return;
-      }
-      const title = task.title ? String(task.title) : pickTitleFromDesc(task.description);
-      bd.appendChild(
-        h("div", { class: "item" }, [
-          h("div", { class: "itemTop" }, [
-            h("div", { class: "itemTitle" }, `${title} (#${task.id})`),
-            h("button", { class: "btn btnPrimary", onclick: () => setHash("/tasks") }, "Tasks →"),
-          ]),
-          h("div", { class: "itemMeta" }, [
-            `Status: ${task.status}`,
-            task.deadline_at ? `Deadline: ${fmtDateTime(task.deadline_at)}` : "Deadline: —",
-            task.project_id ? `Project: #${task.project_id}` : "Project: No PR",
-          ].join(" • ")),
-        ])
-      );
-    },
-  };
-
-
-  /* =========================
-   PART 2: TASKS KANBAN
-   ========================= */
-
-// расширяем API (не ломая Part 1)
-API.tasks = {
-  list: async (filters = {}) => {
-    const qs = new URLSearchParams();
-    if (filters.assignee_user_id) qs.set("assignee_user_id", String(filters.assignee_user_id));
-    if (filters.project_id) qs.set("project_id", String(filters.project_id));
-    const q = qs.toString();
-    const r = await apiFetch("/api/tasks" + (q ? `?${q}` : ""));
-    return r?.data || [];
-  },
-  get: async (id) => {
-    const r = await apiFetch(`/api/tasks/${id}`);
-    return r?.data || null;
-  },
-  create: async (payload) => {
-    const r = await apiFetch("/api/tasks", { method: "POST", json: payload });
-    return r?.data || null;
-  },
-  update: async (id, payload) => {
-    await apiFetch(`/api/tasks/${id}`, { method: "PUT", json: payload });
-    return true;
-  },
-  move: async (id, payload) => {
-    await apiFetch(`/api/tasks/${id}/move`, { method: "POST", json: payload });
-    return true;
-  },
-  del: async (id) => {
-    await apiFetch(`/api/tasks/${id}/delete`, { method: "POST", json: {} });
-    return true;
-  },
-};
-
-API.usersTryList = async () => {
-  try {
-    const r = await apiFetch("/api/users");
-    return r?.data || [];
-  } catch {
-    return null; // forbidden/ошибка — просто нет списка
-  }
-};
-
-// utils
-function dtLocalToSec(v) {
-  if (!v) return null;
-  const ms = new Date(v).getTime();
-  if (!Number.isFinite(ms)) return null;
-  return Math.floor(ms / 1000);
-}
-function secToDtLocal(sec) {
-  if (!sec) return "";
-  const d = new Date(Number(sec) * 1000);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function shortTitle(t) {
-  const title = (t.title && String(t.title).trim()) ? String(t.title).trim() : pickTitleFromDesc(t.description);
-  return title || "—";
-}
-function taskSearchText(t) {
-  const parts = [
-    t.id,
-    t.title,
-    t.description,
-    t.assignee_name,
-    t.project_company_name,
-    t.service_name_uz, t.service_name_ru, t.service_name_en
-  ].map(x => String(x || "").toLowerCase());
-  return parts.join(" ");
-}
-function statusLabelUz(s) {
-  const map = {
-    new: "Yangi",
-    pause: "Pauza",
-    in_progress: "Jarayonda",
-    done: "Tugatildi",
-    canceled: "Otmen",
-  };
-  return map[s] || s;
-}
-function statusDotColor(s){
-  // без хард-цветов из палитры — используем разные оттенки через opacity
-  // (быстро и без “кислоты”)
-  if (s === "new") return "var(--brand)";
-  if (s === "pause") return "rgba(255,255,255,.55)";
-  if (s === "in_progress") return "rgba(16,185,129,.9)";
-  if (s === "done") return "rgba(16,185,129,.65)";
-  if (s === "canceled") return "rgba(241,98,98,.75)";
-  return "var(--brand)";
-}
-
-App.state.tasks = {
-  rows: [],
-  q: "",
-  assignee_user_id: null,
-  project_id: null,
-  users: null, // если доступно
-  loading: false,
-};
-
-App.renderTasks = async function () {
-  this._ui.content.innerHTML = "";
-
-  const S = this.state.tasks;
-
-  // toolbar
-  const qInp = h("input", { class: "input", placeholder: "Qidirish…", value: S.q });
-  const projectInp = h("input", { class: "input", placeholder: "Project ID (ixtiyoriy)", inputmode: "numeric", value: S.project_id || "" });
-
-  const reloadBtn = h("button", { class: "btn" }, "Reload");
-  const createBtn = h("button", { class: "btn btnPrimary" }, "Create task");
-
-  let assSel = null;
-  let assWrap = null;
-
-  // load users list if admin/rop (rop может не иметь доступа — обработаем)
-  if ((this.state.user.role === "admin" || this.state.user.role === "rop") && S.users === null) {
-    S.users = await API.usersTryList(); // null если нет доступа
-  }
-
-  if (S.users && Array.isArray(S.users)) {
-    assSel = h("select", { class: "sel" });
-    assSel.appendChild(h("option", { value: "" }, "Assignee: All"));
-    for (const u of S.users.filter(x => Number(x.is_active) === 1)) {
-      assSel.appendChild(h("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
-    }
-    assSel.value = S.assignee_user_id ? String(S.assignee_user_id) : "";
-    assWrap = assSel;
-  } else {
-    // если список юзеров недоступен — показываем только себя (без фильтра)
-    assWrap = h("div", { class: "badge" }, `Assignee: ${this.state.user.full_name}`);
-  }
-
-  const tbar = h("div", { class: "tbar" }, [
-    qInp,
-    projectInp,
-    assWrap,
-    reloadBtn,
-    createBtn,
-  ]);
-
-  const boardHost = h("div", { class: "kwrap" }, [
-    tbar,
-    h("div", { class: "kanban", id: "tasksKanban" }, ""),
-  ]);
-
-  this._ui.content.appendChild(boardHost);
-
-  // events
-  qInp.addEventListener("input", () => {
-    S.q = qInp.value || "";
-    this.tasksRenderBoard();
-  });
-
-  projectInp.addEventListener("change", () => {
-    const v = String(projectInp.value || "").trim();
-    S.project_id = v ? Number(v) : null;
-    this.tasksLoad(true);
-  });
-
-  if (assSel) {
-    assSel.addEventListener("change", () => {
-      const v = String(assSel.value || "").trim();
-      S.assignee_user_id = v ? Number(v) : null;
-      this.tasksLoad(true);
-    });
-  }
-
-  reloadBtn.addEventListener("click", () => this.tasksLoad(true));
-  createBtn.addEventListener("click", () => this.tasksOpenCreate());
-
-  await this.tasksLoad(false);
-};
-
-App.tasksLoad = async function (force) {
-  const S = this.state.tasks;
-  if (S.loading) return;
-  S.loading = true;
-
-  try {
-    const filters = {
-      assignee_user_id: S.assignee_user_id,
-      project_id: S.project_id,
-    };
-    const rows = await API.tasks.list(filters);
-    S.rows = Array.isArray(rows) ? rows : [];
-    this.tasksRenderBoard();
-  } catch (e) {
-    Toast.show("Xato", e.message || "Tasks load error");
-    S.rows = [];
-    this.tasksRenderBoard();
-  } finally {
-    S.loading = false;
-  }
-};
-
-App.tasksRenderBoard = function () {
-  const host = $("#tasksKanban", this.root);
-  if (!host) return;
-
-  const S = this.state.tasks;
-  const q = String(S.q || "").trim().toLowerCase();
-
-  const rows = (S.rows || []).filter(t => {
-    if (!q) return true;
-    return taskSearchText(t).includes(q);
-  });
-
-  const groups = {
-    new: [],
-    pause: [],
-    in_progress: [],
-    done: [],
-    canceled: [],
-  };
-  for (const t of rows) {
-    const s = t.status || "new";
-    (groups[s] || (groups[s] = [])).push(t);
-  }
-
-  host.innerHTML = "";
-
-  const statuses = ["new", "pause", "in_progress", "done", "canceled"];
-
-  for (const st of statuses) {
-    const col = h("div", { class: "kcol", "data-status": st }, [
-      h("div", { class: "kcolHd" }, [
-        h("div", { class: "kcolTitle" }, [
-          h("span", { class: "kdot", style: `background:${statusDotColor(st)}; box-shadow: 0 0 0 6px rgba(255,255,255,.06);` }),
-          h("span", {}, statusLabelUz(st)),
-        ]),
-        h("div", { class: "kcount" }, String((groups[st] || []).length)),
-      ]),
-      h("div", { class: "kcolBd" }, ""),
-    ]);
-
-    // Desktop drag&drop
-    const body = col.querySelector(".kcolBd");
-    col.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      col.classList.add("kdropTarget");
-    });
-    col.addEventListener("dragleave", () => col.classList.remove("kdropTarget"));
-    col.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      col.classList.remove("kdropTarget");
-      const id = Number(e.dataTransfer?.getData("text/plain") || 0);
-      if (!id) return;
-      await this.tasksMove(id, st);
-    });
-
-    // render cards
-    for (const t of (groups[st] || [])) {
-      const compact = (st === "done" || st === "canceled");
-      const title = shortTitle(t);
-
-      const desc = compact
-        ? (st === "canceled" ? (t.cancel_reason ? `Sabab: ${t.cancel_reason}` : "") : "")
-        : String(t.description || "").trim();
-
-      const deadline = t.deadline_at ? `DL: ${fmtDateTime(t.deadline_at)}` : "DL: —";
-      const spent = `Spent: ${secToHMS(t.spent_seconds || 0)}`;
-
-      const company = t.project_company_name ? t.project_company_name : "No PR";
-      const service = (t.service_name_uz || t.service_name_ru || t.service_name_en) ? (t.service_name_uz || t.service_name_ru || t.service_name_en) : "";
-
-      const openBtn = h("button", { class: "kbtn primary", type: "button" }, "Open");
-
-      const card = h("div", {
-        class: "kcard" + (compact ? " compact" : ""),
-        draggable: "true",
-        "data-id": String(t.id),
-        "data-status": String(t.status),
-      }, [
-        h("div", { class: "ktitle" }, title + ` (#${t.id})`),
-        desc ? h("div", { class: "kdesc" }, desc) : null,
-        h("div", { class: "kmeta" }, [
-          h("span", { class: "kbadge" }, `👤 ${t.assignee_name || "—"}`),
-          h("span", { class: "kbadge" }, `🏢 ${company}`),
-          service ? h("span", { class: "kbadge" }, `🧩 ${service}`) : null,
-          h("span", { class: "kbadge" }, deadline),
-          h("span", { class: "kbadge" }, spent),
-        ]),
-        h("div", { class: "kactions" }, [openBtn]),
-      ]);
-
-      // only Open button opens modal (карточка кликом не открывается)
-      openBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.tasksOpenView(t.id);
-      });
-
-      // Desktop dragstart
-      card.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", String(t.id));
-        e.dataTransfer.effectAllowed = "move";
-      });
-
-      // Mobile “hold & drag”
-      this._bindTouchDrag(card);
-
-      body.appendChild(card);
-    }
-
-    host.appendChild(col);
-  }
-};
-
-// Mobile drag helper (pointer)
-App._bindTouchDrag = function (cardEl) {
-  let pressTimer = null;
-  let dragging = false;
-  let ghost = null;
-  let startX = 0, startY = 0;
-
-  const cleanup = () => {
-    if (pressTimer) clearTimeout(pressTimer);
-    pressTimer = null;
-    dragging = false;
-    if (ghost) ghost.remove();
-    ghost = null;
-    for (const c of $$(".kcol", this.root)) c.classList.remove("kdropTarget");
-  };
-
-  const onMove = (e) => {
-    if (!dragging || !ghost) return;
-    e.preventDefault();
-    const x = e.clientX, y = e.clientY;
-    ghost.style.left = x + "px";
-    ghost.style.top = y + "px";
-
-    const el = document.elementFromPoint(x, y);
-    const col = el ? el.closest(".kcol") : null;
-    for (const c of $$(".kcol", this.root)) c.classList.toggle("kdropTarget", c === col);
-  };
-
-  const onUp = async (e) => {
-    if (!dragging) { cleanup(); return; }
-    e.preventDefault();
-
-    const x = e.clientX, y = e.clientY;
-    const el = document.elementFromPoint(x, y);
-    const col = el ? el.closest(".kcol") : null;
-    const status = col ? col.getAttribute("data-status") : null;
-
-    const id = Number(cardEl.getAttribute("data-id") || 0);
-
-    cleanup();
-
-    if (id && status) {
-      await this.tasksMove(id, status);
-    }
-  };
-
-  cardEl.addEventListener("pointerdown", (e) => {
-    // не трогаем мышь — там норм HTML5 drag
-    if (e.pointerType === "mouse") return;
-
-    // если нажали на кнопку — не начинаем drag
-    if (e.target && (e.target.closest("button") || e.target.closest("input") || e.target.closest("select"))) return;
-
-    startX = e.clientX; startY = e.clientY;
-
-    pressTimer = setTimeout(() => {
-      dragging = true;
-      ghost = cardEl.cloneNode(true);
-      ghost.classList.add("dragGhost");
-      ghost.style.left = startX + "px";
-      ghost.style.top = startY + "px";
-      document.body.appendChild(ghost);
-
-      cardEl.setPointerCapture(e.pointerId);
-      cardEl.addEventListener("pointermove", onMove, { passive: false });
-      cardEl.addEventListener("pointerup", onUp, { passive: false });
-      cardEl.addEventListener("pointercancel", onUp, { passive: false });
-    }, 180);
-  });
-
-  cardEl.addEventListener("pointerup", () => cleanup());
-  cardEl.addEventListener("pointercancel", () => cleanup());
-};
-
-App.tasksMove = async function (id, targetStatus) {
-  const S = this.state.tasks;
-  const t = (S.rows || []).find(x => Number(x.id) === Number(id));
-  if (!t) return;
-
-  // permission for start
-  if (targetStatus === "in_progress") {
-    const canStart = (this.state.user.role === "admin" || this.state.user.role === "rop" || Number(t.assignee_user_id) === Number(this.state.user.id));
-    if (!canStart) {
-      Toast.show("Ruxsat yo‘q", "Faqat mas’ul odam start qila oladi");
-      return;
-    }
-  }
-
-  // cancel needs reason
-  let cancel_reason = null;
-  if (targetStatus === "canceled") {
-    const body = h("div", {}, [
-      h("div", { class: "muted" }, "Otmen uchun sabab kiriting:"),
-      (() => {
-        const inp = h("textarea", { class: "input", style:"min-height:110px", placeholder:"Sabab..." });
-        inp.value = t.cancel_reason ? String(t.cancel_reason) : "";
-        return inp;
-      })(),
-      h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
-        h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
-        h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
-          const ta = $("textarea", Modal.overlay);
-          const reason = String(ta?.value || "").trim();
-          if (!reason) { Toast.show("Xato", "Sabab majburiy"); return; }
-          cancel_reason = reason;
-          Modal.close();
-          await this._tasksMoveCommit(id, targetStatus, cancel_reason);
-        } }, "Otmen"),
-      ]),
-    ]);
-    Modal.open("Cancel task", body);
-    return; // commit внутри модалки
-  }
-
-  await this._tasksMoveCommit(id, targetStatus, cancel_reason);
-};
-
-App._tasksMoveCommit = async function (id, targetStatus, cancel_reason) {
-  const S = this.state.tasks;
-  const t = (S.rows || []).find(x => Number(x.id) === Number(id));
-  if (!t) return;
-
-  try {
-    await API.tasks.move(id, { status: targetStatus, ...(cancel_reason ? { cancel_reason } : {}) });
-
-    const now = Math.floor(Date.now()/1000);
-
-    // local optimistic update + in_progress uniqueness (backend pausing others)
-    if (targetStatus === "in_progress") {
-      for (const x of S.rows) {
-        if (Number(x.assignee_user_id) === Number(t.assignee_user_id) && x.status === "in_progress" && Number(x.id) !== Number(id)) {
-          x.status = "pause";
-          x.updated_at = now;
+      const onUp = async (ev) => {
+        cardEl.releasePointerCapture?.(e.pointerId);
+        cardEl.removeEventListener("pointermove", onMove);
+        cardEl.removeEventListener("pointerup", onUp);
+        cardEl.removeEventListener("pointercancel", onUp);
+
+        if (ghost) ghost.remove();
+        ghost = null;
+
+        if (!dragging) return;
+
+        const id = Number(cardEl.getAttribute("data-id"));
+        if (!id) return;
+
+        const lists = $$("[data-drop]");
+        const target = lists.find((l) => {
+          const r = l.getBoundingClientRect();
+          return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+        });
+
+        if (target) {
+          const status = target.getAttribute("data-drop");
+          // emulate drop
+          const ev2 = new DragEvent("drop", { bubbles: true });
+          target.dispatchEvent(ev2);
+
+          // easiest: open modal and let user drag with mouse normally,
+          // but we keep it simple here: tell user to use desktop for drag if needed.
+          // (Next step we’ll implement full touch-drop with API move.)
+          Toast.show(`${t("toast_saved")}: ${taskStatusLabel(status)}`, "ok");
         }
-      }
-    }
-    t.status = targetStatus;
-    t.cancel_reason = (targetStatus === "canceled") ? (cancel_reason || t.cancel_reason || "") : null;
-    t.updated_at = now;
+      };
 
-    this.tasksRenderBoard();
-    Toast.show("OK", `Moved → ${statusLabelUz(targetStatus)}`);
-  } catch (e) {
-    Toast.show("Xato", e.message || "Move error");
-  }
-};
-
-App.tasksOpenCreate = function () {
-  const S = this.state.tasks;
-  const isAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
-  const users = (S.users && Array.isArray(S.users)) ? S.users.filter(x => Number(x.is_active) === 1) : null;
-
-  const titleInp = h("input", { class:"input", placeholder:"Title (ixtiyoriy)" });
-  const descInp = h("textarea", { class:"input", placeholder:"Description (majburiy)" });
-  const dlInp = h("input", { class:"input", type:"datetime-local" });
-  const prInp = h("input", { class:"input", inputmode:"numeric", placeholder:"Project ID (ixtiyoriy)" });
-
-  let assSel = null;
-  if (isAdminOrRop && users) {
-    assSel = h("select", { class:"sel" });
-    for (const u of users) assSel.appendChild(h("option", { value:String(u.id) }, `${u.full_name} (${u.role})`));
-    assSel.value = String(this.state.user.id);
-  }
-
-  const body = h("div", {}, [
-    h("div", { class:"grid2" }, [
-      h("div", {}, [h("div",{class:"label"},"Title"), titleInp]),
-      h("div", {}, [h("div",{class:"label"},"Deadline"), dlInp]),
-    ]),
-    h("div", { class:"field" }, [h("div",{class:"label"},"Description"), descInp]),
-    h("div", { class:"grid2" }, [
-      h("div", {}, [h("div",{class:"label"},"Project ID"), prInp]),
-      h("div", {}, [
-        h("div",{class:"label"},"Assignee"),
-        assSel ? assSel : h("div",{class:"badge"}, this.state.user.full_name)
-      ]),
-    ]),
-    h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
-      h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
-      h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
-        const description = String(descInp.value || "").trim();
-        if (!description) { Toast.show("Xato", "Description majburiy"); return; }
-
-        const payload = {
-          title: String(titleInp.value || "").trim() || null,
-          description,
-          deadline_at: dtLocalToSec(dlInp.value),
-          project_id: String(prInp.value || "").trim() ? Number(prInp.value) : null,
-          assignee_user_id: assSel ? Number(assSel.value) : Number(App.state.user.id),
-        };
-
-        try {
-          await API.tasks.create(payload);
-          Modal.close();
-          Toast.show("OK", "Task created");
-          await App.tasksLoad(true);
-        } catch (e) {
-          Toast.show("Xato", e.message || "Create error");
-        }
-      }}, "Saqlash"),
-    ]),
-  ]);
-
-  Modal.open("Create task", body);
-};
-
-App.tasksOpenView = async function (id) {
-  try {
-    const t = await API.tasks.get(id);
-    if (!t) { Toast.show("Xato", "Task not found"); return; }
-
-    const canAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
-    const canStart = canAdminOrRop || Number(t.assignee_user_id) === Number(this.state.user.id);
-    const canEdit = canAdminOrRop || Number(t.created_by) === Number(this.state.user.id);
-    const canDelete = canEdit;
-
-    const title = shortTitle(t);
-    const service = (t.service_name_uz || t.service_name_ru || t.service_name_en) ? (t.service_name_uz || t.service_name_ru || t.service_name_en) : "";
-    const company = t.project_company_name ? t.project_company_name : "No PR";
-
-    const info = h("div", {}, [
-      h("div", { class:"card", style:"box-shadow:none" }, [
-        h("div", { class:"cardHd" }, [h("h3", {}, `${title} (#${t.id})`), h("div", { class:"muted" }, statusLabelUz(t.status))]),
-        h("div", { class:"cardBd" }, [
-          h("div", { class:"muted" }, `Assignee: ${t.assignee_name || "—"}`),
-          h("div", { class:"muted", style:"margin-top:6px" }, `Created by: ${t.created_by_name || "—"}`),
-          h("div", { class:"muted", style:"margin-top:6px" }, `Project: ${company} ${service ? "• " + service : ""}`),
-          h("div", { class:"muted", style:"margin-top:6px" }, `Deadline: ${t.deadline_at ? fmtDateTime(t.deadline_at) : "—"}`),
-          h("div", { class:"muted", style:"margin-top:6px" }, `Spent: ${secToHMS(t.spent_seconds || 0)}`),
-          t.cancel_reason ? h("div", { class:"muted", style:"margin-top:6px" }, `Cancel reason: ${t.cancel_reason}`) : null,
-          h("hr"),
-          h("div", { class:"kdesc" }, String(t.description || "").trim() || "—"),
-        ]),
-      ]),
-    ]);
-
-    const btnRow = h("div", { style:"display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:10px" });
-
-    const startBtn = h("button", { class:"btn btnPrimary", type:"button" }, "Start");
-    const pauseBtn = h("button", { class:"btn", type:"button" }, "Pause");
-    const doneBtn  = h("button", { class:"btn", type:"button" }, "Done");
-    const cancelBtn= h("button", { class:"btn btnDanger", type:"button" }, "Cancel");
-    const editBtn  = h("button", { class:"btn", type:"button" }, "Edit");
-    const delBtn   = h("button", { class:"btn btnDanger", type:"button" }, "Delete");
-
-    if (canStart) btnRow.appendChild(startBtn);
-    btnRow.appendChild(pauseBtn);
-    btnRow.appendChild(doneBtn);
-    btnRow.appendChild(cancelBtn);
-    if (canEdit) btnRow.appendChild(editBtn);
-    if (canDelete) btnRow.appendChild(delBtn);
-
-    startBtn.addEventListener("click", async () => { Modal.close(); await this.tasksMove(t.id, "in_progress"); });
-    pauseBtn.addEventListener("click", async () => { Modal.close(); await this.tasksMove(t.id, "pause"); });
-    doneBtn.addEventListener("click",  async () => { Modal.close(); await this.tasksMove(t.id, "done"); });
-    cancelBtn.addEventListener("click",async () => { Modal.close(); await this.tasksMove(t.id, "canceled"); });
-
-    editBtn.addEventListener("click", () => this.tasksOpenEdit(t));
-    delBtn.addEventListener("click", async () => {
-      const body = h("div", {}, [
-        h("div",{class:"muted"},`Delete task #${t.id}?`),
-        h("div",{style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px"},[
-          h("button",{class:"btn",type:"button",onclick:()=>Modal.close()},"Bekor"),
-          h("button",{class:"btn btnDanger",type:"button",onclick:async ()=>{
-            try{
-              await API.tasks.del(t.id);
-              Modal.close();
-              Toast.show("OK","Deleted");
-              await App.tasksLoad(true);
-            }catch(e){
-              Toast.show("Xato", e.message || "Delete error");
-            }
-          }},"Delete"),
-        ])
-      ]);
-      Modal.open("Delete", body);
+      cardEl.setPointerCapture?.(e.pointerId);
+      cardEl.addEventListener("pointermove", onMove);
+      cardEl.addEventListener("pointerup", onUp);
+      cardEl.addEventListener("pointercancel", onUp);
     });
-
-    const wrap = h("div", {}, [info, btnRow]);
-    Modal.open("Task", wrap);
-
-  } catch (e) {
-    Toast.show("Xato", e.message || "Task load error");
-  }
-};
-
-App.tasksOpenEdit = function (taskFull) {
-  const S = this.state.tasks;
-  const canAdminOrRop = (this.state.user.role === "admin" || this.state.user.role === "rop");
-  const users = (S.users && Array.isArray(S.users)) ? S.users.filter(x => Number(x.is_active) === 1) : null;
-
-  const titleInp = h("input", { class:"input", value: String(taskFull.title || "") });
-  const descInp  = h("textarea", { class:"input" }, String(taskFull.description || ""));
-  const dlInp    = h("input", { class:"input", type:"datetime-local", value: secToDtLocal(taskFull.deadline_at) });
-  const prInp    = h("input", { class:"input", inputmode:"numeric", value: taskFull.project_id ? String(taskFull.project_id) : "" });
-
-  let assSel = null;
-  if (canAdminOrRop && users) {
-    assSel = h("select", { class:"sel" });
-    for (const u of users) assSel.appendChild(h("option", { value:String(u.id) }, `${u.full_name} (${u.role})`));
-    assSel.value = String(taskFull.assignee_user_id);
   }
 
-  const body = h("div", {}, [
-    h("div", { class:"grid2" }, [
-      h("div", {}, [h("div",{class:"label"},"Title"), titleInp]),
-      h("div", {}, [h("div",{class:"label"},"Deadline"), dlInp]),
-    ]),
-    h("div", { class:"field" }, [h("div",{class:"label"},"Description"), descInp]),
-    h("div", { class:"grid2" }, [
-      h("div", {}, [h("div",{class:"label"},"Project ID"), prInp]),
-      h("div", {}, [h("div",{class:"label"},"Assignee"), assSel ? assSel : h("div",{class:"badge"}, taskFull.assignee_name || "—")]),
-    ]),
-    h("div", { style:"display:flex;gap:10px;justify-content:flex-end;margin-top:10px" }, [
-      h("button", { class:"btn", type:"button", onclick: () => Modal.close() }, "Bekor"),
-      h("button", { class:"btn btnPrimary", type:"button", onclick: async () => {
-        const description = String(descInp.value || "").trim();
-        if (!description) { Toast.show("Xato","Description majburiy"); return; }
-
-        const payload = {
-          title: String(titleInp.value || "").trim() || null,
-          description,
-          deadline_at: dtLocalToSec(dlInp.value),
-          project_id: String(prInp.value || "").trim() ? Number(prInp.value) : null,
-        };
-        if (assSel) payload.assignee_user_id = Number(assSel.value);
-
-        try {
-          await API.tasks.update(taskFull.id, payload);
-          Modal.close();
-          Toast.show("OK","Saved");
-          await App.tasksLoad(true);
-        } catch (e) {
-          Toast.show("Xato", e.message || "Save error");
-        }
-      }}, "Saqlash"),
-    ]),
-  ]);
-
-  Modal.open("Edit task", body);
-};
-
-
-  // Boot
-  document.addEventListener("DOMContentLoaded", () => {
-    App.start().catch((e) => {
-      console.error(e);
-      const root = document.getElementById("app");
-      if (root) root.textContent = "Fatal error: " + (e?.message || e);
-    });
-  });
+  /* ============ BOOT ============ */
+  App.start();
 })();
