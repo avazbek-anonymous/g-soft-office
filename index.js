@@ -710,7 +710,16 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,rgba(255,208,90,.9),rgba(15,209,167,.75));box-shadow:0 12px 25px rgba(0,0,0,.25)}
 .brandName{font-weight:800;letter-spacing:.6px}
 .nav{display:flex;flex-direction:column;gap:6px;padding:0 6px}
-.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid transparent;color:var(--muted)}
+.nav a{
+display:flex;
+align-items:center;
+gap:12px;
+padding:10px 12px;
+border-radius:14px;
+border:1px solid transparent;
+color:var(--muted);
+text-decoration:none;
+}
 .nav a .txt{white-space:nowrap;opacity:0;transform:translateX(-6px);transition:.18s ease}
 .sidebar:hover .nav a .txt,.sidebar.open .nav a .txt{opacity:1;transform:translateX(0)}
 .nav a.active{background:var(--card);border-color:var(--stroke);color:var(--text)}
