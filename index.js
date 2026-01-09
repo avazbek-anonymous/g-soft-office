@@ -1070,12 +1070,7 @@ max-width:none
       class: "iconBtn",
       type: "button",
       title: t("sign_out"),
-      onClick: async () => {
-        try {
-          await API.logout();
-        } catch {}
-        location.href = "login.html";
-      }
+      onClick:async()=>{try{await API.logout();}catch{} location.href="/login";}
     }, t("sign_out"));
 
     const topbar = el("header", {
@@ -1223,10 +1218,8 @@ max-width:none
               if (!login || !password) return Toast.show(`${t("toast_error")}: ${t("login_hint")}`, "bad");
               btn.disabled = true;
               btn.textContent = t("signing_in");
-              try {
-                await API.login(login, password);
-                location.href = "index.html";
-              } catch (e) {
+              try{ await API.login(login,password); location.href="/"; }
+              catch (e) {
                 Toast.show(e.message || "Login failed", "bad");
                 btn.disabled = false;
                 btn.textContent = t("sign_in");
@@ -2846,22 +2839,38 @@ max-width:none
     injectStyles();
     applyTheme();
 
-    const isLogin = location.pathname.endsWith("/login.html") || location.pathname.endsWith("login.html");
-    if (isLogin) {
-      App.renderLogin();
-      return;
-    }
+    function isLoginPage(){
+  const p = location.pathname.replace(/\/+$/,""); // убираем trailing /
+  // поддерживаем /login, /login.html, /login/index.html
+  return (
+    p === "/login" ||
+    p === "/login.html" ||
+    p.endsWith("/login/index.html")
+  );
+}
 
-    try {
-      const me = await API.me();
-      App.state.user = me.data.user;
-      App.renderShell();
-      App.bindRouting();
-      if (!location.hash || !location.hash.startsWith("#/")) setHash(DEFAULT_ROUTE);
-      else App.routeNow();
-    } catch {
-      location.href = "login.html";
-    }
+async function start(){
+  injectStyles();
+  applyTheme();
+
+  if (isLoginPage()){
+    App.renderLogin();
+    return;
+  }
+
+  try{
+    const me = await API.me();
+    App.state.user = me.data.user;
+    App.renderShell();
+    App.bindRouting();
+    if(!location.hash || !location.hash.startsWith("#/")) setHash(DEFAULT_ROUTE);
+    else App.routeNow();
+  }catch{
+    // ВАЖНО: редиректим на /login (а не login.html), чтобы не было циклов
+    location.href = "/login";
+  }
+}
+
   }
 
   window.GSOFT = App;
