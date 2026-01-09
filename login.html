@@ -1,12 +1,112 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uz" data-lang="uz" data-theme="dark" data-eye="0">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>G-SOFT | Login</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>G-SOFT — Login</title>
+
+  <link rel="icon" href="/assets/icon/asosiy.svg" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
+
+  <style>
+    /* Минимальный safe-base, чтобы не было горизонтального скролла даже без style.css */
+    html, body { height: 100%; }
+    body { margin: 0; overflow-x: hidden; }
+  </style>
 </head>
-<body>
-  <div id="app"></div>
-  <script src="./index.js"></script>
+
+<body class="page page-login">
+  <noscript>
+    <div style="padding:16px;font-family:system-ui">
+      JavaScript yoqilgan bo‘lishi kerak.
+    </div>
+  </noscript>
+
+  <div class="login-shell">
+    <header class="login-topbar">
+      <div class="brand">
+        <img class="brand__logo" src="/assets/icon/asosiy.svg" alt="G-SOFT" />
+        <div class="brand__text">
+          <div class="brand__name">G-SOFT</div>
+          <div class="brand__sub" data-i18n="login_subtitle">Kirish</div>
+        </div>
+      </div>
+
+      <div class="login-topbar__actions">
+        <!-- Language -->
+        <div class="seg" role="group" aria-label="Language">
+          <button class="seg__btn" type="button" data-lang-btn="uz">UZ</button>
+          <button class="seg__btn" type="button" data-lang-btn="ru">RU</button>
+          <button class="seg__btn" type="button" data-lang-btn="en">EN</button>
+        </div>
+
+        <!-- Theme -->
+        <button class="icon-btn" type="button" id="themeToggle" aria-label="Theme">
+          <img src="/assets/icon/dark.svg" alt="" />
+        </button>
+
+        <!-- Eye protection -->
+        <button class="icon-btn" type="button" id="eyeToggle" aria-label="Eye protection">
+          <img src="/assets/icon/eye.svg" alt="" />
+        </button>
+      </div>
+    </header>
+
+    <main class="login-main">
+      <section class="card login-card" aria-labelledby="loginTitle">
+        <h1 id="loginTitle" class="h1" data-i18n="login_title">Tizimga kirish</h1>
+        <p class="muted" data-i18n="login_hint">
+          Login va parolingizni kiriting
+        </p>
+
+        <form id="loginForm" class="form" autocomplete="on">
+          <div class="field">
+            <label class="label" for="login" data-i18n="login_login">Login</label>
+            <input class="input" id="login" name="login" type="text" inputmode="text" autocomplete="username" required />
+          </div>
+
+          <div class="field">
+            <label class="label" for="password" data-i18n="login_password">Parol</label>
+            <div class="input-group">
+              <input class="input" id="password" name="password" type="password" autocomplete="current-password" required />
+              <button class="input-suffix" type="button" id="pwToggle" aria-label="Show/Hide password">
+                <span class="pw-eye"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="row row-between">
+            <label class="check">
+              <input type="checkbox" id="rememberUI" />
+              <span data-i18n="login_remember_ui">Brauzerda eslab qolish</span>
+            </label>
+
+            <span class="muted small" id="serverHint" data-i18n="login_server_hint">
+              API: /api
+            </span>
+          </div>
+
+          <button class="btn btn-primary w-100" type="submit" id="loginSubmit">
+            <span class="btn__text" data-i18n="login_btn">Kirish</span>
+            <span class="btn__spinner" aria-hidden="true"></span>
+          </button>
+
+          <div class="alert alert-error mt-12" id="loginError" hidden></div>
+        </form>
+      </section>
+
+      <footer class="login-footer muted small">
+        <span>© G-SOFT</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- shared UI roots -->
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- scripts -->
+  <script src="/assets/js/lang.js"></script>
+  <script type="module" src="/assets/js/login.js"></script>
 </body>
 </html>
