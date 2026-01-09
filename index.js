@@ -65,12 +65,31 @@
 
   const DICT = {
     ru: {
+      edit: "Редактировать",
+      full_name: "ФИО",
+      phone: "Телефон",
+      role: "Роль",
+      active: "Активен",
+      last_login: "Последний вход",
+      created_at: "Создан",
+      updated_at: "Обновлён",
+      new_password: "Новый пароль",
+      reset_password: "Сбросить пароль",
+      activate: "Активировать",
+      deactivate: "Деактивировать",
+      users_total: "Всего",
+      only_active: "Только активные",
+      all_users: "Все пользователи",
+      user_create: "Создать пользователя",
+      user_created: "Пользователь создан",
+      password_changed: "Пароль обновлён",
+      user_updated: "Пользователь обновлён",
+      user_deactivated: "Пользователь деактивирован",
       app_name: "G-SOFT",
       login_title: "Вход",
       login_hint: "Введите логин и пароль",
       login: "Логин",
       password: "Пароль",
-      edit:"Редактировать",
       sign_in: "Войти",
       signing_in: "Входим…",
       sign_out: "Выйти",
@@ -141,7 +160,26 @@
       create: "Yaratish",
       open: "Ochish",
       search: "Qidiruv…",
-      edit:"Tahrirlash",
+      edit: "Tahrirlash",
+      full_name: "F.I.Sh",
+      phone: "Telefon",
+      role: "Rol",
+      active: "Faol",
+      last_login: "So‘nggi kirish",
+      created_at: "Yaratilgan",
+      updated_at: "Yangilangan",
+      new_password: "Yangi parol",
+      reset_password: "Parolni yangilash",
+      activate: "Faollashtirish",
+      deactivate: "Faolsizlantirish",
+      users_total: "Jami",
+      only_active: "Faqat faol",
+      all_users: "Barchasi",
+      user_create: "Foydalanuvchi yaratish",
+      user_created: "Foydalanuvchi yaratildi",
+      password_changed: "Parol yangilandi",
+      user_updated: "Foydalanuvchi yangilandi",
+      user_deactivated: "Foydalanuvchi faolsizlantirildi",
       assignee: "Mas’ul",
       project: "Loyiha",
       deadline: "Muddat",
@@ -186,7 +224,26 @@
       login_hint: "Enter login and password",
       login: "Login",
       password: "Password",
-      edit:"Edit",
+      edit: "Edit",
+      full_name: "Full name",
+      phone: "Phone",
+      role: "Role",
+      active: "Active",
+      last_login: "Last login",
+      created_at: "Created",
+      updated_at: "Updated",
+      new_password: "New password",
+      reset_password: "Reset password",
+      activate: "Activate",
+      deactivate: "Deactivate",
+      users_total: "Total",
+      only_active: "Only active",
+      all_users: "All users",
+      user_create: "Create user",
+      user_created: "User created",
+      password_changed: "Password updated",
+      user_updated: "User updated",
+      user_deactivated: "User deactivated",
       sign_in: "Sign in",
       signing_in: "Signing in…",
       sign_out: "Sign out",
@@ -248,7 +305,7 @@
     if (nav.startsWith("uz")) return "uz";
     if (nav.startsWith("en")) return "en";
     return "ru";
-  }
+  } 
 
   const App = {
     state: {
@@ -519,6 +576,26 @@
       del: (id) => apiFetch(`/api/tasks/${id}/delete`, {
         method: "POST"
       }),
+    },
+    users: {
+      list: () => apiFetch("/api/users"),
+      create: (body) => apiFetch("/api/users", {
+        method: "POST",
+        body
+      }),
+      update: (id, body) => apiFetch(`/api/users/${id}`, {
+        method: "PUT",
+        body
+      }),
+      resetPassword: (id, new_password) => apiFetch(`/api/users/${id}/reset_password`, {
+        method: "POST",
+        body: {
+          new_password
+        }
+      }),
+      deactivate: (id) => apiFetch(`/api/users/${id}/delete`, {
+        method: "POST"
+      }),
     }
   };
 
@@ -753,6 +830,25 @@ max-width:none
 .kcard.dragging{opacity:.55}
 .kcardActions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
 .btn.mini{padding:6px 10px; border-radius:10px; font-size:12px}
+/* ===== USERS ===== */
+.uToolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.uList{display:flex; flex-direction:column; gap:10px}
+.uCard{padding:12px; border:1px solid var(--stroke); border-radius:18px; background:rgba(255,255,255,.05)}
+.uRow{display:grid; grid-template-columns:70px 1.4fr 1fr 1fr 120px 140px auto; gap:10px; align-items:center}
+.uId{font-family:var(--mono); color:var(--muted2); font-size:12px}
+.uName{font-weight:900}
+.uMeta{color:var(--muted); font-size:12px}
+.uActions{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap}
+.badge.ok{border-color:rgba(37,211,102,.35)}
+.badge.off{border-color:rgba(255,77,77,.35)}
+@media (max-width:1100px){
+  .uRow{grid-template-columns:70px 1.2fr 1fr 120px auto}
+  .uHideLg{display:none}
+}
+@media (max-width:720px){
+  .uRow{display:flex; flex-direction:column; align-items:flex-start}
+  .uActions{width:100%; justify-content:flex-start}
+}
 
     `.trim();
     document.head.appendChild(el("style", {
@@ -1155,6 +1251,7 @@ max-width:none
     host.innerHTML = "";
     if (path === "/main") return App.renderMain(host);
     if (path === "/tasks") return App.renderTasks(host);
+    if (path === "/users") return App.renderUsers(host);
     return App.renderStub(host);
   };
 
@@ -1349,7 +1446,7 @@ max-width:none
   }
 
   App.renderTasks = async function (host) {
-    const role = App.state.user.role;
+    const role = App.state.user.role; 
     const isAdmin = role === "admin";
     const isRop = role === "rop";
 
@@ -1632,198 +1729,333 @@ max-width:none
       });
     }
 
-    async function openTaskView(id){
-  try{
-    const r = await API.tasks.get(id);
-    const x = r.data;
+    async function openTaskView(id) {
+      try {
+        const r = await API.tasks.get(id);
+        const x = r.data;
 
-    const view = el("div",{class:"vcol gap10"},
-      el("div",{class:"grid2"},
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("status")),
-          el("div",{style:"font-weight:900"}, taskStatusLabel(x.status))
-        ),
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("spent")),
-          el("div",{style:"font-weight:900"}, fmtDuration(x.spent_seconds))
-        )
-      ),
-      el("div",{class:"grid2"},
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("assignee")),
-          el("div",{}, x.assignee_name || "—")
-        ),
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("deadline")),
-          el("div",{}, fmtDate(x.deadline_at))
-        )
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("project")),
-        el("div",{}, x.project_company_name || "—")
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("title")),
-        el("div",{style:"font-weight:900"}, x.title || `#${x.id}`)
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("description")),
-        el("div",{class:"muted",style:"white-space:pre-wrap"}, x.description || "—")
-      ),
-      el("div",{class:"muted2",style:"font-size:12px"}, `Updated: ${fmtDate(x.updated_at)}`)
-    );
+        const view = el("div", {
+            class: "vcol gap10"
+          },
+          el("div", {
+              class: "grid2"
+            },
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("status")),
+              el("div", {
+                style: "font-weight:900"
+              }, taskStatusLabel(x.status))
+            ),
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("spent")),
+              el("div", {
+                style: "font-weight:900"
+              }, fmtDuration(x.spent_seconds))
+            )
+          ),
+          el("div", {
+              class: "grid2"
+            },
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("assignee")),
+              el("div", {}, x.assignee_name || "—")
+            ),
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("deadline")),
+              el("div", {}, fmtDate(x.deadline_at))
+            )
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("project")),
+            el("div", {}, x.project_company_name || "—")
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("title")),
+            el("div", {
+              style: "font-weight:900"
+            }, x.title || `#${x.id}`)
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("description")),
+            el("div", {
+              class: "muted",
+              style: "white-space:pre-wrap"
+            }, x.description || "—")
+          ),
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, `Updated: ${fmtDate(x.updated_at)}`)
+        );
 
-    const role = App.state.user.role;
-    const isAdmin = role==="admin";
-    const isRop = role==="rop";
-    const canEdit = (x.created_by===App.state.user.id) || isAdmin || isRop;
-    const canStart = (x.assignee_user_id===App.state.user.id) || isAdmin || isRop;
+        const role = App.state.user.role;
+        const isAdmin = role === "admin";
+        const isRop = role === "rop";
+        const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+        const canStart = (x.assignee_user_id === App.state.user.id) || isAdmin || isRop;
 
-    const actions = [];
+        const actions = [];
 
-    // ✎ Edit
-    if (canEdit){
-      actions.push({label:"✎ " + (DICT[App.state.lang]?.edit || "Edit"), kind:"primary", onClick:()=>{
-        Modal.close();
-        openTaskEdit(x.id);
-      }});
-    }
+        // ✎ Edit
+        if (canEdit) {
+          actions.push({
+            label: "✎ " + (DICT[App.state.lang] ?.edit || "Edit"),
+            kind: "primary",
+            onClick: () => {
+              Modal.close();
+              openTaskEdit(x.id);
+            }
+          });
+        }
 
-    // Status actions
-    const doMove = async (status, extra={})=>{
-      try{
-        await API.tasks.move(x.id, status, extra);
-        Toast.show(t("toast_saved"),"ok");
-        Modal.close();
-        await load();
-      }catch(e){
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+        // Status actions
+        const doMove = async (status, extra = {}) => {
+          try {
+            await API.tasks.move(x.id, status, extra);
+            Toast.show(t("toast_saved"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+          }
+        };
+
+        if (canStart && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
+          actions.push({
+            label: t("action_start"),
+            kind: "ghost",
+            onClick: () => doMove("in_progress")
+          });
+        }
+        if (x.status === "in_progress") {
+          actions.push({
+            label: t("action_pause"),
+            kind: "ghost",
+            onClick: () => doMove("pause")
+          });
+        }
+        if (x.status !== "done" && x.status !== "canceled") {
+          actions.push({
+            label: t("action_done"),
+            kind: "ghost",
+            onClick: () => doMove("done")
+          });
+          actions.push({
+            label: t("action_cancel"),
+            kind: "danger",
+            onClick: async () => {
+              const reason = await Modal.prompt(t("reason"), t("need_reason"));
+              if (!reason) return;
+              await doMove("canceled", {
+                cancel_reason: reason
+              });
+            }
+          });
+        }
+
+        actions.push({
+          label: t("close"),
+          kind: "ghost",
+          onClick: () => Modal.close()
+        });
+
+        Modal.open(`${t("open")} #${x.id}`, view, actions);
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
       }
-    };
-
-    if (canStart && x.status!=="in_progress" && x.status!=="done" && x.status!=="canceled"){
-      actions.push({label:t("action_start"), kind:"ghost", onClick:()=>doMove("in_progress")});
-    }
-    if (x.status==="in_progress"){
-      actions.push({label:t("action_pause"), kind:"ghost", onClick:()=>doMove("pause")});
-    }
-    if (x.status!=="done" && x.status!=="canceled"){
-      actions.push({label:t("action_done"), kind:"ghost", onClick:()=>doMove("done")});
-      actions.push({label:t("action_cancel"), kind:"danger", onClick:async()=>{
-        const reason = await Modal.prompt(t("reason"), t("need_reason"));
-        if(!reason) return;
-        await doMove("canceled",{cancel_reason:reason});
-      }});
     }
 
-    actions.push({label:t("close"), kind:"ghost", onClick:()=>Modal.close()});
+    async function openTaskEdit(id) {
+      try {
+        const r = await API.tasks.get(id);
+        const x = r.data;
 
-    Modal.open(`${t("open")} #${x.id}`, view, actions);
-  }catch(e){
-    Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
-  }
-}
+        const role = App.state.user.role;
+        const isAdmin = role === "admin";
+        const isRop = role === "rop";
+        const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+        if (!canEdit) return openTaskView(id);
 
-async function openTaskEdit(id){
-  try{
-    const r = await API.tasks.get(id);
-    const x = r.data;
+        const titleInp = el("input", {
+          value: x.title || "",
+          placeholder: t("title")
+        });
+        const descInp = el("textarea", {
+          rows: 6,
+          placeholder: t("description")
+        }, x.description || "");
 
-    const role = App.state.user.role;
-    const isAdmin = role==="admin";
-    const isRop = role==="rop";
-    const canEdit = (x.created_by===App.state.user.id) || isAdmin || isRop;
-    if(!canEdit) return openTaskView(id);
-
-    const titleInp = el("input",{value:x.title||"",placeholder:t("title")});
-    const descInp  = el("textarea",{rows:6,placeholder:t("description")}, x.description||"");
-
-    const deadlineInp = el("input",{type:"datetime-local"});
-    if(x.deadline_at){
-      const d=new Date(x.deadline_at*1000);
-      const pad=n=>String(n).padStart(2,"0");
-      deadlineInp.value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
-
-    const projectSel = el("select",{}, el("option",{value:""},"—"));
-    for(const p of (App.state.cache.projects||[])){
-      projectSel.appendChild(el("option",{value:String(p.id),selected:p.id===x.project_id},
-        p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
-      ));
-    }
-
-    let assigneeSel=null;
-    if(isAdmin){
-      assigneeSel = el("select",{},
-        ...(App.state.cache.users||[]).map(u=>el("option",{value:String(u.id),selected:u.id===x.assignee_user_id}, `${u.full_name} (${u.role})`))
-      );
-    }
-
-    const form = el("div",{class:"vcol gap10"},
-      el("div",{class:"grid2"},
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("assignee")),
-          isAdmin ? assigneeSel : el("div",{}, x.assignee_name || "—")
-        ),
-        el("div",{class:"vcol gap8"},
-          el("div",{class:"muted2",style:"font-size:12px"}, t("deadline")),
-          deadlineInp
-        )
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("project")),
-        projectSel
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("title")),
-        titleInp
-      ),
-      el("div",{class:"vcol gap8"},
-        el("div",{class:"muted2",style:"font-size:12px"}, t("description")),
-        descInp
-      )
-    );
-
-    Modal.open("✎ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
-      {label:t("cancel"), kind:"ghost", onClick:()=>Modal.close()},
-      {label:t("save"), kind:"primary", onClick:async()=>{
-        try{
-          const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime()/1000) : null;
-          const body = {
-            title:(titleInp.value||"").trim()||null,
-            description:(descInp.value||"").trim(),
-            deadline_at,
-            project_id: projectSel.value ? Number(projectSel.value) : null,
-          };
-          if(isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
-
-          await API.tasks.update(x.id, body);
-          Toast.show(t("toast_saved"),"ok");
-          Modal.close();
-          await load();
-        }catch(e){
-          Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+        const deadlineInp = el("input", {
+          type: "datetime-local"
+        });
+        if (x.deadline_at) {
+          const d = new Date(x.deadline_at * 1000);
+          const pad = n => String(n).padStart(2, "0");
+          deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
-      }},
-      {label:t("delete"), kind:"danger", onClick:async()=>{
-        const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
-        if(!ok) return;
-        try{
-          await API.tasks.del(x.id);
-          Toast.show(t("toast_deleted"),"ok");
-          Modal.close();
-          await load();
-        }catch(e){
-          Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
-        }
-      }}
-    ]);
 
-    setTimeout(()=>descInp.focus(),0);
-  }catch(e){
-    Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
-  }
-}
+        const projectSel = el("select", {}, el("option", {
+          value: ""
+        }, "—"));
+        for (const p of (App.state.cache.projects || [])) {
+          projectSel.appendChild(el("option", {
+              value: String(p.id),
+              selected: p.id === x.project_id
+            },
+            p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
+          ));
+        }
+
+        let assigneeSel = null;
+        if (isAdmin) {
+          assigneeSel = el("select", {},
+            ...(App.state.cache.users || []).map(u => el("option", {
+              value: String(u.id),
+              selected: u.id === x.assignee_user_id
+            }, `${u.full_name} (${u.role})`))
+          );
+        }
+
+        const form = el("div", {
+            class: "vcol gap10"
+          },
+          el("div", {
+              class: "grid2"
+            },
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("assignee")),
+              isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "—")
+            ),
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("deadline")),
+              deadlineInp
+            )
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("project")),
+            projectSel
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("title")),
+            titleInp
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("description")),
+            descInp
+          )
+        );
+
+        Modal.open("✎ " + (DICT[App.state.lang] ?.edit || "Edit"), form, [{
+            label: t("cancel"),
+            kind: "ghost",
+            onClick: () => Modal.close()
+          },
+          {
+            label: t("save"),
+            kind: "primary",
+            onClick: async () => {
+              try {
+                const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
+                const body = {
+                  title: (titleInp.value || "").trim() || null,
+                  description: (descInp.value || "").trim(),
+                  deadline_at,
+                  project_id: projectSel.value ? Number(projectSel.value) : null,
+                };
+                if (isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
+
+                await API.tasks.update(x.id, body);
+                Toast.show(t("toast_saved"), "ok");
+                Modal.close();
+                await load();
+              } catch (e) {
+                Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+              }
+            }
+          },
+          {
+            label: t("delete"),
+            kind: "danger",
+            onClick: async () => {
+              const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
+              if (!ok) return;
+              try {
+                await API.tasks.del(x.id);
+                Toast.show(t("toast_deleted"), "ok");
+                Modal.close();
+                await load();
+              } catch (e) {
+                Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+              }
+            }
+          }
+        ]);
+
+        setTimeout(() => descInp.focus(), 0);
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+      }
+    }
 
 
     createBtn.addEventListener("click", async () => {
@@ -1945,6 +2177,661 @@ async function openTaskEdit(id){
 
     await load();
   };
+
+  App.renderUsers = async function (host) {
+    const role = App.state.user.role;
+    if (role !== "admin") {
+      host.innerHTML = "";
+      host.appendChild(el("div", {
+          class: "card cardPad vcol gap10"
+        },
+        el("div", {
+          style: "font-weight:900"
+        }, "Forbidden"),
+        el("div", {
+          class: "muted"
+        }, "Only admin")
+      ));
+      return;
+    }
+
+    const top = el("div", {
+        class: "card cardPad vcol gap12"
+      },
+      el("div", {
+        style: "font-weight:900"
+      }, t("route_users")),
+      el("div", {
+          class: "uToolbar"
+        },
+        el("input", {
+          id: "uSearch",
+          placeholder: t("search"),
+          style: "min-width:240px; flex:1"
+        }),
+        el("div", {
+            class: "seg",
+            title: "Filter"
+          },
+          el("button", {
+            type: "button",
+            id: "uOnlyActiveBtn",
+            class: "active"
+          }, t("only_active")),
+          el("button", {
+            type: "button",
+            id: "uAllBtn"
+          }, t("all_users"))
+        ),
+        el("button", {
+          class: "btn primary",
+          type: "button",
+          id: "uCreateBtn"
+        }, t("user_create"))
+      )
+    );
+
+    const listWrap = el("div", {
+        class: "card cardPad vcol gap10"
+      },
+      el("div", {
+        class: "muted2",
+        id: "uCount",
+        style: "font-size:12px"
+      }, ""),
+      el("div", {
+        class: "uList",
+        id: "uList"
+      }, el("div", {
+        class: "muted"
+      }, t("loading")))
+    );
+
+    host.append(top, listWrap);
+
+    const searchInp = $("#uSearch", host);
+    const onlyActiveBtn = $("#uOnlyActiveBtn", host);
+    const allBtn = $("#uAllBtn", host);
+    const createBtn = $("#uCreateBtn", host);
+    const uList = $("#uList", host);
+    const uCount = $("#uCount", host);
+
+    let onlyActive = true;
+    let all = [];
+
+    const ROLES = ["admin", "pm", "fin", "sale", "rop"];
+
+    function fmtTs(ts) {
+      if (!ts) return "—";
+      try {
+        return fmtDate(ts);
+      } catch {
+        return "—";
+      }
+    }
+
+    function render() {
+      const q = (searchInp.value || "").trim().toLowerCase();
+      const rows = all.filter(u => {
+        if (onlyActive && !Number(u.is_active)) return false;
+        if (!q) return true;
+        const s = `${u.id} ${u.full_name||""} ${u.login||""} ${u.phone||""} ${u.role||""}`.toLowerCase();
+        return s.includes(q);
+      });
+
+      uCount.textContent = `${t("users_total")}: ${rows.length}`;
+
+      uList.innerHTML = "";
+      if (!rows.length) {
+        uList.appendChild(el("div", {
+          class: "muted"
+        }, t("no_data")));
+        return;
+      }
+
+      for (const u of rows) {
+        const activeBadge = Number(u.is_active) ?
+          el("span", {
+            class: "badge ok"
+          }, "ON") :
+          el("span", {
+            class: "badge off"
+          }, "OFF");
+
+        const actions = el("div", {
+            class: "uActions"
+          },
+          el("button", {
+            class: "btn mini ghost",
+            type: "button",
+            onClick: () => openUserView(u)
+          }, t("open")),
+          el("button", {
+            class: "btn mini ghost",
+            type: "button",
+            onClick: () => openUserEdit(u)
+          }, "✎ " + t("edit")),
+          el("button", {
+            class: "btn mini ghost",
+            type: "button",
+            onClick: () => openResetPassword(u)
+          }, t("reset_password")),
+          Number(u.is_active) ?
+          el("button", {
+            class: "btn mini danger",
+            type: "button",
+            onClick: () => deactivateUser(u)
+          }, t("deactivate")) :
+          el("button", {
+            class: "btn mini primary",
+            type: "button",
+            onClick: () => activateUser(u)
+          }, t("activate"))
+        );
+
+        const row = el("div", {
+            class: "uCard"
+          },
+          el("div", {
+              class: "uRow"
+            },
+            el("div", {
+              class: "uId"
+            }, `#${u.id}`),
+            el("div", {
+                class: "vcol gap8"
+              },
+              el("div", {
+                class: "uName"
+              }, u.full_name || "—"),
+              el("div", {
+                class: "uMeta"
+              }, `${t("role")}: ${u.role}  •  ${t("login")}: ${u.login}`)
+            ),
+            el("div", {
+                class: "vcol gap8 uHideLg"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("phone")),
+              el("div", {}, u.phone || "—")
+            ),
+            el("div", {
+                class: "vcol gap8 uHideLg"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("last_login")),
+              el("div", {}, fmtTs(u.last_login_at))
+            ),
+            el("div", {
+              class: "hrow gap8",
+              style: "align-items:center"
+            }, activeBadge, el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("active"))),
+            el("div", {
+                class: "vcol gap8 uHideLg"
+              },
+              el("div", {
+                class: "muted2",
+                style: "font-size:12px"
+              }, t("created_at")),
+              el("div", {}, fmtTs(u.created_at))
+            ),
+            actions
+          )
+        );
+
+        uList.appendChild(row);
+      }
+    }
+
+    async function load() {
+      try {
+        const r = await API.users.list();
+        all = (r.data || []).slice();
+        App.state.cache.users = all; // чтобы tasks-admin фильтр всегда был актуальным
+        render();
+      } catch (e) {
+        uList.innerHTML = "";
+        uList.appendChild(el("div", {
+          class: "muted"
+        }, `${t("toast_error")}: ${e.message||"error"}`));
+      }
+    }
+
+    function openUserView(u) {
+      const body = el("div", {
+          class: "vcol gap10"
+        },
+        el("div", {
+            class: "grid2"
+          },
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("full_name")),
+            el("div", {
+              style: "font-weight:900"
+            }, u.full_name || "—")
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("role")),
+            el("div", {
+              style: "font-weight:900"
+            }, u.role)
+          )
+        ),
+        el("div", {
+            class: "grid2"
+          },
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("login")),
+            el("div", {}, u.login)
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("phone")),
+            el("div", {}, u.phone || "—")
+          )
+        ),
+        el("div", {
+            class: "grid2"
+          },
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("created_at")),
+            el("div", {}, fmtTs(u.created_at))
+          ),
+          el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("last_login")),
+            el("div", {}, fmtTs(u.last_login_at))
+          )
+        ),
+        el("div", {
+          class: "muted2",
+          style: "font-size:12px"
+        }, `${t("updated_at")}: ${fmtTs(u.updated_at)}`)
+      );
+
+      Modal.open(`${t("open")} #${u.id}`, body, [{
+          label: "✎ " + t("edit"),
+          kind: "primary",
+          onClick: () => {
+            Modal.close();
+            openUserEdit(u);
+          }
+        },
+        {
+          label: t("reset_password"),
+          kind: "ghost",
+          onClick: () => {
+            Modal.close();
+            openResetPassword(u);
+          }
+        },
+        {
+          label: t("close"),
+          kind: "ghost",
+          onClick: () => Modal.close()
+        }
+      ]);
+    }
+
+    function openUserEdit(u) {
+      const fullName = el("input", {
+        value: u.full_name || "",
+        placeholder: t("full_name")
+      });
+      const phone = el("input", {
+        value: u.phone || "",
+        placeholder: t("phone")
+      });
+      const login = el("input", {
+        value: u.login || "",
+        placeholder: t("login")
+      });
+
+      const roleSel = el("select", {});
+      for (const rr of ROLES) {
+        roleSel.appendChild(el("option", {
+          value: rr,
+          selected: rr === u.role
+        }, rr));
+      }
+
+      const activeSel = el("select", {});
+      activeSel.appendChild(el("option", {
+        value: "1",
+        selected: Number(u.is_active) === 1
+      }, "ON"));
+      activeSel.appendChild(el("option", {
+        value: "0",
+        selected: Number(u.is_active) === 0
+      }, "OFF"));
+
+      const form = el("div", {
+          class: "vcol gap10"
+        },
+        el("div", {
+            class: "grid2"
+          },
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("full_name")),
+            fullName
+          ),
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("phone")),
+            phone
+          )
+        ),
+        el("div", {
+            class: "grid2"
+          },
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("login")),
+            login
+          ),
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("role")),
+            roleSel
+          )
+        ),
+        el("div", {
+            class: "grid2"
+          },
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("active")),
+            activeSel
+          ),
+          el("div", {})
+        )
+      );
+
+      Modal.open("✎ " + t("edit"), form, [{
+          label: t("cancel"),
+          kind: "ghost",
+          onClick: () => Modal.close()
+        },
+        {
+          label: t("save"),
+          kind: "primary",
+          onClick: async () => {
+            try {
+              await API.users.update(u.id, {
+                full_name: (fullName.value || "").trim() || null,
+                phone: (phone.value || "").trim() || null,
+                login: (login.value || "").trim() || null,
+                role: roleSel.value,
+                is_active: Number(activeSel.value) ? 1 : 0
+              });
+              Toast.show(t("user_updated"), "ok");
+              Modal.close();
+              await load();
+            } catch (e) {
+              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+            }
+          }
+        }
+      ]);
+    }
+
+    function openResetPassword(u) {
+      const pass = el("input", {
+        type: "password",
+        placeholder: t("new_password")
+      });
+      const body = el("div", {
+          class: "vcol gap10"
+        },
+        el("div", {
+          class: "muted"
+        }, `${u.full_name || u.login} (#${u.id})`),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("new_password")),
+          pass
+        )
+      );
+
+      Modal.open(t("reset_password"), body, [{
+          label: t("cancel"),
+          kind: "ghost",
+          onClick: () => Modal.close()
+        },
+        {
+          label: t("confirm"),
+          kind: "primary",
+          onClick: async () => {
+            const np = (pass.value || "").trim();
+            if (!np) return;
+            try {
+              await API.users.resetPassword(u.id, np);
+              Toast.show(t("password_changed"), "ok");
+              Modal.close();
+            } catch (e) {
+              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+            }
+          }
+        }
+      ]);
+
+      setTimeout(() => pass.focus(), 0);
+    }
+
+    async function deactivateUser(u) {
+      const ok = await Modal.confirm(t("confirm"), `${t("deactivate")} #${u.id}?`);
+      if (!ok) return;
+      try {
+        await API.users.deactivate(u.id);
+        Toast.show(t("user_deactivated"), "ok");
+        await load();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+      }
+    }
+
+    async function activateUser(u) {
+      try {
+        await API.users.update(u.id, {
+          is_active: 1
+        });
+        Toast.show(t("user_updated"), "ok");
+        await load();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+      }
+    }
+
+    function openCreate() {
+      const fullName = el("input", {
+        placeholder: t("full_name")
+      });
+      const phone = el("input", {
+        placeholder: t("phone")
+      });
+      const login = el("input", {
+        placeholder: t("login")
+      });
+      const pass = el("input", {
+        type: "password",
+        placeholder: t("new_password")
+      });
+
+      const roleSel = el("select", {});
+      for (const rr of ROLES) {
+        roleSel.appendChild(el("option", {
+          value: rr
+        }, rr));
+      }
+
+      const form = el("div", {
+          class: "vcol gap10"
+        },
+        el("div", {
+            class: "grid2"
+          },
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("full_name")),
+            fullName
+          ),
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("phone")),
+            phone
+          )
+        ),
+        el("div", {
+            class: "grid2"
+          },
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("login")),
+            login
+          ),
+          el("label", {
+              class: "vcol gap8"
+            },
+            el("span", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, t("role")),
+            roleSel
+          )
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("new_password")),
+          pass
+        )
+      );
+
+      Modal.open(t("user_create"), form, [{
+          label: t("cancel"),
+          kind: "ghost",
+          onClick: () => Modal.close()
+        },
+        {
+          label: t("create"),
+          kind: "primary",
+          onClick: async () => {
+            const payload = {
+              full_name: (fullName.value || "").trim(),
+              phone: (phone.value || "").trim() || null,
+              login: (login.value || "").trim(),
+              role: roleSel.value,
+              new_password: (pass.value || "").trim()
+            };
+            if (!payload.full_name || !payload.login || !payload.new_password) return;
+            try {
+              await API.users.create(payload);
+              Toast.show(t("user_created"), "ok");
+              Modal.close();
+              await load();
+            } catch (e) {
+              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+            }
+          }
+        }
+      ]);
+
+      setTimeout(() => fullName.focus(), 0);
+    }
+
+    onlyActiveBtn.addEventListener("click", () => {
+      onlyActive = true;
+      onlyActiveBtn.classList.add("active");
+      allBtn.classList.remove("active");
+      render();
+    });
+    allBtn.addEventListener("click", () => {
+      onlyActive = false;
+      allBtn.classList.add("active");
+      onlyActiveBtn.classList.remove("active");
+      render();
+    });
+    searchInp.addEventListener("input", () => render());
+    createBtn.addEventListener("click", () => openCreate());
+
+    await load();
+  };
+
 
   async function start() {
     injectStyles();
