@@ -738,6 +738,7 @@ max-width:none
   align-items:stretch;
   overflow:auto;
   padding-bottom:12px;
+  padding-top:15px;
 }
 .kcol{min-width:260px; max-width:none}
 .klist{min-height:80px}
