@@ -2837,6 +2837,15 @@ max-width:none
 
   
 
+    function isLoginPage(){
+    const p = ((location.pathname || "/").replace(/\/+$/,"")) || "/";
+    return (
+      p === "/login" ||
+      p === "/login.html" ||
+      p.endsWith("/login/index.html")
+    );
+  }
+
   async function start(){
     injectStyles();
     applyTheme();
@@ -2855,15 +2864,11 @@ max-width:none
 
       if(!location.hash || !location.hash.startsWith("#/")) setHash(DEFAULT_ROUTE);
       else App.routeNow();
-
-    }
-    catch(e){
+    } catch(e){
       location.href = "/login";
     }
   }
 
-    window.GSOFT = App;
-    start();
-  }
-
-  )();
+  window.GSOFT = App;
+  start();
+})();
