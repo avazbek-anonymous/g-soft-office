@@ -858,6 +858,60 @@ max-width:none
   .uRow{display:flex; flex-direction:column; align-items:flex-start}
   .uActions{width:100%; justify-content:flex-start}
 }
+/* === FIX: native SELECT dark dropdown === */
+select{
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  padding: 10px 12px;
+  outline: none;
+  color-scheme: dark;
+}
+select:focus{
+  border-color: rgba(255,208,90,.55);
+  box-shadow: 0 0 0 3px rgba(255,208,90,.12);
+}
+select option{
+  background: #0f1714;
+  color: #e7f1ea;
+}
+/* === FIX: move header actions into sidebar on mobile === */
+
+/* sidebar needs column flow to push bottom slot down */
+.sidebar{ display:flex; flex-direction:column; }
+.nav{ flex:1 1 auto; overflow:auto; padding-bottom:10px; }
+
+/* bottom slot (only useful on mobile) */
+.sideActionsSlot{
+  margin-top:auto;
+  padding:12px 10px 12px;
+  border-top:1px solid var(--stroke);
+}
+@media (min-width:901px){
+  .sideActionsSlot{ display:none; }
+}
+
+/* actions when inside sidebar */
+.hdrActions.inSidebar{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:100%;
+}
+.hdrActions.inSidebar .seg{ width:100%; }
+.hdrActions.inSidebar .pill{ width:100%; justify-content:center; }
+.hdrActions.inSidebar .iconBtn{ width:100%; justify-content:center; }
+
+/* optional nice row (icons) */
+.hdrActions.inSidebar .hdrRow{
+  display:flex;
+  gap:10px;
+  width:100%;
+}
+.hdrActions.inSidebar .hdrRow .iconBtn{
+  width:100%;
+}
 
     `.trim();
     document.head.appendChild(el("style", {
@@ -951,154 +1005,155 @@ max-width:none
   };
 
   App.renderShell = function () {
-    const mount = App.mount();
-    mount.innerHTML = "";
-    const role = App.state.user.role;
-    const routes = allowedRoutesByRole(role);
-    const sideOverlay = el("div", {
-      class: "sideOverlay hidden",
-      onClick: () => App.setSidebar(false)
-    });
-    const sidebar = el("aside", {
-        class: "sidebar",
-        id: "sidebar"
-      },
-      el("div", {
-          class: "brand"
-        },
+  const mount = App.mount();
+  mount.innerHTML = "";
+
+  const role = App.state.user.role;
+  const routes = allowedRoutesByRole(role);
+
+  const sideOverlay = el("div", {
+    class: "sideOverlay hidden",
+    onClick: () => App.setSidebar(false)
+  });
+
+  // --- SIDEBAR ---
+  const sideActionsSlot = el("div", { class: "sideActionsSlot", id: "sideActionsSlot" });
+
+  const sidebar = el("aside", { class: "sidebar", id: "sidebar" },
+    el("div", { class: "brand" },
+      el("div", { class: "logo" }),
+      el("div", { class: "vcol brandText", style: "min-width:0" },
+        el("div", { class: "brandName" }, t("app_name")),
         el("div", {
-          class: "logo"
-        }),
-        el("div", {
-            class: "vcol brandText",
-            style: "min-width:0"
-          },
-          el("div", {
-            class: "brandName"
-          }, t("app_name")),
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-          }, App.state.user.full_name || App.state.user.login)
-        )
-      ),
-      el("nav", {
-          class: "nav",
-          id: "nav"
-        },
-        routes.map(r => el("a", {
-            href: `#${r.path}`,
-            "data-path": r.path,
-            onClick: () => App.setSidebar(false)
-          },
-          el("span", {
-            class: "icoWrap",
-            html: ICONS[r.icon]
-          }),
-          el("span", {
-            class: "txt"
-          }, t(r.key))
-        ))
+          class: "muted2",
+          style: "font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+        }, App.state.user.full_name || App.state.user.login)
       )
-    );
+    ),
 
-    const burgerBtn = el("button", {
-        class: "iconBtn",
-        type: "button",
-        title: t("menu"),
-        onClick: () => App.setSidebar(!App.state.ui.sidebarOpen)
+    el("nav", { class: "nav", id: "nav" },
+      routes.map(r => el("a", {
+        href: `#${r.path}`,
+        "data-path": r.path,
+        onClick: () => App.setSidebar(false)
       },
-      el("span", {
-        class: "icoWrap",
-        html: ICONS.burger
-      })
-    );
-    const langSeg = el("div", {
-        class: "seg",
-        title: "Language"
-      },
-      ...LANGS.map(lng => el("button", {
-        type: "button",
-        class: (App.state.lang === lng) ? "active" : "",
-        onClick: () => {
-          App.state.lang = lng;
-          LS.set("gsoft_lang", lng);
-          App.refreshTexts();
-        }
-      }, lng.toUpperCase()))
-    );
-    const themeBtn = el("button", {
-        class: "iconBtn",
-        type: "button",
-        title: (App.state.theme.mode === "dark" ? t("theme_dark") : t("theme_light")),
-        onClick: () => {
-          App.state.theme.mode = (App.state.theme.mode === "dark") ? "light" : "dark";
-          LS.set("gsoft_theme", App.state.theme.mode);
-          applyTheme();
-        }
-      },
-      el("span", {
-        class: "icoWrap",
-        html: (App.state.theme.mode === "dark") ? ICONS.moon : ICONS.sun
-      })
-    );
-    const eyeBtn = el("button", {
-        class: "iconBtn",
-        type: "button",
-        title: t("eye"),
-        onClick: () => {
-          App.state.theme.eye = !App.state.theme.eye;
-          LS.set("gsoft_eye", App.state.theme.eye ? "1" : "0");
-          applyTheme();
-        }
-      },
-      el("span", {
-        class: "icoWrap",
-        html: ICONS.eye
-      })
-    );
-    const userPill = el("div", {
-        class: "pill"
-      },
-      el("span", {
-        class: "muted2",
-        style: "font-family:var(--mono); font-size:11px"
-      }, App.state.user.role),
-      el("span", {}, App.state.user.full_name || App.state.user.login)
-    );
-    const logoutBtn = el("button", {
-      class: "iconBtn",
+        el("span", { class: "icoWrap", html: ICONS[r.icon] }),
+        el("span", { class: "txt" }, t(r.key))
+      ))
+    ),
+
+    // slot in bottom of sidebar (mobile will receive actions here)
+    sideActionsSlot
+  );
+
+  // --- TOPBAR LEFT ---
+  const burgerBtn = el("button", {
+    class: "iconBtn",
+    type: "button",
+    title: t("menu"),
+    onClick: () => App.setSidebar(!App.state.ui.sidebarOpen)
+  }, el("span", { class: "icoWrap", html: ICONS.burger }));
+
+  // --- ACTIONS (LANG/THEME/EYE/USER/LOGOUT) ---
+  const langSeg = el("div", { class: "seg", title: "Language" },
+    ...LANGS.map(lng => el("button", {
       type: "button",
-      title: t("sign_out"),
-      onClick:async()=>{try{await API.logout();}catch{} location.href="/login";}
-    }, t("sign_out"));
+      class: (App.state.lang === lng) ? "active" : "",
+      onClick: () => {
+        App.state.lang = lng;
+        LS.set("gsoft_lang", lng);
+        App.refreshTexts();
+      }
+    }, lng.toUpperCase()))
+  );
 
-    const topbar = el("header", {
-        class: "topbar"
-      },
-      el("div", {
-        class: "topLeft"
-      }, burgerBtn, el("div", {
-        class: "pageTitle",
-        id: "pageTitle"
-      }, t("app_name"))),
-      el("div", {
-        class: "topRight"
-      }, langSeg, themeBtn, eyeBtn, userPill, logoutBtn)
-    );
+  const themeBtn = el("button", {
+    class: "iconBtn",
+    type: "button",
+    title: (App.state.theme.mode === "dark" ? t("theme_dark") : t("theme_light")),
+    onClick: () => {
+      App.state.theme.mode = (App.state.theme.mode === "dark") ? "light" : "dark";
+      LS.set("gsoft_theme", App.state.theme.mode);
+      applyTheme();
+    }
+  }, el("span", { class: "icoWrap", html: (App.state.theme.mode === "dark") ? ICONS.moon : ICONS.sun }));
 
-    const main = el("main", {
-      class: "main"
-    }, topbar, el("div", {
-      class: "content",
-      id: "content"
-    }));
-    mount.append(sideOverlay, el("div", {
-      class: "wrap"
-    }, sidebar, main));
-    App.refreshActiveNav();
-    App.refreshPageTitle();
+  const eyeBtn = el("button", {
+    class: "iconBtn",
+    type: "button",
+    title: t("eye"),
+    onClick: () => {
+      App.state.theme.eye = !App.state.theme.eye;
+      LS.set("gsoft_eye", App.state.theme.eye ? "1" : "0");
+      applyTheme();
+    }
+  }, el("span", { class: "icoWrap", html: ICONS.eye }));
+
+  // icons row (looks nice both desktop and mobile)
+  const iconsRow = el("div", { class: "hdrRow" }, themeBtn, eyeBtn);
+
+  const userPill = el("div", { class: "pill" },
+    el("span", { class: "muted2", style: "font-family:var(--mono); font-size:11px" }, App.state.user.role),
+    el("span", {}, App.state.user.full_name || App.state.user.login)
+  );
+
+  const logoutBtn = el("button", {
+    class: "iconBtn",
+    type: "button",
+    title: t("sign_out"),
+    onClick: async () => { try { await API.logout(); } catch {} location.href = "/login"; }
+  }, t("sign_out"));
+
+  // actions container (we will move it)
+  const actions = el("div", { class: "topRight hdrActions", id: "hdrActions" },
+    langSeg, iconsRow, userPill, logoutBtn
+  );
+
+  // host in header (desktop keeps it here)
+  const actionsHost = el("div", { class: "hdrActionsHost", id: "hdrActionsHost" }, actions);
+
+  const topbar = el("header", { class: "topbar" },
+    el("div", { class: "topLeft" },
+      burgerBtn,
+      el("div", { class: "pageTitle", id: "pageTitle" }, t("app_name"))
+    ),
+    actionsHost
+  );
+
+  const main = el("main", { class: "main" },
+    topbar,
+    el("div", { class: "content", id: "content" })
+  );
+
+  mount.append(
+    sideOverlay,
+    el("div", { class: "wrap" }, sidebar, main)
+  );
+
+  // --- reflow actions: move to sidebar on mobile ---
+  App.reflowHeaderActions = function () {
+    const isMobile = window.matchMedia("(max-width:900px)").matches;
+    const a = $("#hdrActions");
+    const host = $("#hdrActionsHost");
+    const slot = $("#sideActionsSlot");
+    if (!a || !host || !slot) return;
+
+    if (isMobile) {
+      a.classList.add("inSidebar");
+      slot.appendChild(a);
+    } else {
+      a.classList.remove("inSidebar");
+      host.appendChild(a);
+    }
   };
+
+  // run once after render
+  App.reflowHeaderActions();
+
+  App.refreshActiveNav();
+  App.refreshPageTitle();
+};
+
 
   App.renderLogin = function () {
     const mount = App.mount();
@@ -1233,9 +1288,13 @@ max-width:none
   };
 
   App.bindRouting = function () {
-    window.addEventListener("hashchange", () => App.routeNow());
-    window.addEventListener("resize", () => App.setSidebar(false));
-  };
+  window.addEventListener("hashchange", () => App.routeNow());
+  window.addEventListener("resize", () => {
+    App.setSidebar(false);
+    if (App.reflowHeaderActions) App.reflowHeaderActions();
+  });
+};
+
 
   App.routeNow = function () {
     const {
@@ -2301,7 +2360,7 @@ max-width:none
           }, "OFF");
 
         const actions = el("div", {
-            class: "uActions"
+            class: "uActions hdrActions"
           },
           el("button", {
             class: "btn mini ghost",
