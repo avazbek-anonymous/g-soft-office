@@ -301,7 +301,7 @@
     const saved = LS.get("gsoft_lang", "");
     if (saved && LANGS.includes(saved)) return saved;
     const nav = (navigator.language || "").toLowerCase();
-    if (nav.startswith ?.("ru") || nav.startsWith("ru")) return "ru";
+    if (nav.startsWith("ru")) return "ru";
     if (nav.startsWith("uz")) return "uz";
     if (nav.startsWith("en")) return "en";
     return "ru";
@@ -2835,44 +2835,35 @@ max-width:none
   };
 
 
-  async function start() {
+  
+
+  async function start(){
     injectStyles();
     applyTheme();
 
-    function isLoginPage(){
-  const p = location.pathname.replace(/\/+$/,""); // убираем trailing /
-  // поддерживаем /login, /login.html, /login/index.html
-  return (
-    p === "/login" ||
-    p === "/login.html" ||
-    p.endsWith("/login/index.html")
-  );
-}
+    if (isLoginPage()){
+      App.renderLogin();
+      return;
+    }
 
-async function start(){
-  injectStyles();
-  applyTheme();
+    try{
+      const me = await API.me();
+      App.state.user = me.data.user;
 
-  if (isLoginPage()){
-    App.renderLogin();
-    return;
+      App.renderShell();
+      App.bindRouting();
+
+      if(!location.hash || !location.hash.startsWith("#/")) setHash(DEFAULT_ROUTE);
+      else App.routeNow();
+
+    }
+    catch(e){
+      location.href = "/login";
+    }
   }
 
-  try{
-    const me = await API.me();
-    App.state.user = me.data.user;
-    App.renderShell();
-    App.bindRouting();
-    if(!location.hash || !location.hash.startsWith("#/")) setHash(DEFAULT_ROUTE);
-    else App.routeNow();
-  }catch{
-    // ВАЖНО: редиректим на /login (а не login.html), чтобы не было циклов
-    location.href = "/login";
-  }
-}
-
+    window.GSOFT = App;
+    start();
   }
 
-  window.GSOFT = App;
-  start();
-})();
+  )();
