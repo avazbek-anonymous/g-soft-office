@@ -1376,13 +1376,12 @@ select option{
 
   const sidebar = el("aside", { class: "sidebar", id: "sidebar" },
     el("div", { class: "brand" },
-      el("div", { class: "logo" }),
       el("div", { class: "vcol brandText", style: "min-width:0" },
         el("div", { class: "brandName" }, t("app_name")),
         el("div", {
           class: "muted2",
           style: "font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-        }, App.state.user.full_name || App.state.user.login)
+        }, "Task and Project Management System")
       )
     ),
 
