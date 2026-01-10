@@ -139,7 +139,41 @@
       toast_error: "Ошибка",
       me: "Профиль",
       menu: "Меню",
-      touch_drag_hint: "На телефоне: удерживай и перетаскивай карточку"
+      touch_drag_hint: "На телефоне: удерживай и перетаскивай карточку",
+      // ===== ADD: Settings i18n =====
+settings_title:"Настройки",
+settings_theme:"Системный дизайн",
+settings_theme_desc:"Тёмная/светлая тема, цвета и защита глаз",
+settings_edit:"Изменить",
+settings_saved_apply:"Сохранено и применено",
+
+settings_cities:"Города",
+settings_spheres:"Сферы",
+settings_sources:"Источники",
+settings_service_types:"Типы услуг",
+settings_course_types:"Типы курсов",
+
+field_name:"Название",
+field_name_ru:"Название (RU)",
+field_name_uz:"Название (UZ)",
+field_name_en:"Название (EN)",
+field_sort:"Сортировка",
+field_active:"Активный",
+field_start_date:"Дата старта",
+field_price:"Сумма",
+field_currency:"Валюта",
+
+theme_dark_block:"Тёмная тема",
+theme_light_block:"Светлая тема",
+theme_bg:"Фон",
+theme_text:"Текст",
+theme_accent:"Кнопки/Акцент",
+theme_eye_tint:"Жёлтый оттенок (eye)",
+theme_eye_power:"Сила eye",
+
+btn_add:"Добавить",
+btn_update:"Обновить",
+
     },
     uz: {
       app_name: "G-SOFT",
@@ -216,7 +250,40 @@
       toast_error: "Xatolik",
       me: "Profil",
       menu: "Menyu",
-      touch_drag_hint: "Telefonda: kartani bosib ushlab ko‘chiring"
+      touch_drag_hint: "Telefonda: kartani bosib ushlab ko‘chiring",
+      settings_title:"Sozlamalar",
+settings_theme:"Tizim dizayni",
+settings_theme_desc:"Qorong‘i/yorug‘ tema, ranglar va eye himoya",
+settings_edit:"Tahrirlash",
+settings_saved_apply:"Saqlanib qo‘llandi",
+
+settings_cities:"Shaharlar",
+settings_spheres:"Soha",
+settings_sources:"Manbalar",
+settings_service_types:"Xizmat turlari",
+settings_course_types:"Kurs turlari",
+
+field_name:"Nomi",
+field_name_ru:"Nomi (RU)",
+field_name_uz:"Nomi (UZ)",
+field_name_en:"Nomi (EN)",
+field_sort:"Saralash",
+field_active:"Faol",
+field_start_date:"Boshlanish sanasi",
+field_price:"Summa",
+field_currency:"Valyuta",
+
+theme_dark_block:"Qorong‘i tema",
+theme_light_block:"Yorug‘ tema",
+theme_bg:"Fon",
+theme_text:"Matn",
+theme_accent:"Tugma/Accent",
+theme_eye_tint:"Sariq tus (eye)",
+theme_eye_power:"Eye kuchi",
+
+btn_add:"Qo‘shish",
+btn_update:"Yangilash",
+
     },
     en: {
       app_name: "G-SOFT",
@@ -293,7 +360,40 @@
       toast_error: "Error",
       me: "Profile",
       menu: "Menu",
-      touch_drag_hint: "On phone: press & drag the card"
+      touch_drag_hint: "On phone: press & drag the card",
+      settings_title:"Settings",
+settings_theme:"System design",
+settings_theme_desc:"Dark/light theme, colors and eye protection",
+settings_edit:"Edit",
+settings_saved_apply:"Saved & applied",
+
+settings_cities:"Cities",
+settings_spheres:"Spheres",
+settings_sources:"Sources",
+settings_service_types:"Service types",
+settings_course_types:"Course types",
+
+field_name:"Name",
+field_name_ru:"Name (RU)",
+field_name_uz:"Name (UZ)",
+field_name_en:"Name (EN)",
+field_sort:"Sort",
+field_active:"Active",
+field_start_date:"Start date",
+field_price:"Amount",
+field_currency:"Currency",
+
+theme_dark_block:"Dark theme",
+theme_light_block:"Light theme",
+theme_bg:"Background",
+theme_text:"Text",
+theme_accent:"Buttons/Accent",
+theme_eye_tint:"Eye tint",
+theme_eye_power:"Eye strength",
+
+btn_add:"Add",
+btn_update:"Update",
+
     }
   };
 
@@ -325,7 +425,8 @@
       cache: {
         users: null,
         projects: null
-      }
+      },
+      themeCfg: null,
     },
     mount() {
       return $("#app") || document.body;
@@ -349,6 +450,11 @@
     sun: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
     moon: `<svg viewBox="0 0 24 24" class="ico"><path d="M21 12.8A8.5 8.5 0 0 1 11.2 3a7 7 0 1 0 9.8 9.8z"/></svg>`,
     eye: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 5c7 0 10 7 10 7s-3 7-10 7S2 12 2 12s3-7 10-7z"/><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`,
+    edit:`<svg viewBox="0 0 24 24" class="ico"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
+trash:`<svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>`,
+plus:`<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
+palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 2 0 0 0 2-2c0-1.1-.9-2-2-2h-1a3 3 0 0 1 0-6h6a4 4 0 0 0 0-8h-6z"/></svg>`,
+
   };
 
   const Toast = {
@@ -521,89 +627,228 @@
     return json;
   }
 
-  const API = {
-    me: () => apiFetch("/api/auth/me"),
-    login: (login, password) => apiFetch("/api/auth/login", {
+ const API = {
+  // ===== AUTH / MAIN =====
+  me: () => apiFetch("/api/auth/me"),
+  login: (login, password) =>
+    apiFetch("/api/auth/login", {
       method: "POST",
-      body: {
-        login,
-        password
-      }
+      body: { login, password },
     }),
-    logout: () => apiFetch("/api/auth/logout", {
-      method: "POST"
+  logout: () =>
+    apiFetch("/api/auth/logout", {
+      method: "POST",
     }),
-    main: () => apiFetch("/api/main"),
-    usersTryList: async () => {
-      try {
-        const r = await apiFetch("/api/users");
-        return r.data || [];
-      } catch {
-        return null;
-      }
-    },
-    projectsTryList: async () => {
-      try {
-        const r = await apiFetch("/api/projects");
-        return r.data || [];
-      } catch {
-        return null;
-      }
-    },
-    tasks: {
-      list: (q = {}) => {
-        const sp = new URLSearchParams();
-        if (q.assignee_user_id) sp.set("assignee_user_id", q.assignee_user_id);
-        const s = sp.toString();
-        return apiFetch(`/api/tasks${s?"?"+s:""}`);
-      },
-      get: (id) => apiFetch(`/api/tasks/${id}`),
-      create: (body) => apiFetch("/api/tasks", {
-        method: "POST",
-        body
-      }),
-      update: (id, body) => apiFetch(`/api/tasks/${id}`, {
-        method: "PUT",
-        body
-      }),
-      move: (id, status, extra = {}) => apiFetch(`/api/tasks/${id}/move`, {
-        method: "POST",
-        body: {
-          status,
-          ...extra
-        }
-      }),
-      del: (id) => apiFetch(`/api/tasks/${id}/delete`, {
-        method: "POST"
-      }),
-    },
-    users: {
-      list: () => apiFetch("/api/users"),
-      create: (body) => apiFetch("/api/users", {
-        method: "POST",
-        body
-      }),
-      update: (id, body) => apiFetch(`/api/users/${id}`, {
-        method: "PUT",
-        body
-      }),
-      resetPassword: (id, new_password) => apiFetch(`/api/users/${id}/reset_password`, {
-        method: "POST",
-        body: {
-          new_password
-        }
-      }),
-      deactivate: (id) => apiFetch(`/api/users/${id}/delete`, {
-        method: "POST"
-      }),
-    }
-  };
+  main: () => apiFetch("/api/main"),
 
-  function applyTheme() {
-    const root = document.documentElement;
-    root.dataset.theme = App.state.theme.mode;
-    root.dataset.eye = App.state.theme.eye ? "1" : "0";
+  // ===== TRY LISTS (non-blocking) =====
+  usersTryList: async () => {
+    try {
+      const r = await apiFetch("/api/users");
+      return r.data || [];
+    } catch {
+      return null;
+    }
+  },
+  projectsTryList: async () => {
+    try {
+      const r = await apiFetch("/api/projects");
+      return r.data || [];
+    } catch {
+      return null;
+    }
+  },
+
+  // ===== TASKS =====
+  tasks: {
+    list: (q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.assignee_user_id) sp.set("assignee_user_id", q.assignee_user_id);
+      const s = sp.toString();
+      return apiFetch(`/api/tasks${s ? "?" + s : ""}`);
+    },
+    get: (id) => apiFetch(`/api/tasks/${id}`),
+    create: (body) =>
+      apiFetch("/api/tasks", {
+        method: "POST",
+        body,
+      }),
+    update: (id, body) =>
+      apiFetch(`/api/tasks/${id}`, {
+        method: "PUT",
+        body,
+      }),
+    move: (id, status, extra = {}) =>
+      apiFetch(`/api/tasks/${id}/move`, {
+        method: "POST",
+        body: { status, ...extra },
+      }),
+    del: (id) =>
+      apiFetch(`/api/tasks/${id}/delete`, {
+        method: "POST",
+      }),
+  },
+
+  // ===== USERS (admin) =====
+  users: {
+    list: () => apiFetch("/api/users"),
+    create: (body) =>
+      apiFetch("/api/users", {
+        method: "POST",
+        body,
+      }),
+    update: (id, body) =>
+      apiFetch(`/api/users/${id}`, {
+        method: "PUT",
+        body,
+      }),
+    resetPassword: (id, new_password) =>
+      apiFetch(`/api/users/${id}/reset_password`, {
+        method: "POST",
+        body: { new_password },
+      }),
+    deactivate: (id) =>
+      apiFetch(`/api/users/${id}/delete`, {
+        method: "POST",
+      }),
+  },
+
+  // ===== SETTINGS (admin) =====
+  // endpoints must exist in backend:
+  // GET  /api/settings/theme
+  // PUT  /api/settings/theme   { value: {...} }
+  // GET  /api/settings/{kind}
+  // POST /api/settings/{kind}
+  // PUT  /api/settings/{kind}/{id}
+  // POST /api/settings/{kind}/{id}/delete
+  settings: {
+    themeGet: () => apiFetch("/api/settings/theme"),
+    themeSet: (value) =>
+      apiFetch("/api/settings/theme", {
+        method: "PUT",
+        body: { value },
+      }),
+
+    dictList: (kind) => apiFetch(`/api/settings/${kind}`),
+    dictCreate: (kind, body) =>
+      apiFetch(`/api/settings/${kind}`, {
+        method: "POST",
+        body,
+      }),
+    dictUpdate: (kind, id, body) =>
+      apiFetch(`/api/settings/${kind}/${id}`, {
+        method: "PUT",
+        body,
+      }),
+    dictDelete: (kind, id) =>
+      apiFetch(`/api/settings/${kind}/${id}/delete`, {
+        method: "POST",
+      }),
+  },
+};
+
+
+  function hexToRgb(hex){
+  const h=String(hex||"").trim().replace("#","");
+  if(h.length===3){
+    const r=parseInt(h[0]+h[0],16), g=parseInt(h[1]+h[1],16), b=parseInt(h[2]+h[2],16);
+    return {r,g,b};
   }
+  if(h.length!==6) return null;
+  const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  return {r,g,b};
+}
+function clamp01(x){ x=Number(x); if(!isFinite(x)) return 0; return Math.max(0,Math.min(1,x)); }
+function blendBg(hex, dir){ // dir: + => lighten, - => darken
+  const rgb=hexToRgb(hex); if(!rgb) return null;
+  const k = dir>0 ? 24 : -24;
+  const r=Math.max(0,Math.min(255,rgb.r+k));
+  const g=Math.max(0,Math.min(255,rgb.g+k));
+  const b=Math.max(0,Math.min(255,rgb.b+k));
+  const toHex=(n)=>n.toString(16).padStart(2,"0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+function defaultThemeCfg(){
+  return {
+    dark:{ bg:"#06110f", text:"#ffffff", accent:"#FFD05A" },
+    light:{ bg:"#f6f7fb", text:"#0a0a0a", accent:"#003A2F" },
+    eye:{ tint:"#FFD05A", strength:0.12 }
+  };
+}
+function normalizeThemeCfg(v){
+  const base=defaultThemeCfg();
+  if(!v || typeof v!=="object") return base;
+  const out=JSON.parse(JSON.stringify(base));
+  for(const mode of ["dark","light"]){
+    if(v[mode] && typeof v[mode]==="object"){
+      if(v[mode].bg) out[mode].bg=String(v[mode].bg);
+      if(v[mode].text) out[mode].text=String(v[mode].text);
+      if(v[mode].accent) out[mode].accent=String(v[mode].accent);
+    }
+  }
+  if(v.eye && typeof v.eye==="object"){
+    if(v.eye.tint) out.eye.tint=String(v.eye.tint);
+    if(v.eye.strength!=null) out.eye.strength=clamp01(v.eye.strength);
+  }
+  return out;
+}
+
+function injectThemeExtras(){
+  if($("#gsoftThemeExtras")) return;
+  const css=`
+:root{color-scheme:dark;}
+[data-theme="light"]{color-scheme:light;}
+select{color-scheme:inherit;}
+select option{background:var(--bg2); color:var(--text);}
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  pointer-events:none;
+  z-index:9990;
+  background: rgba(var(--eyeTint,255,208,90), var(--eyeAlpha,0.10));
+  opacity:0;
+  transition: opacity .18s ease;
+}
+[data-eye="1"] body::before{opacity:1;}
+  `.trim();
+  document.head.appendChild(el("style",{id:"gsoftThemeExtras"},css));
+}
+
+function applyTheme(){
+  injectThemeExtras();
+
+  const root=document.documentElement;
+  root.dataset.theme=App.state.theme.mode;
+  root.dataset.eye=App.state.theme.eye?"1":"0";
+
+  // берем cfg из памяти, иначе дефолт
+  const cfg = normalizeThemeCfg(App.state.themeCfg);
+
+  const mode = App.state.theme.mode;
+  const m = cfg[mode] || cfg.dark;
+
+  // bg + bg2
+  const bg = m.bg || (mode==="light"?"#f6f7fb":"#06110f");
+  const bg2 = blendBg(bg, mode==="light"?+1:-1) || bg;
+
+  root.style.setProperty("--bg", bg);
+  root.style.setProperty("--bg2", bg2);
+
+  // text (делаем RGBA как раньше)
+  const trgb = hexToRgb(m.text||"#ffffff") || {r:255,g:255,b:255};
+  root.style.setProperty("--text", `rgba(${trgb.r},${trgb.g},${trgb.b},.90)`);
+  root.style.setProperty("--muted", `rgba(${trgb.r},${trgb.g},${trgb.b},.65)`);
+  root.style.setProperty("--muted2", `rgba(${trgb.r},${trgb.g},${trgb.b},.45)`);
+
+  // accent
+  root.style.setProperty("--accent", m.accent || (mode==="light"?"#003A2F":"#FFD05A"));
+
+  // eye tint
+  const eyeRgb = hexToRgb(cfg.eye?.tint || "#FFD05A") || {r:255,g:208,b:90};
+  root.style.setProperty("--eyeTint", `${eyeRgb.r},${eyeRgb.g},${eyeRgb.b}`);
+  root.style.setProperty("--eyeAlpha", String(clamp01(cfg.eye?.strength ?? 0.12)));
+}
+
 
   function parseHash() {
     const h = window.location.hash || "";
@@ -1313,6 +1558,7 @@ select option{
     if (path === "/main") return App.renderMain(host);
     if (path === "/tasks") return App.renderTasks(host);
     if (path === "/users") return App.renderUsers(host);
+    if (path==="/settings") return App.renderSettings(host);
     return App.renderStub(host);
   };
 
@@ -2905,6 +3151,345 @@ select option{
     );
   }
 
+  function injectSettingsStyles(){
+  if($("#gsoftSettingsStyles")) return;
+  const css=`
+.setGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:980px){.setGrid{grid-template-columns:1fr}}
+.rowLine{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--stroke);border-radius:16px;background:rgba(255,255,255,.04)}
+.rowLine:hover{background:rgba(255,255,255,.06)}
+.rowMain{min-width:0}
+.rowTitle{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowSub{color:var(--muted);font-size:12px;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px}
+.rowActions{display:flex;gap:8px;flex:0 0 auto}
+.miniIcon{padding:8px 10px;border-radius:12px}
+.scrollBox{max-height:420px;overflow:auto;padding-right:6px}
+@media (max-width:900px){.scrollBox{max-height:none}}
+  `.trim();
+  document.head.appendChild(el("style",{id:"gsoftSettingsStyles"},css));
+}
+
+function dateToSec(dateStr){
+  if(!dateStr) return null;
+  const d=new Date(`${dateStr}T00:00:00`);
+  return Math.floor(d.getTime()/1000);
+}
+function secToDateInput(sec){
+  if(!sec) return "";
+  const d=new Date(sec*1000);
+  const yyyy=d.getFullYear();
+  const mm=String(d.getMonth()+1).padStart(2,"0");
+  const dd=String(d.getDate()).padStart(2,"0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+function langLabel3(row){
+  const k=`name_${App.state.lang}`;
+  return row?.[k] || row?.name_uz || row?.name_ru || row?.name_en || `#${row?.id||""}`;
+}
+
+async function tryLoadThemeFromServer(){
+  try{
+    const r=await API.settings.themeGet(); // admin-only, но мы ловим ошибки
+    const v=r?.data?.value || null;
+    App.state.themeCfg = normalizeThemeCfg(v);
+    applyTheme();
+  }catch{}
+}
+
+App.renderSettings = async function(host){
+  injectSettingsStyles();
+
+  if((App.state.user?.role||"")!=="admin"){
+    host.appendChild(el("div",{class:"card cardPad vcol gap10"},
+      el("div",{style:"font-weight:900"}, t("toast_error")),
+      el("div",{class:"muted"},"Only admin")
+    ));
+    return;
+  }
+
+  const state={
+    themeCfg: normalizeThemeCfg(App.state.themeCfg),
+    cities:[], spheres:[], sources:[], service_types:[], course_types:[]
+  };
+
+  const loadAll = async ()=>{
+    const [themeR,citiesR,spheresR,sourcesR,serviceR,courseR] = await Promise.all([
+      API.settings.themeGet(),
+      API.settings.dictList("cities"),
+      API.settings.dictList("spheres"),
+      API.settings.dictList("sources"),
+      API.settings.dictList("service_types"),
+      API.settings.dictList("course_types"),
+    ]);
+    state.themeCfg = normalizeThemeCfg(themeR?.data?.value || null);
+    state.cities = citiesR?.data || [];
+    state.spheres = spheresR?.data || [];
+    state.sources = sourcesR?.data || [];
+    state.service_types = serviceR?.data || [];
+    state.course_types = courseR?.data || [];
+    App.state.themeCfg = state.themeCfg;
+    applyTheme();
+  };
+
+  const openThemeModal = ()=>{
+    const cfg = JSON.parse(JSON.stringify(state.themeCfg));
+
+    const mkColor = (label, value, on)=>{
+      const inp=el("input",{type:"color",value:value||"#000000",onInput:(e)=>on(e.target.value)});
+      return el("div",{class:"hrow gap10",style:"align-items:center; justify-content:space-between"},
+        el("div",{class:"muted2",style:"font-size:12px"},label),
+        inp
+      );
+    };
+    const mkRange = (label, value, on)=>{
+      const inp=el("input",{type:"range",min:"0",max:"1",step:"0.01",value:String(value??0.12),onInput:(e)=>on(Number(e.target.value))});
+      const val=el("div",{class:"muted2",style:"font-family:var(--mono); font-size:12px"}, String(value??0.12));
+      inp.addEventListener("input",()=>val.textContent=String(inp.value));
+      return el("div",{class:"vcol gap8"},
+        el("div",{class:"hrow",style:"justify-content:space-between; align-items:center"},
+          el("div",{class:"muted2",style:"font-size:12px"},label),
+          val
+        ),
+        inp
+      );
+    };
+
+    const body=el("div",{class:"vcol gap12"},
+      el("div",{class:"card cardPad vcol gap12"},
+        el("div",{style:"font-weight:900"}, t("theme_dark_block")),
+        mkColor(t("theme_bg"), cfg.dark.bg, v=>cfg.dark.bg=v),
+        mkColor(t("theme_text"), cfg.dark.text, v=>cfg.dark.text=v),
+        mkColor(t("theme_accent"), cfg.dark.accent, v=>cfg.dark.accent=v),
+      ),
+      el("div",{class:"card cardPad vcol gap12"},
+        el("div",{style:"font-weight:900"}, t("theme_light_block")),
+        mkColor(t("theme_bg"), cfg.light.bg, v=>cfg.light.bg=v),
+        mkColor(t("theme_text"), cfg.light.text, v=>cfg.light.text=v),
+        mkColor(t("theme_accent"), cfg.light.accent, v=>cfg.light.accent=v),
+      ),
+      el("div",{class:"card cardPad vcol gap12"},
+        el("div",{style:"font-weight:900"}, "Eye"),
+        mkColor(t("theme_eye_tint"), cfg.eye.tint, v=>cfg.eye.tint=v),
+        mkRange(t("theme_eye_power"), cfg.eye.strength, v=>cfg.eye.strength=v),
+      )
+    );
+
+    Modal.open(t("settings_theme"), body, [
+      {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
+      {label:t("save"),kind:"primary",onClick:async()=>{
+        try{
+          await API.settings.themeSet(cfg);
+          state.themeCfg = normalizeThemeCfg(cfg);
+          App.state.themeCfg = state.themeCfg;
+          applyTheme();
+          Toast.show(t("settings_saved_apply"),"ok");
+          Modal.close();
+          render();
+        }catch(e){
+          Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+        }
+      }},
+    ]);
+  };
+
+  const openDictModal = (kind, is3lang, item)=>{
+    const isEdit=!!item;
+    const title = `${t(isEdit?"btn_update":"btn_add")}: ${kind}`;
+
+    const sortInp=el("input",{type:"number",value:String(item?.sort ?? 1000),placeholder:"1000"});
+    const activeInp=el("input",{type:"checkbox"});
+    activeInp.checked = item ? (Number(item.is_active)!==0) : true;
+
+    const fields=[];
+    if(is3lang){
+      const ru=el("input",{value:item?.name_ru||"",placeholder:"RU"});
+      const uz=el("input",{value:item?.name_uz||"",placeholder:"UZ"});
+      const en=el("input",{value:item?.name_en||"",placeholder:"EN"});
+      fields.push(
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_ru")), ru),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_uz")), uz),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_en")), en),
+      );
+
+      const body=el("div",{class:"vcol gap12"},
+        ...fields,
+        el("div",{class:"grid2"},
+          el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_sort")), sortInp),
+          el("label",{class:"hrow gap10",style:"align-items:center; justify-content:space-between"},
+            el("span",{class:"muted2",style:"font-size:12px"},t("field_active")), activeInp
+          )
+        )
+      );
+
+      Modal.open(title, body, [
+        {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
+        {label:t("save"),kind:"primary",onClick:async()=>{
+          const payload={
+            name_ru:(ru.value||"").trim(),
+            name_uz:(uz.value||"").trim(),
+            name_en:(en.value||"").trim(),
+            sort:Number(sortInp.value||1000),
+            is_active: activeInp.checked ? 1 : 0,
+          };
+          if(!payload.name_ru||!payload.name_uz||!payload.name_en){
+            Toast.show(`${t("toast_error")}: ${t("field_name")}`,"bad"); return;
+          }
+          try{
+            if(isEdit) await API.settings.dictUpdate(kind,item.id,payload);
+            else await API.settings.dictCreate(kind,payload);
+            Toast.show(t("toast_saved"),"ok");
+            Modal.close();
+            await reload();
+          }catch(e){
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+          }
+        }},
+      ]);
+      return;
+    }
+
+    // course_types (one language)
+    const nameInp=el("input",{value:item?.name||"",placeholder:t("field_name")});
+    const dateInp=el("input",{type:"date",value:secToDateInput(item?.start_date)});
+    const priceInp=el("input",{type:"number",value:String(item?.price ?? 0),placeholder:"0"});
+    const curSel=el("select",{},
+      el("option",{value:"UZS"},"UZS"),
+      el("option",{value:"USD"},"USD")
+    );
+    curSel.value = item?.currency || "UZS";
+
+    const body=el("div",{class:"vcol gap12"},
+      el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name")), nameInp),
+      el("div",{class:"grid2"},
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_start_date")), dateInp),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_currency")), curSel),
+      ),
+      el("div",{class:"grid2"},
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_price")), priceInp),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_sort")), sortInp),
+      ),
+      el("label",{class:"hrow gap10",style:"align-items:center; justify-content:space-between"},
+        el("span",{class:"muted2",style:"font-size:12px"},t("field_active")), activeInp
+      )
+    );
+
+    Modal.open(title, body, [
+      {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
+      {label:t("save"),kind:"primary",onClick:async()=>{
+        const payload={
+          name:(nameInp.value||"").trim(),
+          start_date: dateToSec(dateInp.value),
+          price:Number(priceInp.value||0),
+          currency:String(curSel.value||"UZS"),
+          sort:Number(sortInp.value||1000),
+          is_active: activeInp.checked ? 1 : 0,
+        };
+        if(!payload.name){ Toast.show(`${t("toast_error")}: ${t("field_name")}`,"bad"); return; }
+        try{
+          if(isEdit) await API.settings.dictUpdate(kind,item.id,payload);
+          else await API.settings.dictCreate(kind,payload);
+          Toast.show(t("toast_saved"),"ok");
+          Modal.close();
+          await reload();
+        }catch(e){
+          Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+        }
+      }},
+    ]);
+  };
+
+  const dictCard = (titleKey, kind, list, is3lang)=>{
+    const head=el("div",{class:"khead"},
+      el("div",{class:"ttl"}, t(titleKey)),
+      el("div",{class:"hrow gap8",style:"align-items:center"},
+        el("div",{class:"muted2",style:"font-size:12px"}, String(list.length)),
+        el("button",{class:"iconBtn",type:"button",title:t("create"),onClick:()=>openDictModal(kind,is3lang,null)},
+          el("span",{class:"icoWrap",html:ICONS.plus})
+        )
+      )
+    );
+
+    const rows = list.length ? list.map(item=>{
+      const title = is3lang ? langLabel3(item) : (item.name || `#${item.id}`);
+      const sub = is3lang
+        ? `RU: ${item.name_ru || "—"} • UZ: ${item.name_uz || "—"} • EN: ${item.name_en || "—"}`
+        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"—"} • ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
+
+      return el("div",{class:"rowLine"},
+        el("div",{class:"rowMain"},
+          el("div",{class:"rowTitle"}, title),
+          el("div",{class:"rowSub"}, sub, ` • sort:${item.sort ?? 1000}`, ` • ${Number(item.is_active)!==0 ? "active" : "off"}`)
+        ),
+        el("div",{class:"rowActions"},
+          el("button",{class:"iconBtn miniIcon",type:"button",title:t("settings_edit"),onClick:()=>openDictModal(kind,is3lang,item)},
+            el("span",{class:"icoWrap",html:ICONS.edit})
+          ),
+          el("button",{class:"iconBtn miniIcon",type:"button",title:t("delete"),onClick:async()=>{
+            const ok=await Modal.confirm(t("delete"), `${t(titleKey)}: ${title}`);
+            if(!ok) return;
+            try{
+              await API.settings.dictDelete(kind,item.id);
+              Toast.show(t("toast_deleted"),"ok");
+              await reload();
+            }catch(e){
+              Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+            }
+          }},
+            el("span",{class:"icoWrap",html:ICONS.trash})
+          )
+        )
+      );
+    }) : el("div",{class:"muted"}, t("no_data"));
+
+    return el("div",{class:"card"},
+      head,
+      el("div",{class:"cardPad"}, el("div",{class:"scrollBox vcol gap10"}, rows))
+    );
+  };
+
+  const render = ()=>{
+    host.innerHTML="";
+    const top=el("div",{class:"card cardPad vcol gap10"},
+      el("div",{style:"display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"},
+        el("div",{style:"font-weight:900;font-size:18px"}, t("settings_title")),
+        el("button",{class:"btn",type:"button",onClick:openThemeModal},
+          el("span",{class:"icoWrap",html:ICONS.palette}), " ", t("settings_theme")
+        )
+      ),
+      el("div",{class:"muted"}, t("settings_theme_desc"))
+    );
+
+    const grid=el("div",{class:"setGrid"},
+      dictCard("settings_cities","cities",state.cities,true),
+      dictCard("settings_spheres","spheres",state.spheres,true),
+      dictCard("settings_sources","sources",state.sources,true),
+      dictCard("settings_service_types","service_types",state.service_types,true),
+      dictCard("settings_course_types","course_types",state.course_types,false),
+      el("div") // чтобы сетка ровно выглядела
+    );
+
+    host.append(top, grid);
+  };
+
+  const reload = async ()=>{
+    host.innerHTML="";
+    host.appendChild(el("div",{class:"muted"}, t("loading")));
+    try{
+      await loadAll();
+      render();
+    }catch(e){
+      host.innerHTML="";
+      host.appendChild(el("div",{class:"card cardPad vcol gap10"},
+        el("div",{style:"font-weight:900"}, t("toast_error")),
+        el("div",{class:"muted"}, e.message||"Error")
+      ));
+    }
+  };
+
+  await reload();
+};
+
+
   async function start(){
     injectStyles();
     applyTheme();
@@ -2917,6 +3502,9 @@ select option{
     try{
       const me = await API.me();
       App.state.user = me.data.user;
+
+      await tryLoadThemeFromServer(); // theme from backend (admin)
+      applyTheme();
 
       App.renderShell();
       App.bindRouting();
