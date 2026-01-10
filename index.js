@@ -880,7 +880,7 @@ select option{
 
 /* sidebar needs column flow to push bottom slot down */
 .sidebar{ display:flex; flex-direction:column; }
-.nav{ flex:1 1 auto; overflow:auto; padding-bottom:10px; }
+.nav{ flex:1 1 auto; padding-bottom:10px; }
 
 /* bottom slot (only useful on mobile) */
 .sideActionsSlot{
