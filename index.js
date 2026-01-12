@@ -208,6 +208,9 @@ clients_no_course_leads:"Курсовых лидов нет",
 service_type: "Тип услуги",
 pm_label: "PM",
 open_tasks: "Открыть задачи",
+filter_project: "Проект",
+filter_project_all: "Все",
+
 
     },
     uz: {
@@ -353,6 +356,8 @@ clients_no_course_leads:"Kurs leadlari yo‘q",
 service_type: "Xizmat turi",
 pm_label: "PM",
 open_tasks: "Vazifalarni ochish",
+filter_project: "Loyiha",
+filter_project_all: "Barchasi",
 
     },
     en: {
@@ -498,6 +503,8 @@ clients_no_course_leads:"No course leads",
 service_type: "Service type",
 pm_label: "PM",
 open_tasks: "Open tasks",
+filter_project: "Project",
+filter_project_all: "All",
 
     }
   };
@@ -769,9 +776,11 @@ palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 
     list: (q = {}) => {
       const sp = new URLSearchParams();
       if (q.assignee_user_id) sp.set("assignee_user_id", q.assignee_user_id);
+      if (q.project_id) sp.set("project_id", q.project_id); // ✅ ВАЖНО по ТЗ
       const s = sp.toString();
       return apiFetch(`/api/tasks${s ? "?" + s : ""}`);
     },
+
     get: (id) => apiFetch(`/api/tasks/${id}`),
     create: (body) =>
       apiFetch("/api/tasks", {
@@ -796,25 +805,23 @@ palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 
 
     // ===== PROJECTS =====
   projects: {
-    list: (q = {}) => {
-      const sp = new URLSearchParams();
-      if (q.q) sp.set("q", q.q);
-      if (q.status) sp.set("status", q.status);
-      if (q.pm_user_id) sp.set("pm_user_id", q.pm_user_id);
-      if (q.client_id) sp.set("client_id", q.client_id);
-      const s = sp.toString();
-      return apiFetch(`/api/projects${s ? "?" + s : ""}`);
-    },
-    get: (id) => apiFetch(`/api/projects/${id}`),
-    create: (body) => apiFetch("/api/projects", { method: "POST", body }),
-    update: (id, body) => apiFetch(`/api/projects/${id}`, { method: "PUT", body }),
-    move: (id, status, extra = {}) =>
-      apiFetch(`/api/projects/${id}/move`, {
-        method: "POST",
-        body: { status, ...extra },
-      }),
-    del: (id) => apiFetch(`/api/projects/${id}/delete`, { method: "POST" }),
+  list: (q = {}) => {
+    const sp = new URLSearchParams();
+    if (q.q) sp.set("q", q.q);
+    if (q.pm_user_id) sp.set("pm_user_id", q.pm_user_id);
+    if (q.service_type_id) sp.set("service_type_id", q.service_type_id);
+    if (q.client_id) sp.set("client_id", q.client_id);
+    const s = sp.toString();
+    return apiFetch(`/api/projects${s ? "?" + s : ""}`);
   },
+  get: (id) => apiFetch(`/api/projects/${id}`),
+  create: (body) => apiFetch("/api/projects", { method: "POST", body }),
+  update: (id, body) => apiFetch(`/api/projects/${id}`, { method: "PUT", body }),
+  move: (id, status, extra = {}) =>
+    apiFetch(`/api/projects/${id}/move`, { method: "POST", body: { status, ...extra } }),
+  del: (id) => apiFetch(`/api/projects/${id}/delete`, { method: "POST" }),
+  },
+
 
 
   // ===== USERS (admin) =====
@@ -1977,6 +1984,36 @@ select option{
       App.state.cache.projects = pr || [];
     }
 
+    // ✅ Project filter (по ТЗ)
+let projectSel = null;
+const qpid0 = (App.state.current.query && App.state.current.query.project_id)
+  ? String(App.state.current.query.project_id)
+  : "";
+
+if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) {
+  projectSel = el("select", { class: "sel" });
+  projectSel.appendChild(el("option", { value: "" }, `${t("filter_project")}: ${t("filter_project_all")}`));
+
+  for (const p of App.state.cache.projects) {
+    const title = (p.company_name || p.client_company_name || `#${p.id}`);
+    const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "");
+    projectSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} — ${svc}` : title));
+  }
+
+  projectSel.value = qpid0;
+  qRow.appendChild(projectSel);
+
+  // меняем hash → Tasks перерендерится сам
+  projectSel.addEventListener("change", () => {
+    const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    if (projectSel.value) sp.set("project_id", projectSel.value);
+    else sp.delete("project_id");
+    const qs = sp.toString();
+    window.location.hash = qs ? `#/tasks?${qs}` : "#/tasks";
+  });
+}
+
+
     const cols = [{
         key: "new",
         label: t("t_new")
@@ -2145,10 +2182,17 @@ select option{
 
     async function load() {
       try {
-        const assignee_user_id = isAdmin ? (usersSel ?.value || "") : "";
-        const r = await API.tasks.list({
-          assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null
-        });
+        const assignee_user_id = isAdmin ? (usersSel?.value || "") : "";
+
+const project_id =
+  (projectSel && projectSel.value) ? projectSel.value :
+  ((App.state.current.query && App.state.current.query.project_id) ? String(App.state.current.query.project_id) : "");
+
+const r = await API.tasks.list({
+  assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null,
+  project_id: project_id ? Number(project_id) : null, // ✅ ВАЖНО по ТЗ
+});
+
         all = (r.data || []).slice();
         render();
         if (openId) openTask(openId);
@@ -3674,334 +3718,641 @@ function dictLabel(list,id){
    ===== Projects ==========
    ========================= */
 
-App.renderProjects = async function(host){
+App.renderProjects = async function (host) {
+  // ---- styles (progress + better selects) ----
+  if (!document.getElementById("projStyles")) {
+    const st = document.createElement("style");
+    st.id = "projStyles";
+    st.textContent = `
+      .pStats{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+      .pProg{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+      .pProgBar{height:100%;width:0%}
+      .row2{display:flex;gap:10px;align-items:center}
+      .row2 .input,.row2 .sel{flex:1}
+      .btn.mini{padding:8px 10px;border-radius:12px}
+      .sel option, select option{background:rgba(6,26,20,.98);color:var(--text)}
+    `;
+    document.head.appendChild(st);
+  }
+
   const role = App.state.user.role;
   const isAdmin = role === "admin";
   const isRop = role === "rop";
   const isPm = role === "pm";
-  const isFin = role === "fin";
+  const canCreate = isAdmin || isRop || isPm;
 
-  const canCreate = (isAdmin || isRop || isPm);
-  const canEditAny = (isAdmin || isRop);
-  const canMoveAny = (isAdmin || isRop || isPm);
+  // ---- helpers ----
+  const nameByLang = (x) => x ? (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || "") : "";
 
-  const toolbar = el("div",{class:"card cardPad vcol gap12"});
-  const qRow = el("div",{class:"hrow gap10", style:"flex-wrap:wrap; align-items:center"});
+  const toLocalValue = (sec) => {
+    if (!sec) return "";
+    const d = new Date(Number(sec) * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
-  const qInp = el("input",{
-    class:"input",
-    placeholder: t("search"),
-    style:"min-width:240px; flex:1",
-    value: App.state.current.query.q || ""
-  });
+  const fromLocalValue = (v) => {
+    const s = String(v || "").trim();
+    if (!s) return null;
+    const ms = new Date(s).getTime();
+    if (!Number.isFinite(ms)) return null;
+    return Math.floor(ms / 1000);
+  };
 
-  const refreshBtn = el("button",{class:"btn", type:"button"}, t("refresh"));
-  const createBtn = el("button",{class:"btn primary", type:"button"}, `${t("create")} · ${t("project")}`);
+  const statusCols = [
+    { key: "new", label: t("t_new") },
+    { key: "pause", label: t("t_pause") },
+    { key: "in_progress", label: t("t_in_progress") },
+    { key: "done", label: t("t_done") },
+    { key: "canceled", label: t("t_canceled") },
+  ];
 
-  if(!canCreate) createBtn.disabled = true;
+  // ---- load refs ----
+  const [svcRes, pmListRaw] = await Promise.all([
+    API.settings.dictList("service_types").catch(() => ({ data: [] })),
+    (isAdmin || isRop) ? API.usersTryList().catch(() => []) : Promise.resolve([]),
+  ]);
 
-  qRow.append(qInp, refreshBtn);
-  if(canCreate) qRow.append(createBtn);
+  const serviceTypes = (svcRes && svcRes.data) ? svcRes.data : [];
+  const pmList = Array.isArray(pmListRaw) ? pmListRaw.filter(u => u.role === "pm" && Number(u.is_active) === 1) : [];
 
-  const hint = el("div",{class:"muted2", style:"font-size:12px"}, t("touch_drag_hint"));
+  const companiesRes = await API.clients.list("company", "").catch(() => ({ data: [] }));
+  let companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
 
-  toolbar.append(
-    el("div",{class:"hrow gap10", style:"justify-content:space-between; align-items:flex-start; flex-wrap:wrap"},
-      el("div",{class:"vcol gap8"}, el("div",{style:"font-weight:900"}, t("route_projects")), hint),
-      el("div",{class:"vcol gap8", style:"min-width:240px"}, qRow)
+  // ---- task stats (for progress) ----
+  const tasksRes = await API.tasks.list({}).catch(() => ({ data: [] }));
+  const tasksAll = (tasksRes && tasksRes.data) ? tasksRes.data : [];
+  const taskStats = {};
+  for (const x of tasksAll) {
+    const pid = Number(x.project_id || 0);
+    if (!pid) continue;
+    if (!taskStats[pid]) taskStats[pid] = { total: 0, done: 0 };
+    taskStats[pid].total += 1;
+    if ((x.status || "") === "done") taskStats[pid].done += 1;
+  }
+
+  const computeAutoName = (client_id, service_type_id) => {
+    const c = companies.find(x => Number(x.id) === Number(client_id));
+    const s = serviceTypes.find(x => Number(x.id) === Number(service_type_id));
+    const cn = (c && (c.company_name || c.full_name)) ? (c.company_name || c.full_name) : "";
+    const sn = nameByLang(s);
+    const v = `${cn}${cn && sn ? " — " : ""}${sn}`.trim();
+    return v || "—";
+  };
+
+  // ---- toolbar ----
+  const toolbar = el("div", { class: "card cardPad vcol gap12" });
+  const row = el("div", { class: "hrow gap10", style: "flex-wrap:wrap; align-items:center" });
+
+  const qInp = el("input", { class: "input", placeholder: t("search"), style: "min-width:240px; flex:1" });
+  const pmSel = (isAdmin || isRop)
+    ? el("select", { class: "sel" },
+        el("option", { value: "" }, "PM: All"),
+        ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
+      )
+    : null;
+
+  const svcSelFilter = el("select", { class: "sel" },
+    el("option", { value: "" }, `${t("service_type")}: ${t("filter_project_all")}`),
+    ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
+      el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
     )
   );
 
-  const board = el("div",{class:"kanbanWrap", id:"projectBoard", style:"--cols:5"});
+  const refreshBtn = el("button", { class: "btn", type: "button" }, t("refresh"));
+  const createBtn = el("button", { class: "btn primary", type: "button", disabled: !canCreate }, `${t("create")} · ${t("route_projects")}`);
+
+  row.append(qInp);
+  if (pmSel) row.append(pmSel);
+  row.append(svcSelFilter, refreshBtn, createBtn);
+
+  toolbar.append(
+    el("div", { class: "hrow gap10", style: "justify-content:space-between; align-items:flex-start; flex-wrap:wrap" },
+      el("div", { class: "vcol gap6" },
+        el("div", { style: "font-weight:900" }, t("route_projects")),
+        el("div", { class: "muted2", style: "font-size:12px" }, t("touch_drag_hint"))
+      ),
+      row
+    )
+  );
+
+  const board = el("div", { class: "kanbanWrap", id: "projectBoard", style: "--cols:5" });
+  host.innerHTML = "";
   host.append(toolbar, board);
 
-  async function ensureCompanies(){
-    if(App.state.cache.companies) return App.state.cache.companies;
-    try{
-      const r = await API.clients.list("company", "");
-      App.state.cache.companies = (r.data || []);
-    }catch{
-      App.state.cache.companies = [];
-    }
-    return App.state.cache.companies;
-  }
-
-  async function ensureServiceTypes(){
-    if(App.state.cache.serviceTypes) return App.state.cache.serviceTypes;
-    try{
-      const raw = LS.get("gsoft_dict_cache");
-      const obj = raw ? JSON.parse(raw) : {};
-      App.state.cache.serviceTypes = obj.dict_service_types || [];
-    }catch{
-      App.state.cache.serviceTypes = [];
-    }
-    return App.state.cache.serviceTypes;
-  }
-
-  async function ensureUsersForAssign(){
-    if(App.state.cache.usersForAssign) return App.state.cache.usersForAssign;
-    if(!(isAdmin || isRop)){
-      App.state.cache.usersForAssign = [];
-      return [];
-    }
-    try{
-      const list = await API.usersTryList();
-      App.state.cache.usersForAssign = (list || []);
-    }catch{
-      App.state.cache.usersForAssign = [];
-    }
-    return App.state.cache.usersForAssign;
-  }
-
-  const cols = [
-    { key:"new", label: t("t_new") },
-    { key:"pause", label: t("t_pause") },
-    { key:"in_progress", label: t("t_in_progress") },
-    { key:"done", label: t("t_done") },
-    { key:"canceled", label: t("t_canceled") },
-  ];
-
   const colEls = {};
-
-  function buildBoard(){
+  const buildBoard = () => {
     board.innerHTML = "";
-    for(const c of cols){
-      const list = el("div",{class:"klist", "data-status": c.key});
-      const head = el("div",{class:"khead"},
-        el("div",{class:"ttl"}, c.label),
-        el("div",{class:"muted2", id:`pCnt_${c.key}`, style:"font-size:12px"},"0")
+    for (const c of statusCols) {
+      const list = el("div", { class: "klist", "data-status": c.key });
+      const head = el("div", { class: "khead" },
+        el("div", { class: "ttl" }, c.label),
+        el("div", { class: "muted2", style: "font-size:12px" }, "0")
       );
-      const col = el("div",{class:"card kcol"}, head, list);
+      const col = el("div", { class: "card kcol" }, head, list);
+      colEls[c.key] = col;
 
-      list.addEventListener("dragover", (e)=>{ 
-        if(!canMoveAny) return; 
-        e.preventDefault(); 
-        list.classList.add("drop"); 
-      });
-      list.addEventListener("dragleave", ()=> list.classList.remove("drop"));
-      list.addEventListener("drop", async (e)=>{
-        list.classList.remove("drop");
-        if(!canMoveAny) return;
+      // drop
+      list.addEventListener("dragover", (e) => { e.preventDefault(); list.classList.add("drop"); });
+      list.addEventListener("dragleave", () => list.classList.remove("drop"));
+      list.addEventListener("drop", async (e) => {
         e.preventDefault();
-        const id = Number(e.dataTransfer.getData("text/plain")||0);
-        if(!id) return;
+        list.classList.remove("drop");
+        const id = Number(e.dataTransfer.getData("text/plain") || 0);
+        if (!id) return;
         await doMove(id, c.key);
       });
 
       board.appendChild(col);
-      colEls[c.key] = list;
     }
-  }
+  };
 
-  function refreshCounts(all){
-    for(const c of cols){
-      const cnt = (all||[]).filter(x => (x.status||"new") === c.key).length;
-      const elc = $(`#pCnt_${c.key}`);
-      if(elc) elc.textContent = String(cnt);
+  const refreshCounts = () => {
+    for (const c of statusCols) {
+      const list = colEls[c.key].querySelector(".klist");
+      colEls[c.key].querySelector(".khead .muted2").textContent = String(list.children.length);
     }
-  }
+  };
 
-  function buildCard(x){
-    const st = (x.status || "new");
-    const company = x.company_name || x.client_company_name || "";
-    const service = x.service_name_uz || x.service_name_ru || x.service_name_en || "";
-    const pmName = x.pm_full_name || "";
-    const deadline = x.deadline_at ? fmtDate(x.deadline_at) : "—";
+  const canEditRow = (p) => (isAdmin || isRop || (isPm && Number(p.pm_user_id) === Number(App.state.user.id)));
 
-    const head = el("div",{class:"hrow gap8", style:"justify-content:space-between; align-items:flex-start"},
-      el("div",{style:"font-weight:900; line-height:1.1"}, company ? `${company}` : `#${x.id}`),
-      el("div",{class:"muted2", style:"font-size:12px"}, `#${x.id}`)
+  const openTasks = (pid) => {
+    window.location.hash = `#/tasks?project_id=${encodeURIComponent(String(pid))}`;
+  };
+
+  const askCancelReason = () => new Promise((resolve) => {
+    const ta = el("textarea", { class: "input", style: "min-height:110px", placeholder: t("reason") });
+    const body = el("div", { class: "vcol gap10" },
+      el("div", { class: "muted" }, t("need_reason")),
+      ta
     );
+    Modal.open(t("action_cancel"), body, [
+      { label: t("cancel"), kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+      { label: t("action_cancel"), kind: "primary", onClick: () => { const v = String(ta.value || "").trim(); Modal.close(); resolve(v || null); } },
+    ]);
+  });
 
-    const meta = el("div",{class:"kmeta"},
-      service ? el("span",{class:"badge"}, `${t("service_type")}: ${service}`) : null,
-      pmName ? el("span",{class:"badge"}, `${t("pm_label")}: ${pmName}`) : null,
-      el("span",{class:"badge"}, `${t("deadline")}: ${deadline}`)
-    );
-
-    const openBtn = el("button",{class:"btn ghost mini", type:"button", onClick:(e)=>{e.stopPropagation(); openProjectView(x.id);} }, t("open"));
-    const actions = el("div",{class:"kcardActions"}, openBtn);
-
-    const card = el("div",{
-      class:"kcard",
-      draggable: canMoveAny && !isFin,
-      "data-id": String(x.id),
-      onClick: ()=> openProjectView(x.id),
-      onDragstart: (e)=>{
-        if(!canMoveAny || isFin){ e.preventDefault(); return; }
-        e.dataTransfer.setData("text/plain", String(x.id));
-        e.dataTransfer.effectAllowed = "move";
-        card.classList.add("dragging");
-      },
-      onDragend: ()=> card.classList.remove("dragging")
-    }, head, meta, actions);
-
-    return { st, card };
-  }
-
-  async function doMove(id, status){
-    try{
+  async function doMove(id, status) {
+    try {
       let extra = {};
-      if(status === "canceled"){
-        const reason = await Modal.prompt(t("reason"), t("need_reason"));
-        if(!reason) return;
+      if (status === "canceled") {
+        const reason = await askCancelReason();
+        if (!reason) return;
         extra.cancel_reason = reason;
       }
       await API.projects.move(id, status, extra);
       Toast.show(t("toast_saved"), "ok");
       await load();
-    }catch(e){
-      Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
     }
   }
 
-  async function openProjectView(id){
-    try{
-      const r = await API.projects.get(id);
-      const x = r.data || {};
-      const company = x.company_name || x.client_company_name || "";
-      const service = x.service_name_uz || x.service_name_ru || x.service_name_en || "";
-      const pmName = x.pm_full_name || "";
-      const deadline = x.deadline_at ? fmtDate(x.deadline_at) : "—";
-      const statusLabel = (cols.find(c=>c.key===(x.status||"new"))||{}).label || (x.status||"—");
+  function cardFor(p) {
+    const st = p.status || "new";
+    const company = p.company_name || p.client_company_name || "";
+    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
+    const autoTitle = (company && svc) ? `${company} — ${svc}` : (company || svc || `#${p.id}`);
 
-      const body = el("div",{class:"vcol gap12"},
-        el("div",{class:"grid2"},
-          el("div",{class:"vcol gap8"},
-            el("div",{class:"muted2", style:"font-size:12px"}, t("client_company")),
-            el("div",{style:"font-weight:900"}, company || "—")
-          ),
-          el("div",{class:"vcol gap8"},
-            el("div",{class:"muted2", style:"font-size:12px"}, t("status")),
-            el("div",{style:"font-weight:900"}, statusLabel)
-          )
-        ),
-        el("div",{class:"grid2"},
-          el("div",{class:"vcol gap8"},
-            el("div",{class:"muted2", style:"font-size:12px"}, t("service_type")),
-            el("div",{style:"font-weight:700"}, service || "—")
-          ),
-          el("div",{class:"vcol gap8"},
-            el("div",{class:"muted2", style:"font-size:12px"}, t("pm_label")),
-            el("div",{style:"font-weight:700"}, pmName || "—")
-          )
-        ),
-        el("div",{class:"grid2"},
-          el("div",{class:"vcol gap8"},
-            el("div",{class:"muted2", style:"font-size:12px"}, t("deadline")),
-            el("div",{style:"font-weight:700"}, deadline)
-          )
-        ),
-      );
+    const stat = taskStats[Number(p.id)] || { total: 0, done: 0 };
+    const pct = stat.total ? Math.round((stat.done * 100) / stat.total) : 0;
 
-      const actions = [
-        {
-          label: t("open_tasks"),
-          kind: "",
-          onClick: ()=>{
-            Modal.close();
-            location.hash = `#/tasks?project_id=${encodeURIComponent(String(id))}`;
-          }
-        },
-        { label: t("close"), kind:"", onClick: ()=>Modal.close() }
-      ];
+    const title = el("div", { style: "font-weight:900; line-height:1.1" }, autoTitle);
+    const idBox = el("div", { class: "muted2", style: "font-size:12px" }, `#${p.id}`);
 
-      Modal.open(`${t("project")} #${id}`, body, actions);
-    }catch(e){
-      Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-    }
-  }
+    const top = el("div", { class: "hrow gap8", style: "justify-content:space-between; align-items:flex-start" }, title, idBox);
 
-  createBtn.onclick = async ()=>{
-    const companies = await ensureCompanies();
-    const services = await ensureServiceTypes();
-    const users = await ensureUsersForAssign();
-
-    const companySel = el("select",{class:"input"}, el("option",{value:""},"—"));
-    companies.forEach(c=>{
-      companySel.appendChild(el("option",{value:String(c.id)}, c.company_name || c.full_name || `#${c.id}`));
-    });
-
-    const serviceSel = el("select",{class:"input"}, el("option",{value:""},"—"));
-    services.forEach(s=>{
-      const nm = s[`name_${App.state.lang}`] || s.name_uz || s.name_ru || s.name_en || `#${s.id}`;
-      serviceSel.appendChild(el("option",{value:String(s.id)}, nm));
-    });
-
-    const pmSel = el("select",{class:"input"}, el("option",{value:""},"—"));
-    users.forEach(u=>{
-      pmSel.appendChild(el("option",{value:String(u.id)}, `${u.full_name} (${u.role})`));
-    });
-
-    const nameInp = el("input",{class:"input", placeholder:t("name")});
-    const deadlineInp = el("input",{class:"input", type:"datetime-local"});
-    const commentInp = el("textarea",{class:"input", rows:4, placeholder:t("comment")});
-
-    const form = el("div",{class:"vcol gap12"},
-      el("div",{class:"grid2"},
-        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("client_company")), companySel),
-        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("name")), nameInp),
-      ),
-      el("div",{class:"grid2"},
-        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("service_type")), serviceSel),
-        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("pm_label")), pmSel),
-      ),
-      el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("deadline")), deadlineInp),
-      el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("comment")), commentInp),
+    const meta = el("div", { class: "kmeta" },
+      svc ? el("span", { class: "badge" }, `${t("service_type")}: ${svc}`) : null,
+      (p.pm_full_name) ? el("span", { class: "badge" }, `PM: ${p.pm_full_name}`) : null,
+      p.deadline_at ? el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(p.deadline_at)}`) : null,
     );
 
-    Modal.open(`${t("create")} · ${t("project")}`, form, [
-      {label:t("cancel"), kind:"", onClick:()=>Modal.close()},
-      {label:t("create"), kind:"primary", onClick: async ()=>{
-        try{
-          const body = {
-            client_id: companySel.value ? Number(companySel.value) : null,
-            name: String(nameInp.value||"").trim(),
-            service_type_id: serviceSel.value ? Number(serviceSel.value) : null,
-            pm_user_id: pmSel.value ? Number(pmSel.value) : null,
-            deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime()/1000) : null,
-            comment: String(commentInp.value||"").trim() || null,
-          };
-          await API.projects.create(body);
-          Modal.close();
-          Toast.show(t("toast_saved"), "ok");
-          await load();
-        }catch(e){
-          Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-        }
-      }}
+    const statsRow = el("div", { class: "pStats" },
+      el("span", { class: "badge" }, `${t("route_tasks")}: ${stat.total}`),
+      el("span", { class: "badge" }, `${t("t_done")}: ${stat.done} (${pct}%)`)
+    );
+
+    const prog = el("div", { class: "pProg" },
+      el("div", { class: "pProgBar", style: `width:${pct}%; background:rgba(255,208,90,.85)` })
+    );
+
+    const btnTasks = el("button", { class: "btn ghost mini", type: "button", onClick: (e) => { e.stopPropagation(); openTasks(p.id); } }, t("open_tasks"));
+    const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(p.id); } }, t("open"));
+
+    const actions = el("div", { class: "kcardActions" }, btnTasks, btnOpen);
+
+    const card = el("div", {
+      class: "kcard",
+      draggable: true,
+      onDragstart: (e) => { e.dataTransfer.setData("text/plain", String(p.id)); e.dataTransfer.effectAllowed = "move"; },
+    }, top, meta, statsRow, prog, actions);
+
+    // клик НЕ открывает (как ты просил — только кнопкой)
+    return { st, card };
+  }
+
+  async function openView(id) {
+    const r = await API.projects.get(id).catch(() => null);
+    const p = r ? (r.data || r) : null;
+    if (!p) { Toast.show(t("toast_error"), "bad"); return; }
+
+    const canEdit = canEditRow(p);
+
+    const company = p.company_name || p.client_company_name || "";
+    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
+    const autoTitle = (company && svc) ? `${company} — ${svc}` : (company || svc || `#${p.id}`);
+
+    const stat = taskStats[Number(p.id)] || { total: 0, done: 0 };
+    const pct = stat.total ? Math.round((stat.done * 100) / stat.total) : 0;
+
+    const body = el("div", { class: "vcol gap12" },
+      el("div", { style: "font-weight:900; font-size:18px" }, autoTitle),
+      el("div", { class: "muted2", style: "font-size:12px" }, `#${p.id}`),
+      el("div", { class: "pStats" },
+        el("span", { class: "badge" }, `${t("route_tasks")}: ${stat.total}`),
+        el("span", { class: "badge" }, `${t("t_done")}: ${stat.done} (${pct}%)`)
+      ),
+      el("div", { class: "pProg" },
+        el("div", { class: "pProgBar", style: `width:${pct}%; background:rgba(255,208,90,.85)` })
+      ),
+      p.deadline_at ? el("div", { class: "muted" }, `${t("deadline")}: ${fmtDate(p.deadline_at)}`) : null,
+      p.comment ? el("div", { class: "muted" }, `${t("comment")}: ${p.comment}`) : null
+    );
+
+    Modal.open(`${t("route_projects")} #${p.id}`, body, [
+      { label: t("open_tasks"), kind: "ghost", onClick: () => { Modal.close(); openTasks(p.id); } },
+      ...(canEdit ? [{ label: t("edit"), kind: "primary", onClick: () => { Modal.close(); openEdit(p); } }] : []),
+      ...(canEdit ? [{ label: t("delete"), kind: "danger", onClick: async () => {
+        const ok = await Modal.confirm(t("delete"), t("clients_delete_confirm"));
+        if (!ok) return;
+        await API.projects.del(p.id);
+        Modal.close();
+        Toast.show(t("toast_saved"), "ok");
+        await load();
+      }}] : []),
+      { label: t("close"), kind: "ghost", onClick: () => Modal.close() },
     ]);
-  };
+  }
 
-  refreshBtn.onclick = load;
-  qInp.addEventListener("keydown",(e)=>{ if(e.key==="Enter") load(); });
+  async function openCreate() {
+    const canPickPm = isAdmin || isRop;
 
-  let stateAll = [];
+    const companySel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...companies.map(c => el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)))
+    );
 
-  async function load(){
-    try{
-      refreshBtn.disabled = true;
-      const q = String(qInp.value||"").trim();
-      const r = await API.projects.list({ q });
-      stateAll = r.data || [];
-    }catch(e){
-      stateAll = [];
-      Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-    }finally{
-      refreshBtn.disabled = false;
+    const svcSel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
+        el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
+      )
+    );
+
+    const pmSel = canPickPm
+      ? el("select", { class: "sel" },
+          el("option", { value: "" }, "—"),
+          ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
+        )
+      : el("select", { class: "sel", disabled: true },
+          el("option", { value: String(App.state.user.id) }, App.state.user.full_name)
+        );
+
+    const meetInp = el("input", { class: "input", type: "datetime-local" });
+    const dlInp = el("input", { class: "input", type: "datetime-local" });
+
+    const amountInp = el("input", { class: "input", inputmode: "decimal", placeholder: "0" });
+    const curSel = el("select", { class: "sel" },
+      el("option", { value: "UZS" }, "UZS"),
+      el("option", { value: "USD" }, "USD")
+    );
+
+    const commentInp = el("textarea", { class: "input", style: "min-height:90px" });
+
+    // ✅ auto-name preview (changes on select)
+    const namePreview = el("div", { class: "muted2", style: "font-size:12px" }, "—");
+    const syncPreview = () => {
+      namePreview.textContent = computeAutoName(companySel.value, svcSel.value);
+    };
+    companySel.addEventListener("change", syncPreview);
+    svcSel.addEventListener("change", syncPreview);
+
+    // ✅ "+ company" button
+    const addCompanyBtn = el("button", { class: "btn ghost mini", type: "button" }, "+");
+    addCompanyBtn.addEventListener("click", () => openCreateCompany(async (newId) => {
+      const fresh = await API.clients.list("company", "").catch(() => ({ data: [] }));
+      companies = (fresh && fresh.data) ? fresh.data : [];
+      companySel.innerHTML = "";
+      companySel.appendChild(el("option", { value: "" }, "—"));
+      for (const c of companies) {
+        companySel.appendChild(el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)));
+      }
+      companySel.value = String(newId || "");
+      syncPreview();
+    }));
+
+    const form = el("div", { class: "vcol gap12" },
+      el("div", { class: "muted2", style: "font-size:12px" }, `${t("name")}: ${t("client_company")} + ${t("service_type")}`),
+      namePreview,
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("client_company")),
+        el("div", { class: "row2" }, companySel, addCompanyBtn),
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("service_type")),
+        svcSel
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, "PM"),
+        pmSel
+      ),
+
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, "Meeting"),
+          meetInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+          dlInp
+        ),
+      ),
+
+      (isAdmin || isRop)
+        ? el("div", { class: "grid2" },
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, "Amount"),
+              amountInp
+            ),
+            el("div", { class: "vcol gap8" },
+              el("div", { class: "muted2", style: "font-size:12px" }, "Currency"),
+              curSel
+            ),
+          )
+        : null,
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("comment")),
+        commentInp
+      )
+    );
+
+    Modal.open(`${t("create")} · ${t("route_projects")}`, form, [
+      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+      { label: t("create"), kind: "primary", onClick: async () => {
+        const client_id = Number(companySel.value || 0);
+        const service_type_id = Number(svcSel.value || 0);
+        const pm_user_id = Number(pmSel.value || 0);
+
+        if (!client_id || !service_type_id || !pm_user_id) {
+          Toast.show(t("toast_error"), "bad");
+          return;
+        }
+
+        const payload = {
+          client_id,
+          service_type_id,
+          pm_user_id,
+          name: computeAutoName(client_id, service_type_id), // ✅ авто-название
+          meeting_at: fromLocalValue(meetInp.value),
+          deadline_at: fromLocalValue(dlInp.value),
+          comment: String(commentInp.value || "").trim() || null,
+        };
+
+        if (isAdmin || isRop) {
+          const a = String(amountInp.value || "").trim();
+          payload.amount = a ? Number(a) : null;
+          payload.currency = String(curSel.value || "UZS");
+        }
+
+        await API.projects.create(payload);
+        Modal.close();
+        Toast.show(t("toast_saved"), "ok");
+        await load();
+      }},
+    ]);
+  }
+
+  async function openEdit(p) {
+    const canEdit = canEditRow(p);
+    if (!canEdit) return;
+
+    const companySel = el("select", { class: "sel" },
+      ...companies.map(c => el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)))
+    );
+    companySel.value = String(p.client_id || "");
+
+    const svcSel = el("select", { class: "sel" },
+      ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
+        el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
+      )
+    );
+    svcSel.value = String(p.service_type_id || "");
+
+    const canPickPm = isAdmin || isRop;
+    const pmSel = canPickPm
+      ? el("select", { class: "sel" },
+          ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
+        )
+      : el("select", { class: "sel", disabled: true },
+          el("option", { value: String(App.state.user.id) }, App.state.user.full_name)
+        );
+    pmSel.value = String(p.pm_user_id || App.state.user.id);
+
+    const meetInp = el("input", { class: "input", type: "datetime-local", value: toLocalValue(p.meeting_at) });
+    const dlInp = el("input", { class: "input", type: "datetime-local", value: toLocalValue(p.deadline_at) });
+
+    const amountInp = el("input", { class: "input", inputmode: "decimal", value: (p.amount != null ? String(p.amount) : "") });
+    const curSel = el("select", { class: "sel" },
+      el("option", { value: "UZS" }, "UZS"),
+      el("option", { value: "USD" }, "USD")
+    );
+    curSel.value = String(p.currency || "UZS");
+
+    const commentInp = el("textarea", { class: "input", style: "min-height:90px" });
+    commentInp.value = p.comment ? String(p.comment) : "";
+
+    const namePreview = el("div", { class: "muted2", style: "font-size:12px" }, "—");
+    const syncPreview = () => {
+      namePreview.textContent = computeAutoName(companySel.value, svcSel.value);
+    };
+    companySel.addEventListener("change", syncPreview);
+    svcSel.addEventListener("change", syncPreview);
+    syncPreview();
+
+    const addCompanyBtn = el("button", { class: "btn ghost mini", type: "button" }, "+");
+    addCompanyBtn.addEventListener("click", () => openCreateCompany(async (newId) => {
+      const fresh = await API.clients.list("company", "").catch(() => ({ data: [] }));
+      companies = (fresh && fresh.data) ? fresh.data : [];
+      companySel.innerHTML = "";
+      for (const c of companies) {
+        companySel.appendChild(el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)));
+      }
+      companySel.value = String(newId || "");
+      syncPreview();
+    }));
+
+    const form = el("div", { class: "vcol gap12" },
+      el("div", { class: "muted2", style: "font-size:12px" }, `${t("name")}: ${t("client_company")} + ${t("service_type")}`),
+      namePreview,
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("client_company")),
+        el("div", { class: "row2" }, companySel, addCompanyBtn),
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("service_type")),
+        svcSel
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, "PM"),
+        pmSel
+      ),
+
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Meeting"), meetInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")), dlInp),
+      ),
+
+      (isAdmin || isRop)
+        ? el("div", { class: "grid2" },
+            el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Amount"), amountInp),
+            el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Currency"), curSel),
+          )
+        : null,
+
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment")), commentInp)
+    );
+
+    Modal.open(`${t("edit")} · ${t("route_projects")} #${p.id}`, form, [
+      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+      { label: t("save"), kind: "primary", onClick: async () => {
+        const client_id = Number(companySel.value || 0);
+        const service_type_id = Number(svcSel.value || 0);
+        const pm_user_id = Number(pmSel.value || 0);
+
+        if (!client_id || !service_type_id || !pm_user_id) {
+          Toast.show(t("toast_error"), "bad");
+          return;
+        }
+
+        const payload = {
+          client_id,
+          service_type_id,
+          pm_user_id,
+          name: computeAutoName(client_id, service_type_id), // ✅ авто-обновление названия
+          meeting_at: fromLocalValue(meetInp.value),
+          deadline_at: fromLocalValue(dlInp.value),
+          comment: String(commentInp.value || "").trim() || null,
+        };
+
+        if (isAdmin || isRop) {
+          const a = String(amountInp.value || "").trim();
+          payload.amount = a ? Number(a) : null;
+          payload.currency = String(curSel.value || "UZS");
+        }
+
+        await API.projects.update(p.id, payload);
+        Modal.close();
+        Toast.show(t("toast_saved"), "ok");
+        await load();
+      }},
+    ]);
+  }
+
+  function openCreateCompany(onDoneSelect) {
+    const companyName = el("input", { class: "input", placeholder: t("client_company_name") });
+    const fullName = el("input", { class: "input", placeholder: t("client_full_name") });
+    const phone1 = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
+    const phone2 = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
+
+    const body = el("div", { class: "vcol gap12" },
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_company_name")), companyName),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")), fullName),
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")), phone1),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")), phone2),
+      )
+    );
+
+    Modal.open(t("clients_create_company"), body, [
+      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+      { label: t("create"), kind: "primary", onClick: async () => {
+        const payload = {
+          type: "company",
+          company_name: String(companyName.value || "").trim(),
+          full_name: String(fullName.value || "").trim(),
+          phone1: String(phone1.value || "").trim(),
+          phone2: String(phone2.value || "").trim() || null,
+        };
+        if (!payload.company_name || !payload.phone1) {
+          Toast.show(t("toast_error"), "bad");
+          return;
+        }
+        const res = await API.clients.create(payload);
+        Modal.close();
+        Toast.show(t("toast_saved"), "ok");
+
+        // достаём id максимально безопасно
+        const newId =
+          (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) :
+          (res && res.id) ? res.id : null;
+
+        if (onDoneSelect) onDoneSelect(newId);
+      }},
+    ]);
+  }
+
+  // ---- load + render ----
+  let all = [];
+
+  async function load() {
+    const q = String(qInp.value || "").trim();
+    const pm_user_id = pmSel ? (pmSel.value ? Number(pmSel.value) : null) : null;
+    const service_type_id = svcSelFilter.value ? Number(svcSelFilter.value) : null;
+
+    const r = await API.projects.list({ q, pm_user_id, service_type_id }).catch(() => ({ data: [] }));
+    all = (r && r.data) ? r.data : [];
+    render();
+  }
+
+  function render() {
+    buildBoard();
+
+    // фильтр по поиску (на фронте)
+    const q = String(qInp.value || "").trim().toLowerCase();
+    const filtered = !q ? all : all.filter(p => {
+      const company = (p.company_name || p.client_company_name || "").toLowerCase();
+      const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "").toLowerCase();
+      const pmn = (p.pm_full_name || "").toLowerCase();
+      return (company + " " + svc + " " + pmn + " #" + p.id).includes(q);
+    });
+
+    for (const p of filtered) {
+      const st = p.status || "new";
+      const list = (colEls[st] ? colEls[st].querySelector(".klist") : colEls["new"].querySelector(".klist"));
+      list.appendChild(cardFor(p).card);
     }
 
-    buildBoard();
-    stateAll.forEach(x=>{
-      const st = x.status || "new";
-      const target = colEls[st] || colEls.new;
-      target.appendChild(buildCard(x).card);
-    });
-    refreshCounts(stateAll);
+    refreshCounts();
   }
+
+  // ---- events ----
+  refreshBtn.addEventListener("click", load);
+  createBtn.addEventListener("click", () => { if (canCreate) openCreate(); });
+  qInp.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+  if (pmSel) pmSel.addEventListener("change", load);
+  svcSelFilter.addEventListener("change", load);
 
   await load();
 };
+
 
 
 async function loadDictCacheIfAny(){
