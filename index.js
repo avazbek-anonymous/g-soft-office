@@ -3725,7 +3725,7 @@ App.renderProjects = async function (host) {
     st.id = "projStyles";
     st.textContent = `
       .pStats{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-      .pProg{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+      .pProg{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top: 10px;}
       .pProgBar{height:100%;width:0%}
       .row2{display:flex;gap:10px;align-items:center}
       .row2 .input,.row2 .sel{flex:1}
