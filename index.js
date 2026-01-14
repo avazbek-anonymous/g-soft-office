@@ -2005,12 +2005,18 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
 
   // меняем hash → Tasks перерендерится сам
   projectSel.addEventListener("change", () => {
-    const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    if (projectSel.value) sp.set("project_id", projectSel.value);
-    else sp.delete("project_id");
-    const qs = sp.toString();
-    window.location.hash = qs ? `#/tasks?${qs}` : "#/tasks";
-  });
+  const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  if (projectSel.value) sp.set("project_id", projectSel.value);
+  else sp.delete("project_id");
+
+  // одноразовые флаги нельзя тянуть дальше, иначе будет мусор
+  sp.delete("open_create");
+  sp.delete("open");
+
+  const qs = sp.toString();
+  window.location.hash = qs ? `#/tasks?${qs}` : "#/tasks";
+});
+
 }
 
 
@@ -2196,6 +2202,21 @@ const r = await API.tasks.list({
         all = (r.data || []).slice();
         render();
         if (openId) openTask(openId);
+
+// one-time: открыть создание задачи из Projects (#/tasks?project_id=..&open_create=1)
+const q = (App.state.current && App.state.current.query) ? App.state.current.query : {};
+if (String(q.open_create || "") === "1") {
+  openTaskCreate({ project_id: q.project_id ? Number(q.project_id) : null });
+
+  // убрать флаг, чтобы модалка не открывалась снова при refresh
+  try {
+    const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    sp.delete("open_create");
+    const qs2 = sp.toString();
+    window.location.hash = qs2 ? `#/tasks?${qs2}` : "#/tasks";
+  } catch {}
+}
+
       } catch (e) {
         Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
       }
@@ -2394,276 +2415,222 @@ const r = await API.tasks.list({
     }
 
     async function openTaskEdit(id) {
-      try {
-        const r = await API.tasks.get(id);
-        const x = r.data;
+  try {
+    const r = await API.tasks.get(id);
+    const x = r.data;
 
-        const role = App.state.user.role;
-        const isAdmin = role === "admin";
-        const isRop = role === "rop";
-        const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
-        if (!canEdit) return openTaskView(id);
+    const role = App.state.user.role;
+    const isAdmin = role === "admin";
+    const isRop = role === "rop";
+    const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+    if (!canEdit) return openTaskView(id);
 
-        const titleInp = el("input", {
-          value: x.title || "",
-          placeholder: t("title")
-        });
-        const descInp = el("textarea", {
-          rows: 6,
-          placeholder: t("description")
-        }, x.description || "");
+    const titleInp = el("input", {
+      class: "input",
+      value: x.title || "",
+      placeholder: t("title")
+    });
 
-        const deadlineInp = el("input", {
-          type: "datetime-local"
-        });
-        if (x.deadline_at) {
-          const d = new Date(x.deadline_at * 1000);
-          const pad = n => String(n).padStart(2, "0");
-          deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        }
+    const descInp = el("textarea", {
+      class: "input",
+      rows: 6,
+      placeholder: t("description")
+    }, x.description || "");
 
-        const projectSel = el("select", {}, el("option", {
-          value: ""
-        }, "—"));
-        for (const p of (App.state.cache.projects || [])) {
-          projectSel.appendChild(el("option", {
-              value: String(p.id),
-              selected: p.id === x.project_id
-            },
-            p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
-          ));
-        }
+    const deadlineInp = el("input", {
+      class: "input",
+      type: "datetime-local"
+    });
 
-        let assigneeSel = null;
-        if (isAdmin) {
-          assigneeSel = el("select", {},
-            ...(App.state.cache.users || []).map(u => el("option", {
-              value: String(u.id),
-              selected: u.id === x.assignee_user_id
-            }, `${u.full_name} (${u.role})`))
-          );
-        }
-
-        const form = el("div", {
-            class: "vcol gap10"
-          },
-          el("div", {
-              class: "grid2"
-            },
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("assignee")),
-              isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "—")
-            ),
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("deadline")),
-              deadlineInp
-            )
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("project")),
-            projectSel
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("title")),
-            titleInp
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("description")),
-            descInp
-          )
-        );
-
-        Modal.open("✎ " + (DICT[App.state.lang] ?.edit || "Edit"), form, [{
-            label: t("cancel"),
-            kind: "ghost",
-            onClick: () => Modal.close()
-          },
-          {
-            label: t("save"),
-            kind: "primary",
-            onClick: async () => {
-              try {
-                const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
-                const body = {
-                  title: (titleInp.value || "").trim() || null,
-                  description: (descInp.value || "").trim(),
-                  deadline_at,
-                  project_id: projectSel.value ? Number(projectSel.value) : null,
-                };
-                if (isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
-
-                await API.tasks.update(x.id, body);
-                Toast.show(t("toast_saved"), "ok");
-                Modal.close();
-                await load();
-              } catch (e) {
-                Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-              }
-            }
-          },
-          {
-            label: t("delete"),
-            kind: "danger",
-            onClick: async () => {
-              const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
-              if (!ok) return;
-              try {
-                await API.tasks.del(x.id);
-                Toast.show(t("toast_deleted"), "ok");
-                Modal.close();
-                await load();
-              } catch (e) {
-                Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-              }
-            }
-          }
-        ]);
-
-        setTimeout(() => descInp.focus(), 0);
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-      }
+    if (x.deadline_at) {
+      const d = new Date(x.deadline_at * 1000);
+      const pad = (n) => String(n).padStart(2, "0");
+      deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    const projectSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
+    for (const p of (App.state.cache.projects || [])) {
+      projectSel.appendChild(el("option", {
+        value: String(p.id),
+        selected: p.id === x.project_id
+      }, p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`));
+    }
 
-    createBtn.addEventListener("click", async () => {
-      const titleInp = el("input", {
-        placeholder: t("title")
-      });
-      const descInp = el("textarea", {
-        rows: 5,
-        placeholder: t("description")
-      });
-      const deadlineInp = el("input", {
-        type: "datetime-local"
-      });
-
-      const projectSel = el("select", {}, el("option", {
-        value: ""
-      }, "—"));
-      for (const p of (App.state.cache.projects || [])) {
-        projectSel.appendChild(el("option", {
-          value: String(p.id)
-        }, p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`));
-      }
-
-      let assigneeSel = null;
-      if (isAdmin) {
-        assigneeSel = el("select", {}, ...(App.state.cache.users || []).map(u => el("option", {
+    let assigneeSel = null;
+    if (isAdmin) {
+      assigneeSel = el("select", { class: "sel" },
+        ...(App.state.cache.users || []).map(u => el("option", {
           value: String(u.id),
-          selected: u.id === App.state.user.id
-        }, `${u.full_name} (${u.role})`)));
-      }
-
-      const body = el("div", {
-          class: "vcol gap10"
-        },
-        el("div", {
-            class: "grid2"
-          },
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("assignee")),
-            el("div", {}, isAdmin ? assigneeSel : (App.state.user.full_name || App.state.user.login))
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("deadline")),
-            deadlineInp
-          )
-        ),
-        el("div", {
-            class: "vcol gap8"
-          },
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, t("project")),
-          projectSel
-        ),
-        el("div", {
-            class: "vcol gap8"
-          },
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, t("title")),
-          titleInp
-        ),
-        el("div", {
-            class: "vcol gap8"
-          },
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, t("description")),
-          descInp
-        )
+          selected: u.id === x.assignee_user_id
+        }, `${u.full_name} (${u.role})`))
       );
+    }
 
-      Modal.open(t("create"), body, [{
-          label: t("cancel"),
-          kind: "ghost",
-          onClick: () => Modal.close()
-        },
-        {
-          label: t("create"),
-          kind: "primary",
-          onClick: async () => {
-            try {
-              const payload = {
-                title: (titleInp.value || "").trim() || null,
-                description: (descInp.value || "").trim(),
-                assignee_user_id: isAdmin && assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
-                project_id: projectSel.value ? Number(projectSel.value) : null,
-                deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null,
-              };
-              if (!payload.description) return;
-              await API.tasks.create(payload);
-              Toast.show(t("toast_saved"), "ok");
-              Modal.close();
-              await load();
-            } catch (e) {
-              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-            }
+    const form = el("div", { class: "vcol gap10" },
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+          isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "—")
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+          deadlineInp
+        )
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+        projectSel
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+        titleInp
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+        descInp
+      )
+    );
+
+    Modal.open("✎ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
+      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+      {
+        label: t("save"),
+        kind: "primary",
+        onClick: async () => {
+          try {
+            const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
+
+            const body = {
+              title: (titleInp.value || "").trim() || null,
+              description: (descInp.value || "").trim(),
+              deadline_at,
+              project_id: projectSel.value ? Number(projectSel.value) : null,
+            };
+
+            if (isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
+
+            await API.tasks.update(x.id, body);
+            Toast.show(t("toast_saved"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
           }
         }
-      ]);
-      setTimeout(() => descInp.focus(), 0);
-    });
+      },
+      {
+        label: t("delete"),
+        kind: "danger",
+        onClick: async () => {
+          const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
+          if (!ok) return;
+          try {
+            await API.tasks.del(x.id);
+            Toast.show(t("toast_deleted"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+          }
+        }
+      }
+    ]);
+
+    setTimeout(() => descInp.focus(), 0);
+  } catch (e) {
+    Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+  }
+}
+
+
+
+    function openTaskCreate(preset = {}) {
+  const titleInp = el("input", { class: "input", placeholder: t("title") });
+  const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
+  const deadlineInp = el("input", { class: "input", type: "datetime-local" });
+
+  const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
+  for (const p of (App.state.cache.projects || [])) {
+    projSel.appendChild(el("option", { value: String(p.id) },
+      p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
+    ));
+  }
+
+  if (preset && preset.project_id) projSel.value = String(preset.project_id);
+  // если фильтр сверху выбран — пусть тоже подставляется
+  if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
+
+  let assigneeSel = null;
+  if (isAdmin) {
+    assigneeSel = el("select", { class: "sel" },
+      ...(App.state.cache.users || []).map(u => el("option", {
+        value: String(u.id),
+        selected: (preset && preset.assignee_user_id) ? (u.id === preset.assignee_user_id) : (u.id === App.state.user.id)
+      }, `${u.full_name} (${u.role})`))
+    );
+  }
+
+  const body = el("div", { class: "vcol gap10" },
+    el("div", { class: "grid2" },
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+        el("div", {}, isAdmin ? assigneeSel : (App.state.user.full_name || App.state.user.login))
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+        deadlineInp
+      )
+    ),
+    el("div", { class: "vcol gap8" },
+      el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+      projSel
+    ),
+    el("div", { class: "vcol gap8" },
+      el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+      titleInp
+    ),
+    el("div", { class: "vcol gap8" },
+      el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+      descInp
+    )
+  );
+
+  Modal.open(t("create"), body, [
+    { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+    {
+      label: t("create"),
+      kind: "primary",
+      onClick: async () => {
+        try {
+          const payload = {
+            title: (titleInp.value || "").trim() || null,
+            description: (descInp.value || "").trim(),
+            assignee_user_id: isAdmin && assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
+            project_id: projSel.value ? Number(projSel.value) : null,
+            deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null,
+          };
+
+          if (!payload.title) return Toast.show(`${t("toast_error")}: ${t("title")}`, "bad");
+          if (!payload.description) return Toast.show(`${t("toast_error")}: ${t("description")}`, "bad");
+
+          await API.tasks.create(payload);
+          Toast.show(t("toast_saved"), "ok");
+          Modal.close();
+          await load();
+        } catch (e) {
+          Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+        }
+      }
+    }
+  ]);
+
+  setTimeout(() => descInp.focus(), 0);
+}
+
+createBtn.addEventListener("click", () => {
+  openTaskCreate({ project_id: (projectSel && projectSel.value) ? Number(projectSel.value) : null });
+});
+
 
     searchInp.addEventListener("input", () => render());
     if (usersSel) usersSel.addEventListener("change", () => load());
@@ -3982,6 +3949,7 @@ App.renderProjects = async function (host) {
 
     Modal.open(`${t("route_projects")} #${p.id}`, body, [
       { label: t("open_tasks"), kind: "ghost", onClick: () => { Modal.close(); openTasks(p.id); } },
+      { label: "+ Task", kind: "ghost", onClick: () => { Modal.close(); window.location.hash = `#/tasks?project_id=${encodeURIComponent(String(p.id))}&open_create=1`;} },
       ...(canEdit ? [{ label: t("edit"), kind: "primary", onClick: () => { Modal.close(); openEdit(p); } }] : []),
       ...(canEdit ? [{ label: t("delete"), kind: "danger", onClick: async () => {
         const ok = await Modal.confirm(t("delete"), t("clients_delete_confirm"));
@@ -4267,47 +4235,115 @@ App.renderProjects = async function (host) {
   }
 
   function openCreateCompany(onDoneSelect) {
+  (async () => {
+    const [citiesRes, sourcesRes, spheresRes] = await Promise.all([
+      API.settings.dictList("cities").catch(() => ({ data: [] })),
+      API.settings.dictList("sources").catch(() => ({ data: [] })),
+      API.settings.dictList("spheres").catch(() => ({ data: [] })),
+    ]);
+
+    const cities  = (citiesRes && citiesRes.data) ? citiesRes.data : [];
+    const sources = (sourcesRes && sourcesRes.data) ? sourcesRes.data : [];
+    const spheres = (spheresRes && spheresRes.data) ? spheresRes.data : [];
+
     const companyName = el("input", { class: "input", placeholder: t("client_company_name") });
-    const fullName = el("input", { class: "input", placeholder: t("client_full_name") });
-    const phone1 = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
-    const phone2 = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
+    const fullName    = el("input", { class: "input", placeholder: t("client_full_name") });
+    const phone1      = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
+    const phone2      = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
+
+    const citySel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...cities.filter(x => Number(x.is_active) === 1).map(x =>
+        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+      )
+    );
+
+    const sourceSel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...sources.filter(x => Number(x.is_active) === 1).map(x =>
+        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+      )
+    );
+
+    const sphereSel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...spheres.filter(x => Number(x.is_active) === 1).map(x =>
+        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+      )
+    );
+
+    const comment = el("textarea", { class: "input", style: "min-height:90px", placeholder: t("comment") });
 
     const body = el("div", { class: "vcol gap12" },
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_company_name")), companyName),
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")), fullName),
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")), phone1),
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")), phone2),
-      )
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company_name")),
+          companyName
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")),
+          fullName
+        )
+      ),
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")),
+          phone1
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")),
+          phone2
+        ),
+      ),
+      el("div", { class: "grid3" },
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("city")), citySel),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("source")), sourceSel),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("sphere")), sphereSel),
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style:"font-size:12px" }, t("comment")),
+        comment
+      ),
     );
 
     Modal.open(t("clients_create_company"), body, [
       { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
-      { label: t("create"), kind: "primary", onClick: async () => {
-        const payload = {
-          type: "company",
-          company_name: String(companyName.value || "").trim(),
-          full_name: String(fullName.value || "").trim(),
-          phone1: String(phone1.value || "").trim(),
-          phone2: String(phone2.value || "").trim() || null,
-        };
-        if (!payload.company_name || !payload.phone1) {
-          Toast.show(t("toast_error"), "bad");
-          return;
+      {
+        label: t("save"),
+        kind: "primary",
+        onClick: async () => {
+          const payload = {
+            type: "company",
+            company_name: String(companyName.value || "").trim() || null,
+            full_name: String(fullName.value || "").trim() || null,
+            phone1: String(phone1.value || "").trim() || null,
+            phone2: String(phone2.value || "").trim() || null,
+            city_id: citySel.value ? Number(citySel.value) : null,
+            source_id: sourceSel.value ? Number(sourceSel.value) : null,
+            sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
+            comment: String(comment.value || "").trim() || null,
+          };
+
+          if (!payload.company_name) {
+            Toast.show(t("toast_error"), "bad");
+            return;
+          }
+
+          const res = await API.clients.create(payload);
+          Modal.close();
+          Toast.show(t("toast_saved"), "ok");
+
+          const newId =
+            (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) :
+            (res && res.id) ? res.id : null;
+
+          if (onDoneSelect) onDoneSelect(newId);
         }
-        const res = await API.clients.create(payload);
-        Modal.close();
-        Toast.show(t("toast_saved"), "ok");
-
-        // достаём id максимально безопасно
-        const newId =
-          (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) :
-          (res && res.id) ? res.id : null;
-
-        if (onDoneSelect) onDoneSelect(newId);
-      }},
+      }
     ]);
-  }
+  })();
+}
+
 
   // ---- load + render ----
   let all = [];
