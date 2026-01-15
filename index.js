@@ -2159,15 +2159,21 @@ App.routeNow = async function () {
     host.append(toolbar, board);
 
 
-    if (isAdmin && !App.state.cache.users) {
-      const list = await API.usersTryList();
-      App.state.cache.users = list || [];
-      for (const u of App.state.cache.users) {
-        usersSel.appendChild(el("option", {
-          value: String(u.id)
-        }, `${u.full_name} (${u.role})`));
-      }
-    }
+    // ✅ users list нужен всем (для назначения задач)
+if (!App.state.cache.users) {
+  const list = await API.usersTryList();
+  App.state.cache.users = list || [];
+}
+
+if (isAdmin && usersSel) {
+  // фильтр исполнителя сверху только для админа
+  usersSel.innerHTML = "";
+  usersSel.appendChild(el("option", { value:"" }, `${t("assignee")}: —`));
+  for (const u of App.state.cache.users) {
+    usersSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+  }
+}
+
 
     if (!App.state.cache.projects) {
       const pr = await API.projectsTryList();
@@ -2530,8 +2536,9 @@ if (String(q.open_create || "") === "1") {
         const role = App.state.user.role;
         const isAdmin = role === "admin";
         const isRop = role === "rop";
-        const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
-        const canStart = (x.assignee_user_id === App.state.user.id) || isAdmin || isRop;
+        const canEdit = isAdmin || isRop || x.created_by === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
+        const canStart = isAdmin || isRop || x.assignee_user_id === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
+
 
         const actions = [];
 
@@ -4903,7 +4910,41 @@ App.renderClients = async function(host){
     );
 
     const qInp = el("input",{class:"input",value:state.q,placeholder:t("clients_search")});
-    qInp.addEventListener("keydown",(e)=>{ if(e.key==="Enter") loadList(); });
+
+// ✅ Enter — мгновенный поиск
+qInp.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter"){
+    state.q = ((qInp.value||"").trim());
+    state.page = 1;
+    loadList().then(()=>{
+      const qi = $("#clients_q");
+      if(qi){
+        qi.focus();
+        const n = qi.value.length;
+        try{ qi.setSelectionRange(n,n); }catch{}
+      }
+    });
+  }
+});
+
+// ✅ Live search (без кнопки) — debounce чтобы не тормозило
+let __qTimer = null;
+qInp.addEventListener("input", ()=>{
+  clearTimeout(__qTimer);
+  __qTimer = setTimeout(()=>{
+    state.q = ((qInp.value||"").trim());
+    state.page = 1;
+    loadList().then(()=>{
+      const qi = $("#clients_q");
+      if(qi){
+        qi.focus();
+        const n = qi.value.length;
+        try{ qi.setSelectionRange(n,n); }catch{}
+      }
+    });
+  }, 250);
+});
+
 
     const createBtn = (state.tab==="company")
       ? el("button",{class:"btn",type:"button",disabled:!canCreateCompany,onClick:()=>openUpsertModal("company",null)}, t("clients_create_company"))
