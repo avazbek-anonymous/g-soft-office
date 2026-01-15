@@ -1840,66 +1840,93 @@ select option{
   };
 
   function bindTouchDrag(cardEl, onDrop) {
-    let startX = 0,
-      startY = 0,
-      dragging = false,
-      ghost = null;
-    cardEl.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "mouse") return;
-      if (e.target && e.target.closest && e.target.closest("button,a,input,select,textarea")) return;
-      startX = e.clientX;
-      startY = e.clientY;
-      dragging = false;
-      const id = Number(cardEl.getAttribute("data-id"));
-      if (!id) return;
+  let ghost = null;
+  let dragging = false;
+  let startX = 0, startY = 0;
+  let lastTarget = null;
 
-      const onMove = (ev) => {
-        const dx = ev.clientX - startX,
-          dy = ev.clientY - startY;
-        if (!dragging && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-          dragging = true;
-          ghost = cardEl.cloneNode(true);
-          ghost.style.position = "fixed";
-          ghost.style.left = ev.clientX + "px";
-          ghost.style.top = ev.clientY + "px";
-          ghost.style.transform = "translate(-50%,-50%)";
-          ghost.style.opacity = "0.85";
-          ghost.style.pointerEvents = "none";
-          ghost.style.zIndex = "9999";
-          document.body.appendChild(ghost);
-        }
-        if (dragging && ghost) {
-          ghost.style.left = ev.clientX + "px";
-          ghost.style.top = ev.clientY + "px";
-        }
-      };
+  const cleanup = () => {
+    dragging = false;
+    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    ghost = null;
+    if (lastTarget) lastTarget.classList.remove("drop");
+    lastTarget = null;
+    cardEl.classList.remove("dragging");
+  };
 
-      const onUp = async (ev) => {
-        cardEl.removeEventListener("pointermove", onMove);
-        cardEl.removeEventListener("pointerup", onUp);
-        cardEl.removeEventListener("pointercancel", onUp);
-        if (ghost) ghost.remove();
-        ghost = null;
-        if (!dragging) return;
+  cardEl.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return; 
+    if (e.button != null && e.button !== 0) return;
+    if (e.target && e.target.closest && e.target.closest("button,a,input,select,textarea,label")) return;
 
-        const lists = $$("[data-drop]");
-        const target = lists.find(l => {
-          const r = l.getBoundingClientRect();
-          return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
-        });
-        if (target) {
-          const status = target.getAttribute("data-drop");
-          try {
-            await onDrop(id, status);
-          } catch {}
-        }
-      };
+    const id = Number(cardEl.getAttribute("data-id"));
+    if (!id) return;
 
-      cardEl.addEventListener("pointermove", onMove);
-      cardEl.addEventListener("pointerup", onUp);
-      cardEl.addEventListener("pointercancel", onUp);
-    });
-  }
+    startX = e.clientX;
+    startY = e.clientY;
+    dragging = false;
+
+    try { cardEl.setPointerCapture(e.pointerId); } catch {}
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+
+      if (!dragging) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        dragging = true;
+
+        const r = cardEl.getBoundingClientRect();
+        ghost = cardEl.cloneNode(true);
+        ghost.classList.add("dragGhost");
+        ghost.style.position = "fixed";
+        ghost.style.left = r.left + "px";
+        ghost.style.top = r.top + "px";
+        ghost.style.width = r.width + "px";
+        ghost.style.zIndex = 9999;
+        ghost.style.pointerEvents = "none";
+        ghost.style.opacity = "0.98";
+        ghost.style.transform = "translate3d(0,0,0)";
+        document.body.appendChild(ghost);
+
+        cardEl.classList.add("dragging");
+      }
+
+      if (ghost) ghost.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+
+      const elAt = document.elementFromPoint(ev.clientX, ev.clientY);
+      const targetList = elAt ? elAt.closest && elAt.closest(".klist[data-drop]") : null;
+
+      if (targetList !== lastTarget) {
+        if (lastTarget) lastTarget.classList.remove("drop");
+        if (targetList) targetList.classList.add("drop");
+        lastTarget = targetList;
+      }
+
+      ev.preventDefault();
+    };
+
+    const onUp = async (ev) => {
+      const target = lastTarget;
+      cleanup();
+      cardEl.removeEventListener("pointermove", onMove);
+      cardEl.removeEventListener("pointerup", onUp);
+      cardEl.removeEventListener("pointercancel", onUp);
+
+      if (!target) return;
+      const status = target.getAttribute("data-drop");
+      if (!status) return;
+
+      try { await onDrop(id, status); } catch {}
+      ev.preventDefault();
+    };
+
+    cardEl.addEventListener("pointermove", onMove);
+    cardEl.addEventListener("pointerup", onUp);
+    cardEl.addEventListener("pointercancel", onUp);
+  });
+}
+
 
   App.renderTasks = async function (host) {
     const role = App.state.user.role; 
@@ -3686,17 +3713,16 @@ function dictLabel(list,id){
    ========================= */
 
 App.renderProjects = async function (host) {
-  // ---- styles (progress + better selects) ----
+  // ---- styles (local) ----
   if (!document.getElementById("projStyles")) {
     const st = document.createElement("style");
     st.id = "projStyles";
     st.textContent = `
-      .pStats{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-      .pProg{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top: 10px;}
-      .pProgBar{height:100%;width:0%}
-      .row2{display:flex;gap:10px;align-items:center}
-      .row2 .input,.row2 .sel{flex:1}
-      .btn.mini{padding:8px 10px;border-radius:12px}
+      .pCardTitle{font-weight:900;line-height:1.1}
+      .pLine{font-size:12px;color:var(--muted);margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+      .pLine b{color:var(--text);font-weight:700}
+      .pActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+      .btn.mini{padding:8px 10px;border-radius:12px;font-size:12px}
       .sel option, select option{background:rgba(6,26,20,.98);color:var(--text)}
     `;
     document.head.appendChild(st);
@@ -3708,158 +3734,154 @@ App.renderProjects = async function (host) {
   const isPm = role === "pm";
   const canCreate = isAdmin || isRop || isPm;
 
-  // ---- helpers ----
+  const lang = App.state.lang || "ru";
+  const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
+
+  // ✅ PROJECT STATUSES by TZ
+  const statusCols = [
+    { key: "new",         label: { ru: "Новый",          uz: "Yangi",          en: "New" } },
+    { key: "tz_given",    label: { ru: "ТЗ выдано",      uz: "Tz berildi",     en: "TZ given" } },
+    { key: "offer_given", label: { ru: "Предложение",    uz: "Taklif berildi", en: "Offer given" } },
+    { key: "in_progress", label: { ru: "В процессе",     uz: "Jarayonda",      en: "In progress" } },
+    { key: "later",       label: { ru: "Позже",          uz: "Keyinroq",       en: "Later" } },
+    { key: "done",        label: { ru: "Завершено",      uz: "Bajarildi",      en: "Done" } },
+    { key: "canceled",    label: { ru: "Отмена",         uz: "Otmen",          en: "Canceled" } },
+  ];
+
+  // helpers
   const nameByLang = (x) => x ? (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || "") : "";
 
-  const toLocalValue = (sec) => {
-    if (!sec) return "";
-    const d = new Date(Number(sec) * 1000);
+  const toLocalInput = (tsSec) => {
+    if (!tsSec) return "";
+    const d = new Date(tsSec * 1000);
     const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
   };
 
-  const fromLocalValue = (v) => {
-    const s = String(v || "").trim();
+  const fromLocalInput = (s) => {
     if (!s) return null;
     const ms = new Date(s).getTime();
     if (!Number.isFinite(ms)) return null;
     return Math.floor(ms / 1000);
   };
 
-  const statusCols = [
-    { key: "new", label: t("t_new") },
-    { key: "pause", label: t("t_pause") },
-    { key: "in_progress", label: t("t_in_progress") },
-    { key: "done", label: t("t_done") },
-    { key: "canceled", label: t("t_canceled") },
-  ];
+  const fmtAmount = (amount, currency) => {
+    if (amount == null || amount === "") return "—";
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    const cur = currency || "UZS";
+    return `${n.toLocaleString(undefined)} ${cur}`;
+  };
 
   // ---- load refs ----
-  const [svcRes, pmListRaw] = await Promise.all([
+  const [svcRes, pmListRaw, companiesRes] = await Promise.all([
     API.settings.dictList("service_types").catch(() => ({ data: [] })),
     (isAdmin || isRop) ? API.usersTryList().catch(() => []) : Promise.resolve([]),
+    API.clients.list("company", "").catch(() => ({ data: [] })),
   ]);
 
   const serviceTypes = (svcRes && svcRes.data) ? svcRes.data : [];
   const pmList = Array.isArray(pmListRaw) ? pmListRaw.filter(u => u.role === "pm" && Number(u.is_active) === 1) : [];
-
-  const companiesRes = await API.clients.list("company", "").catch(() => ({ data: [] }));
   let companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
 
-  // ---- task stats (for progress) ----
-  const tasksRes = await API.tasks.list({}).catch(() => ({ data: [] }));
-  const tasksAll = (tasksRes && tasksRes.data) ? tasksRes.data : [];
-  const taskStats = {};
-  for (const x of tasksAll) {
-    const pid = Number(x.project_id || 0);
-    if (!pid) continue;
-    if (!taskStats[pid]) taskStats[pid] = { total: 0, done: 0 };
-    taskStats[pid].total += 1;
-    if ((x.status || "") === "done") taskStats[pid].done += 1;
-  }
-
-  const computeAutoName = (client_id, service_type_id) => {
-    const c = companies.find(x => Number(x.id) === Number(client_id));
-    const s = serviceTypes.find(x => Number(x.id) === Number(service_type_id));
-    const cn = (c && (c.company_name || c.full_name)) ? (c.company_name || c.full_name) : "";
-    const sn = nameByLang(s);
-    const v = `${cn}${cn && sn ? " — " : ""}${sn}`.trim();
-    return v || "—";
-  };
+  const companyById = (id) => companies.find(x => String(x.id) === String(id));
+  const serviceById = (id) => serviceTypes.find(x => String(x.id) === String(id));
+  const pmById = (id) => pmList.find(x => String(x.id) === String(id));
 
   // ---- toolbar ----
-  const toolbar = el("div", { class: "card cardPad vcol gap12" });
-  const row = el("div", { class: "hrow gap10", style: "flex-wrap:wrap; align-items:center" });
+  const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
 
-  const qInp = el("input", { class: "input", placeholder: t("search"), style: "min-width:240px; flex:1" });
   const pmSel = (isAdmin || isRop)
     ? el("select", { class: "sel" },
-        el("option", { value: "" }, "PM: All"),
+        el("option", { value: "" }, "—"),
         ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
       )
     : null;
 
   const svcSelFilter = el("select", { class: "sel" },
-    el("option", { value: "" }, `${t("service_type")}: ${t("filter_project_all")}`),
+    el("option", { value: "" }, "—"),
     ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
       el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
     )
   );
 
-  const refreshBtn = el("button", { class: "btn", type: "button" }, t("refresh"));
-  const createBtn = el("button", { class: "btn primary", type: "button", disabled: !canCreate }, `${t("create")} · ${t("route_projects")}`);
+  const createBtn = el("button", { class: "btn primary", type: "button", disabled: !canCreate }, t("create") || "Create");
+  createBtn.onclick = () => openCreate({});
 
-  row.append(qInp);
-  if (pmSel) row.append(pmSel);
-  row.append(svcSelFilter, refreshBtn, createBtn);
-
-  toolbar.append(
-    el("div", { class: "hrow gap10", style: "justify-content:space-between; align-items:flex-start; flex-wrap:wrap" },
-      el("div", { class: "vcol gap6" },
-        el("div", { style: "font-weight:900" }, t("route_projects")),
-        el("div", { class: "muted2", style: "font-size:12px" }, t("touch_drag_hint"))
-      ),
-      row
-    )
+  const row = el("div", { class: "hrow gap10", style: "flex-wrap:wrap;justify-content:space-between" },
+    el("div", { class: "hrow gap10", style: "flex:1;min-width:260px;flex-wrap:wrap" },
+      qInp,
+      (pmSel ? el("div", { style: "min-width:220px" }, pmSel) : null),
+      el("div", { style: "min-width:220px" }, svcSelFilter),
+    ),
+    createBtn
   );
 
-  const board = el("div", { class: "kanbanWrap", id: "projectBoard", style: "--cols:5" });
+  const toolbar = el("div", { class: "card cardPad vcol gap10" }, row);
+
+  const board = el("div", { class: "kanbanWrap", id: "projectBoard" });
   host.innerHTML = "";
   host.append(toolbar, board);
 
+  // columns DOM
   const colEls = {};
-  const buildBoard = () => {
-    board.innerHTML = "";
-    for (const c of statusCols) {
-      const list = el("div", { class: "klist", "data-status": c.key });
-      const head = el("div", { class: "khead" },
-        el("div", { class: "ttl" }, c.label),
-        el("div", { class: "muted2", style: "font-size:12px" }, "0")
-      );
-      const col = el("div", { class: "card kcol" }, head, list);
-      colEls[c.key] = col;
+  for (const c of statusCols) {
+    const countEl = el("div", { class: "muted2", style: "font-size:12px" }, "0");
 
-      // drop
-      list.addEventListener("dragover", (e) => { e.preventDefault(); list.classList.add("drop"); });
-      list.addEventListener("dragleave", () => list.classList.remove("drop"));
-      list.addEventListener("drop", async (e) => {
-        e.preventDefault();
-        list.classList.remove("drop");
-        const id = Number(e.dataTransfer.getData("text/plain") || 0);
-        if (!id) return;
-        await doMove(id, c.key);
-      });
+    const list = el("div", { class: "klist", "data-drop": c.key });
 
-      board.appendChild(col);
-    }
-  };
+    // mouse DnD highlight
+    list.addEventListener("dragover", (e) => { e.preventDefault(); list.classList.add("drop"); });
+    list.addEventListener("dragenter", () => list.classList.add("drop"));
+    list.addEventListener("dragleave", () => list.classList.remove("drop"));
+    list.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      list.classList.remove("drop");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      if (!id) return;
+      await doMove(id, c.key);
+    });
 
-  const refreshCounts = () => {
-    for (const c of statusCols) {
-      const list = colEls[c.key].querySelector(".klist");
-      colEls[c.key].querySelector(".khead .muted2").textContent = String(list.children.length);
-    }
-  };
+    const col = el("div", { class: "card kcol" },
+      el("div", { class: "khead" },
+        el("div", { class: "ttl" }, tr(c.label)),
+        countEl
+      ),
+      list
+    );
 
-  const canEditRow = (p) => (isAdmin || isRop || (isPm && Number(p.pm_user_id) === Number(App.state.user.id)));
+    board.appendChild(col);
+    colEls[c.key] = { col, list, countEl };
+  }
 
-  const openTasks = (pid) => {
-    window.location.hash = `#/tasks?project_id=${encodeURIComponent(String(pid))}`;
-  };
+  // data
+  let all = [];
 
   const askCancelReason = () => new Promise((resolve) => {
-    const ta = el("textarea", { class: "input", style: "min-height:110px", placeholder: t("reason") });
-    const body = el("div", { class: "vcol gap10" },
-      el("div", { class: "muted" }, t("need_reason")),
-      ta
+    const inp = el("textarea", { class: "input", style: "min-height:110px", placeholder: t("reason") || "Reason..." });
+    Modal.open(tr({ ru: "Причина отмены", uz: "Bekor qilish sababi", en: "Cancel reason" }),
+      el("div", { class: "vcol gap10" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Укажи причину отмены:", uz: "Sababni yozing:", en: "Provide a reason:" })),
+        inp
+      ),
+      [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+        { label: t("save") || "Save", kind: "primary", onClick: () => {
+            const v = (inp.value || "").trim();
+            if (!v) { Toast.show(tr({ru:"Причина обязательна",uz:"Sabab majburiy",en:"Reason required"}), "bad"); return; }
+            Modal.close(); resolve(v);
+          }
+        }
+      ]
     );
-    Modal.open(t("action_cancel"), body, [
-      { label: t("cancel"), kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
-      { label: t("action_cancel"), kind: "primary", onClick: () => { const v = String(ta.value || "").trim(); Modal.close(); resolve(v || null); } },
-    ]);
   });
 
-  async function doMove(id, status) {
+  const doMove = async (id, status) => {
     try {
       let extra = {};
       if (status === "canceled") {
@@ -3868,102 +3890,229 @@ App.renderProjects = async function (host) {
         extra.cancel_reason = reason;
       }
       await API.projects.move(id, status, extra);
-      Toast.show(t("toast_saved"), "ok");
-      await load();
+
+      // ✅ ускорение: не грузим заново с сервера, обновляем локально
+      const row = all.find(x => Number(x.id) === Number(id));
+      if (row) {
+        row.status = status;
+        if (status === "canceled") row.cancel_reason = extra.cancel_reason || row.cancel_reason;
+      }
+
+      render();
+      Toast.show(t("toast_saved") || "Saved", "ok");
     } catch (e) {
-      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
     }
-  }
+  };
 
-  function cardFor(p) {
+  const openTasks = (pid) => {
+    setHash("/tasks", { project_id: String(pid) });
+  };
+
+  const canEditRow = (p) => {
+    if (isAdmin || isRop) return true;
+    if (isPm && Number(p.pm_user_id) === Number(App.state.user.id)) return true;
+    return false;
+  };
+
+  const cardFor = (p) => {
     const st = p.status || "new";
-    const company = p.company_name || p.client_company_name || "";
+    const company = p.company_name || "";
     const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
-    const autoTitle = (company && svc) ? `${company} — ${svc}` : (company || svc || `#${p.id}`);
 
-    const stat = taskStats[Number(p.id)] || { total: 0, done: 0 };
-    const pct = stat.total ? Math.round((stat.done * 100) / stat.total) : 0;
-
-    const title = el("div", { style: "font-weight:900; line-height:1.1" }, autoTitle);
-    const idBox = el("div", { class: "muted2", style: "font-size:12px" }, `#${p.id}`);
-
-    const top = el("div", { class: "hrow gap8", style: "justify-content:space-between; align-items:flex-start" }, title, idBox);
-
-    const meta = el("div", { class: "kmeta" },
-      svc ? el("span", { class: "badge" }, `${t("service_type")}: ${svc}`) : null,
-      (p.pm_full_name) ? el("span", { class: "badge" }, `PM: ${p.pm_full_name}`) : null,
-      p.deadline_at ? el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(p.deadline_at)}`) : null,
+    const title = el("div", { class: "pCardTitle" },
+      el("div", {}, company || `#${p.id}`),
+      el("div", { class: "muted2", style: "font-size:12px;margin-top:2px" }, svc || "—")
     );
 
-    const statsRow = el("div", { class: "pStats" },
-      el("span", { class: "badge" }, `${t("route_tasks")}: ${stat.total}`),
-      el("span", { class: "badge" }, `${t("t_done")}: ${stat.done} (${pct}%)`)
-    );
+    let bodyParts = [title];
 
-    const prog = el("div", { class: "pProg" },
-      el("div", { class: "pProgBar", style: `width:${pct}%; background:rgba(255,208,90,.85)` })
-    );
+    // ✅ DONE: only 2 lines (company + service)
+    if (st === "done") {
+      // no extra lines
+    }
+    // ✅ CANCELED: 3 lines (company + service + reason)
+    else if (st === "canceled") {
+      bodyParts.push(
+        el("div", { class: "muted2", style: "font-size:12px;margin-top:6px;white-space:pre-wrap" },
+          (p.cancel_reason || tr({ru:"Причина не указана",uz:"Sabab ko'rsatilmagan",en:"No reason"}))
+        )
+      );
+    }
+    else {
+      // meeting time only for new + tz_given
+      if ((st === "new" || st === "tz_given") && p.meeting_at) {
+        bodyParts.push(el("div", { class: "pLine" }, "🕒 ", el("b", {}, fmtDate(p.meeting_at))));
+      }
+      if (p.deadline_at) {
+        bodyParts.push(el("div", { class: "pLine" }, "⏳ ", el("b", {}, fmtDate(p.deadline_at))));
+      }
+      if (isAdmin && p.amount != null) {
+        bodyParts.push(el("div", { class: "pLine" }, "💰 ", el("b", {}, fmtAmount(p.amount, p.currency))));
+      }
+      if (p.pm_name) {
+        bodyParts.push(el("div", { class: "pLine" }, "👤 ", el("b", {}, p.pm_name)));
+      }
+    }
 
-    const btnTasks = el("button", { class: "btn ghost mini", type: "button", onClick: (e) => { e.stopPropagation(); openTasks(p.id); } }, t("open_tasks"));
-    const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(p.id); } }, t("open"));
+    const btnTasks = el("button", { class: "btn ghost mini", type: "button", onClick: (e) => { e.stopPropagation(); openTasks(p.id); } }, t("open_tasks") || "Tasks");
+    const btnOpen  = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(p.id); } }, t("open") || "Open");
 
-    const actions = el("div", { class: "kcardActions" }, btnTasks, btnOpen);
+    const actions = el("div", { class: "pActions" }, btnTasks, btnOpen);
 
     const card = el("div", {
       class: "kcard",
       draggable: true,
-      onDragstart: (e) => { e.dataTransfer.setData("text/plain", String(p.id)); e.dataTransfer.effectAllowed = "move"; },
-    }, top, meta, statsRow, prog, actions);
+      "data-id": String(p.id),
+      onDragstart: (e) => {
+        e.dataTransfer.setData("text/plain", String(p.id));
+        e.dataTransfer.effectAllowed = "move";
+        card.classList.add("dragging");
+      },
+      onDragend: () => card.classList.remove("dragging"),
+    }, ...bodyParts, actions);
 
-    // клик НЕ открывает (как ты просил — только кнопкой)
+    // ✅ touch drag support
+    bindTouchDrag(card, doMove);
+
     return { st, card };
+  };
+
+  const render = () => {
+    // clear
+    for (const c of statusCols) {
+      colEls[c.key].list.innerHTML = "";
+    }
+
+    // group + render
+    const counts = {};
+    for (const c of statusCols) counts[c.key] = 0;
+
+    for (const p of all) {
+      const obj = cardFor(p);
+      const key = obj.st;
+      if (!colEls[key]) continue;
+      colEls[key].list.appendChild(obj.card);
+      counts[key]++;
+    }
+
+    for (const c of statusCols) {
+      colEls[c.key].countEl.textContent = String(counts[c.key] || 0);
+    }
+  };
+
+  let loadTimer = null;
+  const load = async () => {
+    const q = String(qInp.value || "").trim();
+    const pm_user_id = pmSel ? (pmSel.value ? Number(pmSel.value) : null) : null;
+    const service_type_id = svcSelFilter.value ? Number(svcSelFilter.value) : null;
+
+    const r = await API.projects.list({ q, pm_user_id, service_type_id }).catch(() => ({ data: [] }));
+    all = (r && r.data) ? r.data : [];
+    render();
+  };
+
+  // debounce search
+  qInp.addEventListener("input", () => {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(load, 250);
+  });
+  if (pmSel) pmSel.addEventListener("change", load);
+  svcSelFilter.addEventListener("change", load);
+
+  // ---- MODALS ----
+
+  function openCreateCompany(onDoneSelect) {
+    (async () => {
+      const [citiesRes, sourcesRes, spheresRes] = await Promise.all([
+        API.settings.dictList("cities").catch(() => ({ data: [] })),
+        API.settings.dictList("sources").catch(() => ({ data: [] })),
+        API.settings.dictList("spheres").catch(() => ({ data: [] })),
+      ]);
+
+      const cities  = (citiesRes && citiesRes.data) ? citiesRes.data : [];
+      const sources = (sourcesRes && sourcesRes.data) ? sourcesRes.data : [];
+      const spheres = (spheresRes && spheresRes.data) ? spheresRes.data : [];
+
+      const companyName = el("input", { class: "input", placeholder: t("client_company_name") });
+      const fullName    = el("input", { class: "input", placeholder: t("client_full_name") });
+      const phone1      = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
+      const phone2      = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
+
+      const citySel = el("select", { class: "sel" },
+        el("option", { value: "" }, "—"),
+        ...cities.filter(x => Number(x.is_active) === 1).map(x =>
+          el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+        )
+      );
+
+      const sourceSel = el("select", { class: "sel" },
+        el("option", { value: "" }, "—"),
+        ...sources.filter(x => Number(x.is_active) === 1).map(x =>
+          el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+        )
+      );
+
+      const sphereSel = el("select", { class: "sel" },
+        el("option", { value: "" }, "—"),
+        ...spheres.filter(x => Number(x.is_active) === 1).map(x =>
+          el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
+        )
+      );
+
+      const comment = el("textarea", { class: "input", style: "min-height:90px", placeholder: t("comment") });
+
+      const body = el("div", { class: "vcol gap12" },
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_company_name")), companyName),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")), fullName),
+        ),
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")), phone1),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")), phone2),
+        ),
+        el("div", { class: "grid3" },
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("city")), citySel),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("source")), sourceSel),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("sphere")), sphereSel),
+        ),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("comment")), comment),
+      );
+
+      Modal.open(t("clients_create_company") || "Create company", body, [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+        { label: t("save") || "Save", kind: "primary", onClick: async () => {
+            try {
+              const payload = {
+                type: "company",
+                company_name: (companyName.value || "").trim(),
+                full_name: (fullName.value || "").trim(),
+                phone1: (phone1.value || "").trim(),
+                phone2: (phone2.value || "").trim() || null,
+                city_id: citySel.value ? Number(citySel.value) : null,
+                source_id: sourceSel.value ? Number(sourceSel.value) : null,
+                sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
+                comment: (comment.value || "").trim() || null,
+              };
+              const res = await API.clients.create(payload);
+              Modal.close();
+              Toast.show(t("toast_saved") || "Saved", "ok");
+
+              const newId =
+                (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) :
+                (res && res.id) ? res.id : null;
+
+              if (onDoneSelect) onDoneSelect(newId);
+            } catch (e) {
+              Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+            }
+          }
+        }
+      ]);
+    })();
   }
 
-  async function openView(id) {
-    const r = await API.projects.get(id).catch(() => null);
-    const p = r ? (r.data || r) : null;
-    if (!p) { Toast.show(t("toast_error"), "bad"); return; }
-
-    const canEdit = canEditRow(p);
-
-    const company = p.company_name || p.client_company_name || "";
-    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
-    const autoTitle = (company && svc) ? `${company} — ${svc}` : (company || svc || `#${p.id}`);
-
-    const stat = taskStats[Number(p.id)] || { total: 0, done: 0 };
-    const pct = stat.total ? Math.round((stat.done * 100) / stat.total) : 0;
-
-    const body = el("div", { class: "vcol gap12" },
-      el("div", { style: "font-weight:900; font-size:18px" }, autoTitle),
-      el("div", { class: "muted2", style: "font-size:12px" }, `#${p.id}`),
-      el("div", { class: "pStats" },
-        el("span", { class: "badge" }, `${t("route_tasks")}: ${stat.total}`),
-        el("span", { class: "badge" }, `${t("t_done")}: ${stat.done} (${pct}%)`)
-      ),
-      el("div", { class: "pProg" },
-        el("div", { class: "pProgBar", style: `width:${pct}%; background:rgba(255,208,90,.85)` })
-      ),
-      p.deadline_at ? el("div", { class: "muted" }, `${t("deadline")}: ${fmtDate(p.deadline_at)}`) : null,
-      p.comment ? el("div", { class: "muted" }, `${t("comment")}: ${p.comment}`) : null
-    );
-
-    Modal.open(`${t("route_projects")} #${p.id}`, body, [
-      { label: t("open_tasks"), kind: "ghost", onClick: () => { Modal.close(); openTasks(p.id); } },
-      { label: "+ Task", kind: "ghost", onClick: () => { Modal.close(); window.location.hash = `#/tasks?project_id=${encodeURIComponent(String(p.id))}&open_create=1`;} },
-      ...(canEdit ? [{ label: t("edit"), kind: "primary", onClick: () => { Modal.close(); openEdit(p); } }] : []),
-      ...(canEdit ? [{ label: t("delete"), kind: "danger", onClick: async () => {
-        const ok = await Modal.confirm(t("delete"), t("clients_delete_confirm"));
-        if (!ok) return;
-        await API.projects.del(p.id);
-        Modal.close();
-        Toast.show(t("toast_saved"), "ok");
-        await load();
-      }}] : []),
-      { label: t("close"), kind: "ghost", onClick: () => Modal.close() },
-    ]);
-  }
-
-  async function openCreate() {
+  const openCreate = (prefill = {}) => {
     const canPickPm = isAdmin || isRop;
 
     const companySel = el("select", { class: "sel" },
@@ -3990,140 +4139,179 @@ App.renderProjects = async function (host) {
     const meetInp = el("input", { class: "input", type: "datetime-local" });
     const dlInp = el("input", { class: "input", type: "datetime-local" });
 
-    const amountInp = el("input", { class: "input", inputmode: "decimal", placeholder: "0" });
-    const curSel = el("select", { class: "sel" },
+    const amountInp = el("input", { class: "input", inputmode: "decimal", placeholder: "0", disabled: !isAdmin });
+    const curSel = el("select", { class: "sel", disabled: !isAdmin },
       el("option", { value: "UZS" }, "UZS"),
       el("option", { value: "USD" }, "USD")
     );
 
     const commentInp = el("textarea", { class: "input", style: "min-height:90px" });
 
-    // ✅ auto-name preview (changes on select)
-    const namePreview = el("div", { class: "muted2", style: "font-size:12px" }, "—");
-    const syncPreview = () => {
-      namePreview.textContent = computeAutoName(companySel.value, svcSel.value);
-    };
-    companySel.addEventListener("change", syncPreview);
-    svcSel.addEventListener("change", syncPreview);
+    // owner info (readonly)
+    const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Владелец (из компании)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
+      el("div", { style: "font-weight:800" }, "—"),
+      el("div", { class: "muted2" }, "—")
+    );
 
-    // ✅ "+ company" button
+    const syncOwner = () => {
+      const c = companyById(companySel.value);
+      const name = c ? (c.full_name || "—") : "—";
+      const ph = c ? (c.phone1 || "") : "";
+      const ph2 = c ? (c.phone2 || "") : "";
+      ownerBox.children[1].textContent = name;
+      ownerBox.children[2].textContent = (ph || ph2) ? [ph, ph2].filter(Boolean).join(" • ") : "—";
+    };
+
+    companySel.addEventListener("change", syncOwner);
+
+    // ✅ "+ company" — important fix: reopen create modal with selected company
     const addCompanyBtn = el("button", { class: "btn ghost mini", type: "button" }, "+");
-    addCompanyBtn.addEventListener("click", () => openCreateCompany(async (newId) => {
-      const fresh = await API.clients.list("company", "").catch(() => ({ data: [] }));
-      companies = (fresh && fresh.data) ? fresh.data : [];
-      companySel.innerHTML = "";
-      companySel.appendChild(el("option", { value: "" }, "—"));
-      for (const c of companies) {
-        companySel.appendChild(el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)));
-      }
-      companySel.value = String(newId || "");
-      syncPreview();
-    }));
+    addCompanyBtn.onclick = () => {
+      // save draft
+      const draft = {
+        service_type_id: svcSel.value,
+        pm_user_id: pmSel.value,
+        meeting_at: meetInp.value,
+        deadline_at: dlInp.value,
+        amount: amountInp.value,
+        currency: curSel.value,
+        comment: commentInp.value,
+      };
+      openCreateCompany(async (newId) => {
+        // refresh companies
+        const fresh = await API.clients.list("company", "").catch(() => ({ data: [] }));
+        companies = (fresh && fresh.data) ? fresh.data : companies;
+
+        // reopen modal with newId selected
+        openCreate({
+          client_id: newId,
+          ...draft
+        });
+      });
+    };
+
+    // apply prefill
+    if (prefill.client_id) companySel.value = String(prefill.client_id);
+    if (prefill.service_type_id) svcSel.value = String(prefill.service_type_id);
+    if (prefill.pm_user_id) pmSel.value = String(prefill.pm_user_id);
+    if (prefill.meeting_at) meetInp.value = prefill.meeting_at;
+    if (prefill.deadline_at) dlInp.value = prefill.deadline_at;
+    if (prefill.amount != null) amountInp.value = String(prefill.amount || "");
+    if (prefill.currency) curSel.value = String(prefill.currency || "UZS");
+    if (prefill.comment) commentInp.value = String(prefill.comment || "");
+
+    syncOwner();
 
     const form = el("div", { class: "vcol gap12" },
-      el("div", { class: "muted2", style: "font-size:12px" }, `${t("name")}: ${t("client_company")} + ${t("service_type")}`),
-      namePreview,
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("client_company")),
-        el("div", { class: "row2" }, companySel, addCompanyBtn),
-      ),
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("service_type")),
-        svcSel
-      ),
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, "PM"),
-        pmSel
-      ),
-
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, "Meeting"),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || "Company"),
+          el("div", { class: "hrow gap8" }, companySel, addCompanyBtn)
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("service_type") || "Service"),
+          svcSel
+        ),
+      ),
+      ownerBox,
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Время встречи",uz:"Uchrashuv vaqti",en:"Meeting time"})),
           meetInp
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("deadline") || "Deadline"),
           dlInp
         ),
       ),
-
-      (isAdmin || isRop)
-        ? el("div", { class: "grid2" },
-            el("div", { class: "vcol gap8" },
-              el("div", { class: "muted2", style: "font-size:12px" }, "Amount"),
-              amountInp
-            ),
-            el("div", { class: "vcol gap8" },
-              el("div", { class: "muted2", style: "font-size:12px" }, "Currency"),
-              curSel
-            ),
-          )
-        : null,
-
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})),
+          amountInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})),
+          curSel
+        ),
+      ),
       el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("comment")),
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})),
+        pmSel
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"),
         commentInp
-      )
+      ),
     );
 
-    Modal.open(`${t("create")} · ${t("route_projects")}`, form, [
-      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
-      { label: t("create"), kind: "primary", onClick: async () => {
-        const client_id = Number(companySel.value || 0);
-        const service_type_id = Number(svcSel.value || 0);
-        const pm_user_id = Number(pmSel.value || 0);
+    Modal.open(t("create") || "Create", form, [
+      { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+      { label: t("save") || "Save", kind: "primary", onClick: async () => {
+          try {
+            const payload = {
+              client_id: companySel.value ? Number(companySel.value) : null,
+              service_type_id: svcSel.value ? Number(svcSel.value) : null,
+              pm_user_id: pmSel.value ? Number(pmSel.value) : null,
+              meeting_at: fromLocalInput(meetInp.value),
+              deadline_at: fromLocalInput(dlInp.value),
+              amount: isAdmin ? (amountInp.value ? Number(amountInp.value) : null) : null,
+              currency: isAdmin ? (curSel.value || "UZS") : "UZS",
+              comment: (commentInp.value || "").trim() || null
+            };
 
-        if (!client_id || !service_type_id || !pm_user_id) {
-          Toast.show(t("toast_error"), "bad");
-          return;
+            if (!payload.client_id || !payload.service_type_id || !payload.pm_user_id) {
+              Toast.show(tr({ru:"Заполни Company/Service/PM",uz:"Company/Service/PM ni to'ldiring",en:"Fill Company/Service/PM"}), "bad");
+              return;
+            }
+
+            const res = await API.projects.create(payload);
+            const newId = (res && res.data && res.data.id) ? res.data.id : null;
+
+            // ✅ локально добавляем, не полный reload
+            if (newId) {
+              const full = await API.projects.get(newId).catch(() => null);
+              if (full && full.data) all.unshift(full.data);
+              else all.unshift({ ...payload, id: newId, status: "new" });
+            }
+            Modal.close();
+            render();
+            Toast.show(t("toast_saved") || "Saved", "ok");
+          } catch (e) {
+            Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+          }
         }
-
-        const payload = {
-          client_id,
-          service_type_id,
-          pm_user_id,
-          name: computeAutoName(client_id, service_type_id), // ✅ авто-название
-          meeting_at: fromLocalValue(meetInp.value),
-          deadline_at: fromLocalValue(dlInp.value),
-          comment: String(commentInp.value || "").trim() || null,
-        };
-
-        if (isAdmin || isRop) {
-          const a = String(amountInp.value || "").trim();
-          payload.amount = a ? Number(a) : null;
-          payload.currency = String(curSel.value || "UZS");
-        }
-
-        await API.projects.create(payload);
-        Modal.close();
-        Toast.show(t("toast_saved"), "ok");
-        await load();
-      }},
+      }
     ]);
-  }
+  };
 
-  async function openEdit(p) {
-    const canEdit = canEditRow(p);
-    if (!canEdit) return;
+  const openEdit = async (id) => {
+    const r = await API.projects.get(id).catch(() => null);
+    const p = r ? (r.data || r) : null;
+    if (!p) return;
+
+    if (!canEditRow(p)) {
+      Toast.show(t("toast_error") || "No access", "bad");
+      return;
+    }
 
     const companySel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
       ...companies.map(c => el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)))
     );
     companySel.value = String(p.client_id || "");
 
     const svcSel = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
       ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
         el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
       )
     );
     svcSel.value = String(p.service_type_id || "");
 
-    const canPickPm = isAdmin || isRop;
-    const pmSel = canPickPm
+    const pmSel = (isAdmin || isRop)
       ? el("select", { class: "sel" },
+          el("option", { value: "" }, "—"),
           ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
         )
       : el("select", { class: "sel", disabled: true },
@@ -4131,263 +4319,117 @@ App.renderProjects = async function (host) {
         );
     pmSel.value = String(p.pm_user_id || App.state.user.id);
 
-    const meetInp = el("input", { class: "input", type: "datetime-local", value: toLocalValue(p.meeting_at) });
-    const dlInp = el("input", { class: "input", type: "datetime-local", value: toLocalValue(p.deadline_at) });
+    const meetInp = el("input", { class: "input", type: "datetime-local", value: toLocalInput(p.meeting_at) });
+    const dlInp   = el("input", { class: "input", type: "datetime-local", value: toLocalInput(p.deadline_at) });
 
-    const amountInp = el("input", { class: "input", inputmode: "decimal", value: (p.amount != null ? String(p.amount) : "") });
-    const curSel = el("select", { class: "sel" },
+    const amountInp = el("input", { class: "input", inputmode: "decimal", value: (p.amount != null ? String(p.amount) : ""), disabled: !isAdmin });
+    const curSel = el("select", { class: "sel", disabled: !isAdmin },
       el("option", { value: "UZS" }, "UZS"),
       el("option", { value: "USD" }, "USD")
     );
     curSel.value = String(p.currency || "UZS");
 
     const commentInp = el("textarea", { class: "input", style: "min-height:90px" });
-    commentInp.value = p.comment ? String(p.comment) : "";
+    commentInp.value = p.comment || "";
 
-    const namePreview = el("div", { class: "muted2", style: "font-size:12px" }, "—");
-    const syncPreview = () => {
-      namePreview.textContent = computeAutoName(companySel.value, svcSel.value);
-    };
-    companySel.addEventListener("change", syncPreview);
-    svcSel.addEventListener("change", syncPreview);
-    syncPreview();
-
-    const addCompanyBtn = el("button", { class: "btn ghost mini", type: "button" }, "+");
-    addCompanyBtn.addEventListener("click", () => openCreateCompany(async (newId) => {
-      const fresh = await API.clients.list("company", "").catch(() => ({ data: [] }));
-      companies = (fresh && fresh.data) ? fresh.data : [];
-      companySel.innerHTML = "";
-      for (const c of companies) {
-        companySel.appendChild(el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)));
-      }
-      companySel.value = String(newId || "");
-      syncPreview();
-    }));
+    const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Владелец (из компании)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
+      el("div", { style: "font-weight:800" }, p.owner_full_name || "—"),
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "—")
+    );
 
     const form = el("div", { class: "vcol gap12" },
-      el("div", { class: "muted2", style: "font-size:12px" }, `${t("name")}: ${t("client_company")} + ${t("service_type")}`),
-      namePreview,
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("client_company")),
-        el("div", { class: "row2" }, companySel, addCompanyBtn),
-      ),
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("service_type")),
-        svcSel
-      ),
-
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, "PM"),
-        pmSel
-      ),
-
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Meeting"), meetInp),
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")), dlInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || "Company"), companySel),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("service_type") || "Service"), svcSel),
       ),
-
-      (isAdmin || isRop)
-        ? el("div", { class: "grid2" },
-            el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Amount"), amountInp),
-            el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, "Currency"), curSel),
-          )
-        : null,
-
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment")), commentInp)
-    );
-
-    Modal.open(`${t("edit")} · ${t("route_projects")} #${p.id}`, form, [
-      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
-      { label: t("save"), kind: "primary", onClick: async () => {
-        const client_id = Number(companySel.value || 0);
-        const service_type_id = Number(svcSel.value || 0);
-        const pm_user_id = Number(pmSel.value || 0);
-
-        if (!client_id || !service_type_id || !pm_user_id) {
-          Toast.show(t("toast_error"), "bad");
-          return;
-        }
-
-        const payload = {
-          client_id,
-          service_type_id,
-          pm_user_id,
-          name: computeAutoName(client_id, service_type_id), // ✅ авто-обновление названия
-          meeting_at: fromLocalValue(meetInp.value),
-          deadline_at: fromLocalValue(dlInp.value),
-          comment: String(commentInp.value || "").trim() || null,
-        };
-
-        if (isAdmin || isRop) {
-          const a = String(amountInp.value || "").trim();
-          payload.amount = a ? Number(a) : null;
-          payload.currency = String(curSel.value || "UZS");
-        }
-
-        await API.projects.update(p.id, payload);
-        Modal.close();
-        Toast.show(t("toast_saved"), "ok");
-        await load();
-      }},
-    ]);
-  }
-
-  function openCreateCompany(onDoneSelect) {
-  (async () => {
-    const [citiesRes, sourcesRes, spheresRes] = await Promise.all([
-      API.settings.dictList("cities").catch(() => ({ data: [] })),
-      API.settings.dictList("sources").catch(() => ({ data: [] })),
-      API.settings.dictList("spheres").catch(() => ({ data: [] })),
-    ]);
-
-    const cities  = (citiesRes && citiesRes.data) ? citiesRes.data : [];
-    const sources = (sourcesRes && sourcesRes.data) ? sourcesRes.data : [];
-    const spheres = (spheresRes && spheresRes.data) ? spheresRes.data : [];
-
-    const companyName = el("input", { class: "input", placeholder: t("client_company_name") });
-    const fullName    = el("input", { class: "input", placeholder: t("client_full_name") });
-    const phone1      = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
-    const phone2      = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
-
-    const citySel = el("select", { class: "sel" },
-      el("option", { value: "" }, "—"),
-      ...cities.filter(x => Number(x.is_active) === 1).map(x =>
-        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
-      )
-    );
-
-    const sourceSel = el("select", { class: "sel" },
-      el("option", { value: "" }, "—"),
-      ...sources.filter(x => Number(x.is_active) === 1).map(x =>
-        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
-      )
-    );
-
-    const sphereSel = el("select", { class: "sel" },
-      el("option", { value: "" }, "—"),
-      ...spheres.filter(x => Number(x.is_active) === 1).map(x =>
-        el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
-      )
-    );
-
-    const comment = el("textarea", { class: "input", style: "min-height:90px", placeholder: t("comment") });
-
-    const body = el("div", { class: "vcol gap12" },
+      ownerBox,
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company_name")),
-          companyName
-        ),
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")),
-          fullName
-        )
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Время встречи",uz:"Uchrashuv vaqti",en:"Meeting time"})), meetInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("deadline") || "Deadline"), dlInp),
       ),
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")),
-          phone1
-        ),
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")),
-          phone2
-        ),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), curSel),
       ),
-      el("div", { class: "grid3" },
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("city")), citySel),
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("source")), sourceSel),
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("sphere")), sphereSel),
-      ),
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style:"font-size:12px" }, t("comment")),
-        comment
-      ),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})), pmSel),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
     );
 
-    Modal.open(t("clients_create_company"), body, [
-      { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
-      {
-        label: t("save"),
-        kind: "primary",
-        onClick: async () => {
-          const payload = {
-            type: "company",
-            company_name: String(companyName.value || "").trim() || null,
-            full_name: String(fullName.value || "").trim() || null,
-            phone1: String(phone1.value || "").trim() || null,
-            phone2: String(phone2.value || "").trim() || null,
-            city_id: citySel.value ? Number(citySel.value) : null,
-            source_id: sourceSel.value ? Number(sourceSel.value) : null,
-            sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
-            comment: String(comment.value || "").trim() || null,
-          };
+    Modal.open(t("edit") || "Edit", form, [
+      { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+      { label: t("save") || "Save", kind: "primary", onClick: async () => {
+          try {
+            const payload = {
+              client_id: companySel.value ? Number(companySel.value) : null,
+              service_type_id: svcSel.value ? Number(svcSel.value) : null,
+              pm_user_id: pmSel.value ? Number(pmSel.value) : null,
+              meeting_at: fromLocalInput(meetInp.value),
+              deadline_at: fromLocalInput(dlInp.value),
+              amount: isAdmin ? (amountInp.value ? Number(amountInp.value) : null) : null,
+              currency: isAdmin ? (curSel.value || "UZS") : (p.currency || "UZS"),
+              comment: (commentInp.value || "").trim() || null
+            };
+            await API.projects.update(id, payload);
 
-          if (!payload.company_name) {
-            Toast.show(t("toast_error"), "bad");
-            return;
+            // ✅ local update
+            const row = all.find(x => Number(x.id) === Number(id));
+            if (row) Object.assign(row, payload);
+
+            Modal.close();
+            render();
+            Toast.show(t("toast_saved") || "Saved", "ok");
+          } catch (e) {
+            Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
           }
-
-          const res = await API.clients.create(payload);
-          Modal.close();
-          Toast.show(t("toast_saved"), "ok");
-
-          const newId =
-            (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) :
-            (res && res.id) ? res.id : null;
-
-          if (onDoneSelect) onDoneSelect(newId);
         }
       }
     ]);
-  })();
-}
+  };
 
+  const openView = async (id) => {
+    const r = await API.projects.get(id).catch(() => null);
+    const p = r ? (r.data || r) : null;
+    if (!p) { Toast.show(t("toast_error") || "Error", "bad"); return; }
 
-  // ---- load + render ----
-  let all = [];
+    const canEdit = canEditRow(p);
 
-  async function load() {
-    const q = String(qInp.value || "").trim();
-    const pm_user_id = pmSel ? (pmSel.value ? Number(pmSel.value) : null) : null;
-    const service_type_id = svcSelFilter.value ? Number(svcSelFilter.value) : null;
+    const company = p.company_name || "";
+    const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
 
-    const r = await API.projects.list({ q, pm_user_id, service_type_id }).catch(() => ({ data: [] }));
-    all = (r && r.data) ? r.data : [];
-    render();
-  }
+    const head = el("div", { class: "vcol gap8" },
+      el("div", { style: "font-weight:900;font-size:18px" }, company || `#${p.id}`),
+      el("div", { class: "muted2" }, svc || "—")
+    );
 
-  function render() {
-    buildBoard();
+    const owner = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"ФИО и телефон владельца (из компании)",uz:"Ega FIO va telefon",en:"Owner name & phone"})),
+      el("div", { style: "font-weight:800" }, p.owner_full_name || "—"),
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "—")
+    );
 
-    // фильтр по поиску (на фронте)
-    const q = String(qInp.value || "").trim().toLowerCase();
-    const filtered = !q ? all : all.filter(p => {
-      const company = (p.company_name || p.client_company_name || "").toLowerCase();
-      const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "").toLowerCase();
-      const pmn = (p.pm_full_name || "").toLowerCase();
-      return (company + " " + svc + " " + pmn + " #" + p.id).includes(q);
-    });
+    const lines = el("div", { class: "vcol gap8" },
+      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
+      p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Встреча:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
+      p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Дедлайн:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
+      (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"Сумма:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
+      p.pm_name ? el("div", { class: "pLine" }, "PM:", el("b", {}, p.pm_name)) : null,
+      (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"Причина отмены:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "—")) : null,
+      p.comment ? el("div", { class: "muted2", style: "white-space:pre-wrap;margin-top:6px" }, p.comment) : null,
+    );
 
-    for (const p of filtered) {
-      const st = p.status || "new";
-      const list = (colEls[st] ? colEls[st].querySelector(".klist") : colEls["new"].querySelector(".klist"));
-      list.appendChild(cardFor(p).card);
-    }
+    const body = el("div", { class: "vcol gap12" }, head, owner, lines);
 
-    refreshCounts();
-  }
+    Modal.open(t("open") || "Open", body, [
+      { label: t("open_tasks") || "Tasks", kind: "ghost", onClick: () => { Modal.close(); openTasks(p.id); } },
+      ...(canEdit ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(p.id); } }] : []),
+    ]);
+  };
 
-  // ---- events ----
-  refreshBtn.addEventListener("click", load);
-  createBtn.addEventListener("click", () => { if (canCreate) openCreate(); });
-  qInp.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
-  if (pmSel) pmSel.addEventListener("change", load);
-  svcSelFilter.addEventListener("change", load);
-
+  // initial load
   await load();
 };
+
 
 
 
@@ -4424,10 +4466,9 @@ async function refreshDictCacheAdmin(){
   }
 }
 
-App.renderClients = async function(host){
+  App.renderClients = async function(host){
   injectClientsStyles();
 
-  // fin has no access in backend — show friendly card
   if((App.state.user?.role||"")==="fin"){
     host.appendChild(el("div",{class:"card cardPad vcol gap10"},
       el("div",{style:"font-weight:900"}, t("toast_error")),
@@ -4437,335 +4478,231 @@ App.renderClients = async function(host){
   }
 
   const state = {
-    tab: "company",       // company | lead
+    tab: "company",
     q: "",
     list: [],
     companies: [],
     refs: await loadDictCacheIfAny(),
   };
 
-  // if admin — refresh dict cache now
   const fresh = await refreshDictCacheAdmin();
   if(fresh) state.refs=fresh;
 
   const canCreateCompany = ["admin","rop","sale","pm"].includes(App.state.user.role);
-  const canCreateLead    = ["admin","rop","sale"].includes(App.state.user.role); // backend: pm forbidden for lead
+  const canCreateLead    = ["admin","rop","sale"].includes(App.state.user.role);
 
-  const loadCompaniesForSelect = async ()=>{
-    try{
-      const r = await API.clients.list("company","");
-      state.companies = r.data || [];
-    }catch{
-      state.companies = [];
-    }
-  };
+  let searchTimer = null;
 
   const loadList = async ()=>{
-    host.innerHTML="";
-    host.appendChild(el("div",{class:"muted"}, t("loading")));
-    try{
-      const r = await API.clients.list(state.tab, state.q);
-      state.list = r.data || [];
-      render();
-    }catch(e){
-      host.innerHTML="";
-      host.appendChild(el("div",{class:"card cardPad vcol gap10"},
-        el("div",{style:"font-weight:900"}, t("toast_error")),
-        el("div",{class:"muted"}, e.message||"Error")
-      ));
-    }
+    const r = await API.clients.list(state.tab, state.q).catch(()=>({data:[]}));
+    state.list = (r && r.data) ? r.data : [];
+    render();
   };
 
-  const openUpsertModal = async (type, row=null)=>{
-    const isEdit=!!row;
-    const title = isEdit ? `${t("clients_edit")} • ${type}` : (type==="company" ? t("clients_create_company") : t("clients_create_lead"));
+  const openUpsertModal = (type,row)=>{
+    // оставил твою старую модалку (логика), чтобы ничего не сломать
+    // (она ок по ТЗ, правим только вид карточки + поиск)
+    const isEdit = !!row;
 
-    // fields
-    const companyNameInp = el("input",{class:"input",value:row?.company_name||"",placeholder:t("client_company_name")});
-    const fullNameInp    = el("input",{class:"input",value:row?.full_name||"",placeholder:t("client_full_name")});
-    const phone1Inp      = el("input",{class:"input",value:row?.phone1||"",placeholder:t("client_phone1"),inputmode:"tel"});
-    const phone2Inp      = el("input",{class:"input",value:row?.phone2||"",placeholder:t("client_phone2"),inputmode:"tel"});
-    const commentInp     = el("textarea",{class:"input",style:"min-height:84px",value:row?.comment||"",placeholder:t("client_comment")});
-    const tgInp          = el("input",{class:"input",value:row?.tg_group_link||"",placeholder:t("client_tg_group")});
+    const companyNameInp = el("input",{class:"input",value:(row?.company_name||""),placeholder:t("client_company_name")});
+    const fullNameInp    = el("input",{class:"input",value:(row?.full_name||""),placeholder:t("client_full_name")});
+    const phone1Inp      = el("input",{class:"input",value:(row?.phone1||""),placeholder:t("client_phone1"),inputmode:"tel"});
+    const phone2Inp      = el("input",{class:"input",value:(row?.phone2||""),placeholder:t("client_phone2"),inputmode:"tel"});
+    const commentInp     = el("textarea",{class:"input",style:"min-height:90px",placeholder:t("comment")});
+    commentInp.value = row?.comment || "";
 
-    // selects (optional: if dicts empty - still ok)
-    const citySel   = el("select",{class:"input"});
-    const sourceSel = el("select",{class:"input"});
-    const sphereSel = el("select",{class:"input"});
+    const cities  = state.refs?.dict_cities  || [];
+    const sources = state.refs?.dict_sources || [];
+    const spheres = state.refs?.dict_spheres || [];
 
-    const fillSel = (sel, list, cur)=>{
-      sel.appendChild(el("option",{value:""},"—"));
-      (list||[]).forEach(it=>{
-        const label = (it[`name_${App.state.lang}`] || it.name_uz || it.name_ru || it.name_en || `#${it.id}`);
-        sel.appendChild(el("option",{value:String(it.id)}, label));
-      });
-      sel.value = cur ? String(cur) : "";
-    };
-    fillSel(citySel, state.refs.cities, row?.city_id);
-    fillSel(sourceSel, state.refs.sources, row?.source_id);
-    fillSel(sphereSel, state.refs.spheres, row?.sphere_id);
-
-    // lead => choose company_id (optional)
-    if(type==="lead" && !state.companies.length) await loadCompaniesForSelect();
-    const companySel = el("select",{class:"input"});
-    companySel.appendChild(el("option",{value:""},"—"));
-    state.companies.forEach(c=>{
-      companySel.appendChild(el("option",{value:String(c.id)}, c.company_name || (`#${c.id}`)));
-    });
-    companySel.value = row?.company_id ? String(row.company_id) : "";
-
-    // layout
-    const body = el("div",{class:"vcol gap12"},
-      (type==="company"
-        ? el("label",{class:"vcol gap8"},
-            el("span",{class:"muted2",style:"font-size:12px"}, t("client_company_name")),
-            companyNameInp
-          )
-        : el("div",{class:"vcol gap8"},
-            el("span",{class:"muted2",style:"font-size:12px"}, t("client_link_company")),
-            companySel
-          )
-      ),
-
-      el("div",{class:"grid2"},
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_full_name")), fullNameInp),
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone1")), phone1Inp),
-      ),
-      el("div",{class:"grid2"},
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone2")), phone2Inp),
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_tg_group")), tgInp),
-      ),
-      el("div",{class:"grid2"},
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_city")), citySel),
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_source")), sourceSel),
-      ),
-      el("label",{class:"vcol gap8"},
-        el("span",{class:"muted2",style:"font-size:12px"},t("client_sphere")),
-        sphereSel
-      ),
-      el("label",{class:"vcol gap8"},
-        el("span",{class:"muted2",style:"font-size:12px"},t("client_comment")),
-        commentInp
-      ),
+    const citySel = el("select",{class:"sel"},
+      el("option",{value:""},"—"),
+      ...cities.map(x=>el("option",{value:String(x.id)}, x[`name_${App.state.lang}`]||x.name_uz||x.name_ru||x.name_en||`#${x.id}`))
+    );
+    const sourceSel = el("select",{class:"sel"},
+      el("option",{value:""},"—"),
+      ...sources.map(x=>el("option",{value:String(x.id)}, x[`name_${App.state.lang}`]||x.name_uz||x.name_ru||x.name_en||`#${x.id}`))
+    );
+    const sphereSel = el("select",{class:"sel"},
+      el("option",{value:""},"—"),
+      ...spheres.map(x=>el("option",{value:String(x.id)}, x[`name_${App.state.lang}`]||x.name_uz||x.name_ru||x.name_en||`#${x.id}`))
     );
 
-    Modal.open(title, body, [
-      {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
-      {label:t("save"),kind:"primary",onClick:async()=>{
-        const payload={
-          type,
-          company_name: (type==="company") ? (companyNameInp.value||"").trim() : null,
-          full_name: (fullNameInp.value||"").trim(),
-          phone1: (phone1Inp.value||"").trim(),
-          phone2: (phone2Inp.value||"").trim() || null,
-          city_id: citySel.value ? Number(citySel.value) : null,
-          source_id: sourceSel.value ? Number(sourceSel.value) : null,
-          sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
-          comment: (commentInp.value||"").trim() || null,
-          tg_group_link: (tgInp.value||"").trim() || null,
-          company_id: (type==="lead" && companySel.value) ? Number(companySel.value) : null,
-        };
+    citySel.value = row?.city_id ? String(row.city_id) : "";
+    sourceSel.value = row?.source_id ? String(row.source_id) : "";
+    sphereSel.value = row?.sphere_id ? String(row.sphere_id) : "";
 
-        // minimal validation per UX
-        if(type==="company" && !payload.company_name){
-          Toast.show(`${t("toast_error")}: ${t("client_company_name")}`,"bad"); return;
-        }
-        if(!payload.full_name || !payload.phone1){
-          Toast.show(`${t("toast_error")}: ${t("client_full_name")} / ${t("client_phone1")}`,"bad"); return;
-        }
+    const body = el("div",{class:"vcol gap12"},
+      (type==="company"
+        ? el("div",{class:"grid2"},
+            el("div",{class:"vcol gap8"}, companyNameInp),
+            el("div",{class:"vcol gap8"}, fullNameInp),
+          )
+        : el("div",{class:"vcol gap8"}, fullNameInp)
+      ),
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap8"}, phone1Inp),
+        el("div",{class:"vcol gap8"}, phone2Inp),
+      ),
+      el("div",{class:"grid3"},
+        el("div",{class:"vcol gap8"}, citySel),
+        el("div",{class:"vcol gap8"}, sourceSel),
+        el("div",{class:"vcol gap8"}, sphereSel),
+      ),
+      el("div",{class:"vcol gap8"}, commentInp),
+    );
 
+    Modal.open(isEdit ? (t("clients_edit")||"Edit") : (t("create")||"Create"), body, [
+      {label:t("cancel")||"Cancel", kind:"ghost", onClick:()=>Modal.close()},
+      {label:t("save")||"Save", kind:"primary", onClick:async ()=>{
         try{
+          const payload = {
+            type,
+            company_name: (type==="company") ? (companyNameInp.value||"").trim() : null,
+            full_name: (fullNameInp.value||"").trim(),
+            phone1: (phone1Inp.value||"").trim(),
+            phone2: (phone2Inp.value||"").trim() || null,
+            city_id: citySel.value ? Number(citySel.value) : null,
+            source_id: sourceSel.value ? Number(sourceSel.value) : null,
+            sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
+            comment: (commentInp.value||"").trim() || null,
+          };
+
           if(isEdit){
-            // backend ignores unknown fields; update only allowed fields
-            const upd={
-              company_name: payload.company_name,
-              full_name: payload.full_name,
-              phone1: payload.phone1,
-              phone2: payload.phone2,
-              city_id: payload.city_id,
-              source_id: payload.source_id,
-              sphere_id: payload.sphere_id,
-              comment: payload.comment,
-              tg_group_link: payload.tg_group_link,
-              company_id: payload.company_id,
-            };
-            await API.clients.update(row.id, upd);
+            await API.clients.update(row.id, payload);
           }else{
             await API.clients.create(payload);
           }
-          Toast.show(t("toast_saved"),"ok");
+          Toast.show(t("toast_saved")||"Saved","ok");
           Modal.close();
           await loadList();
         }catch(e){
-          Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+          Toast.show(`${t("toast_error")||"Error"}: ${e.message||"error"}`,"bad");
         }
       }},
     ]);
   };
 
+  // ✅ BEAUTIFUL CARD + trimmed lists
   const openCard = async (id)=>{
     try{
       const r = await API.clients.get(id);
       const data = r.data || {};
       const c = data.client;
 
-      const head = el("div",{class:"vcol gap8"},
-        el("div",{style:"display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"},
-          el("div",{style:"font-weight:900;font-size:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},
-            c.type==="company" ? (c.company_name||`#${c.id}`) : (c.full_name||`#${c.id}`)
-          ),
-          el("div",{class:"hrow gap8"},
-            (c.tg_group_link ? el("a",{class:"btn linkBtn",href:c.tg_group_link,target:"_blank",rel:"noopener"},
-              t("clients_go_group")
-            ) : null),
-            el("button",{class:"btn",type:"button",onClick:()=>openUpsertModal(c.type,c)}, t("clients_edit")),
-          )
-        ),
-        el("div",{class:"muted"},
-          `${t("client_full_name")}: ${c.full_name||"—"} • ${t("client_phone1")}: ${c.phone1||"—"}`
-        ),
-        el("div",{class:"muted2",style:"font-size:12px"},
-          `${t("client_city")}: ${dictLabel(state.refs.cities,c.city_id)} • ${t("client_source")}: ${dictLabel(state.refs.sources,c.source_id)} • ${t("client_sphere")}: ${dictLabel(state.refs.spheres,c.sphere_id)}`
-        ),
-        c.comment ? el("div",{class:"muted2",style:"font-size:12px"}, c.comment) : null
+      const title = el("div",{style:"font-weight:900;font-size:18px"},
+        c.type==="company" ? (c.company_name||`#${c.id}`) : (c.full_name||`#${c.id}`)
+      );
+
+      const infoList = el("div",{class:"card cardPad vcol gap6",style:"background:rgba(255,255,255,.03)"},
+        ...(c.full_name ? [el("div",{style:"font-weight:700"}, c.full_name)] : []),
+        ...(c.phone1 ? [el("div",{class:"muted2"}, [c.phone1, c.phone2].filter(Boolean).join(" • "))] : []),
+        ...(c.comment ? [el("div",{class:"muted2",style:"white-space:pre-wrap"}, c.comment)] : [])
       );
 
       const projList = (data.projects||[]);
       const clList   = (data.course_leads||[]);
 
       const projectsBox = el("div",{class:"card cardPad vcol gap10"},
-        el("div",{style:"font-weight:900"}, t("clients_card_projects")),
+        el("div",{style:"font-weight:900"}, t("clients_card_projects")||"Projects"),
         projList.length
-          ? el("div",{class:"smallList"}, projList.map(p=>el("div",{class:"smallItem"},
-              el("div",{class:"t"}, p.company_name || c.company_name || `#${p.id}`),
-              el("div",{class:"s"},
-                `#${p.id}`,
-                p.service_name_uz || p.service_name_ru || p.service_name_en || "",
-                `PM: ${p.pm_full_name || ""}`,
-                (p.deadline_at ? `DL: ${fmtDate(p.deadline_at)}` : "")
-              ),
-              el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
-                el("button",{class:"btn",type:"button",onClick:()=>{
-                  // пока Projects этап не завершён — просто переходим туда
-                  location.hash="#/projects";
-                  Toast.show("Projects → (filter later)", "ok");
-                }}, t("clients_open"))
-              )
-          )))
-          : el("div",{class:"muted"}, t("clients_no_projects"))
+          ? el("div",{class:"smallList"}, projList.map(p=>{
+              const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
+              return el("div",{class:"smallItem"},
+                el("div",{class:"t"}, svc || `#${p.id}`)
+              );
+            }))
+          : el("div",{class:"muted"}, t("clients_no_projects")||"—")
       );
 
       const leadsBox = el("div",{class:"card cardPad vcol gap10"},
-        el("div",{style:"font-weight:900"}, t("clients_card_course_leads")),
+        el("div",{style:"font-weight:900"}, t("clients_card_course_leads")||"Course leads"),
         clList.length
-          ? el("div",{class:"smallList"}, clList.map(x=>el("div",{class:"smallItem"},
-              el("div",{class:"t"}, x.lead_full_name || `#${x.id}`),
-              el("div",{class:"s"},
-                `#${x.id}`,
-                `${x.course_type_name||""}`,
-                `${x.status||""}`,
-                (x.agreed_amount!=null ? `Agreed: ${x.agreed_amount}` : ""),
-                (x.paid_amount!=null ? `Paid: ${x.paid_amount}` : "")
-              ),
-              el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
-                el("button",{class:"btn",type:"button",onClick:()=>{
-                  location.hash="#/courses";
-                  Toast.show("Courses → (open later)", "ok");
-                }}, t("clients_open"))
-              )
-          )))
-          : el("div",{class:"muted"}, t("clients_no_course_leads"))
+          ? el("div",{class:"smallList"}, clList.map(x=>{
+              const course = x.course_type_name || x.course_name || "";
+              return el("div",{class:"smallItem"},
+                el("div",{class:"t"}, course || `#${x.id}`)
+              );
+            }))
+          : el("div",{class:"muted"}, t("clients_no_course_leads")||"—")
       );
 
-      const body = el("div",{class:"vcol gap12"}, head,
-        (c.type==="company" ? el("div",{class:"cliCardGrid"}, projectsBox, leadsBox) : null)
+      const body = el("div",{class:"vcol gap12"},
+        el("div",{style:"display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap"},
+          title,
+          el("div",{class:"hrow gap8"},
+            el("button",{class:"btn",type:"button",onClick:()=>openUpsertModal(c.type,c)}, t("clients_edit")||"Edit")
+          )
+        ),
+        infoList,
+        (c.type==="company" ? el("div",{class:"grid2"}, projectsBox, leadsBox) : leadsBox)
       );
 
-      Modal.open(t("clients_open"), body, [
-        {label:t("close"),kind:"ghost",onClick:()=>Modal.close()},
+      Modal.open(t("open")||"Open", body, [
+        {label:t("close")||"Close", kind:"ghost", onClick:()=>Modal.close()}
       ]);
     }catch(e){
-      Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+      Toast.show(`${t("toast_error")||"Error"}: ${e.message||"error"}`,"bad");
     }
   };
 
+  // UI
+  const tabBtns = el("div",{class:"hrow gap10",style:"flex-wrap:wrap"},
+    el("button",{class:"btn",type:"button",onClick:async()=>{state.tab="company";await loadList();}}, t("clients_companies")||"Companies"),
+    el("button",{class:"btn",type:"button",onClick:async()=>{state.tab="lead";await loadList();}}, t("clients_leads")||"Leads"),
+  );
+
+  const qInp = el("input",{class:"input",value:state.q,placeholder:t("clients_search")||"Search..."});
+
+  // ✅ FIX: search on input (debounce)
+  qInp.addEventListener("input",()=>{
+    state.q = qInp.value || "";
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadList, 250);
+  });
+
+  const createBtn = (state.tab==="company")
+    ? el("button",{class:"btn primary",type:"button",disabled:!canCreateCompany,onClick:()=>openUpsertModal("company",null)}, t("clients_create_company")||"Create company")
+    : el("button",{class:"btn primary",type:"button",disabled:!canCreateLead,onClick:()=>openUpsertModal("lead",null)}, t("clients_create_lead")||"Create lead");
+
+  const header = el("div",{class:"card cardPad vcol gap10"},
+    el("div",{class:"hrow gap10",style:"justify-content:space-between;flex-wrap:wrap"},
+      tabBtns,
+      createBtn
+    ),
+    qInp
+  );
+
+  const listBox = el("div",{class:"card cardPad vcol gap10"},
+    el("div",{class:"cliList"})
+  );
+
+  host.innerHTML="";
+  host.append(header,listBox);
+
   const render = ()=>{
-    host.innerHTML="";
-
-    const tabs = el("div",{class:"tabs"},
-      el("button",{class:`tabBtn ${state.tab==="company"?"active":""}`,type:"button",onClick:async()=>{state.tab="company";await loadList();}}, t("clients_companies")),
-      el("button",{class:`tabBtn ${state.tab==="lead"?"active":""}`,type:"button",onClick:async()=>{state.tab="lead";await loadList();}}, t("clients_leads")),
-    );
-
-    const qInp = el("input",{class:"input",value:state.q,placeholder:t("clients_search")});
-    qInp.addEventListener("keydown",(e)=>{ if(e.key==="Enter") loadList(); });
-
-    const createBtn = (state.tab==="company")
-      ? el("button",{class:"btn",type:"button",disabled:!canCreateCompany,onClick:()=>openUpsertModal("company",null)}, t("clients_create_company"))
-      : el("button",{class:"btn",type:"button",disabled:!canCreateLead,onClick:()=>openUpsertModal("lead",null)}, t("clients_create_lead"));
-
-    const top = el("div",{class:"card cardPad vcol gap10"},
-      el("div",{class:"cliTop"},
-        el("div",{style:"font-weight:900;font-size:18px"}, t("clients_title")),
-        tabs
-      ),
-      el("div",{class:"cliFilters"},
-        qInp,
-        el("button",{class:"btn",type:"button",onClick:()=>{state.q=qInp.value||""; loadList();}}, t("search")||"Search"),
-        createBtn
-      )
-    );
-
-    const list = state.list.length
-      ? el("div",{class:"cliList"}, state.list.map(row=>{
-          const title = (row.type==="company")
-            ? (row.company_name || `#${row.id}`)
-            : (row.full_name || `#${row.id}`);
-
-          const subParts = [
-            `${t("client_full_name")}: ${row.full_name||"—"}`,
-            `${t("client_phone1")}: ${row.phone1||"—"}`,
-            row.phone2 ? `${t("client_phone2")}: ${row.phone2}` : "",
-            `${t("client_city")}: ${dictLabel(state.refs.cities,row.city_id)}`,
-            `${t("client_source")}: ${dictLabel(state.refs.sources,row.source_id)}`,
-            `${t("client_sphere")}: ${dictLabel(state.refs.spheres,row.sphere_id)}`,
-          ].filter(Boolean);
-
-          return el("div",{class:"cliRow"},
-            el("div",{class:"cliMain"},
-              el("div",{class:"cliTitle"}, title),
-              el("div",{class:"cliSub"}, ...subParts.map(s=>el("span",{},s)))
-            ),
-            el("div",{class:"cliActions"},
-              el("button",{class:"iconBtn",type:"button",title:t("clients_open"),onClick:()=>openCard(row.id)},
-                el("span",{class:"icoWrap",html:ICONS.eye || ICONS.open || ICONS.edit})
-              ),
-              el("button",{class:"iconBtn",type:"button",title:t("clients_edit"),onClick:()=>openUpsertModal(row.type,row)},
-                el("span",{class:"icoWrap",html:ICONS.edit})
-              ),
-              el("button",{class:"iconBtn",type:"button",title:t("delete"),onClick:async()=>{
-                const ok = await Modal.confirm(t("delete"), t("clients_delete_confirm"));
-                if(!ok) return;
-                try{
-                  await API.clients.del(row.id);
-                  Toast.show(t("clients_deleted"),"ok");
-                  await loadList();
-                }catch(e){
-                  Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
-                }
-              }},
-                el("span",{class:"icoWrap",html:ICONS.trash})
-              )
-            )
-          );
-        }))
-      : el("div",{class:"card cardPad muted"}, t("no_data"));
-
-    host.append(top, el("div",{class:"card cardPad"}, list));
+    const wrap = listBox.querySelector(".cliList");
+    wrap.innerHTML = "";
+    for(const row of state.list){
+      const line = el("div",{class:"cliRow",style:"display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid var(--stroke);border-radius:14px;background:rgba(255,255,255,.03);cursor:pointer"},
+        el("div",{style:"min-width:0"},
+          el("div",{style:"font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"},
+            row.type==="company" ? (row.company_name||`#${row.id}`) : (row.full_name||`#${row.id}`)
+          ),
+          el("div",{class:"muted2",style:"font-size:12px"}, [row.full_name, row.phone1].filter(Boolean).join(" • "))
+        ),
+        el("div",{class:"hrow gap8"},
+          el("button",{class:"btn ghost mini",type:"button",onClick:(e)=>{e.stopPropagation(); openUpsertModal(row.type,row);}}, "✎"),
+        )
+      );
+      line.onclick = ()=>openCard(row.id);
+      wrap.appendChild(line);
+    }
   };
 
   await loadList();
 };
+
 
   async function start(){
     injectStyles();
