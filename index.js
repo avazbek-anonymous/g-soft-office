@@ -1206,7 +1206,7 @@ text-decoration:none;
 
 /* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
-  --cols:5;
+  --cols:7;
   display:grid;
   grid-template-columns:repeat(var(--cols), minmax(260px, 1fr));
   gap:12px;
