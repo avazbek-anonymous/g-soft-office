@@ -1777,7 +1777,7 @@ select option{
 };
 
 
-App.routeNow = async function () {
+  App.routeNow = async function () {
   const token = (App.state.__routeToken = (App.state.__routeToken || 0) + 1);
 
   const { path, query } = parseHash();
