@@ -1162,7 +1162,7 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .sideOverlay{display:none}
 
 .kanbanWrap{
-  --cols:5;
+  --cols:7;
   display:grid;
   grid-template-columns:repeat(var(--cols), minmax(260px, 1fr));
   gap:12px;
