@@ -1106,10 +1106,14 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .brandName{font-weight:800;letter-spacing:.6px}
 .nav{display:flex;flex-direction:column;gap:6px;padding:0 6px}
 .nav a{
-  display:flex; align-items:center; gap:12px;
-  padding:10px 12px; border-radius:14px;
-  border:1px solid transparent;
-  color:var(--muted); text-decoration:none;
+display:flex;
+align-items:center;
+gap:12px;
+padding:10px 12px;
+border-radius:14px;
+border:1px solid transparent;
+color:var(--muted);
+text-decoration:none;
 }
 .nav a .txt{white-space:nowrap;opacity:0;transform:translateX(-6px);transition:.18s ease}
 .sidebar:hover .nav a .txt,.sidebar.open .nav a .txt{opacity:1;transform:translateX(0)}
@@ -1160,9 +1164,49 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .modalBody{padding:14px}
 .modalFoot{padding:12px 14px 14px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--stroke)}
 .sideOverlay{display:none}
+@media (max-width:900px){
+  .sidebar{position:fixed;left:-290px;top:0;height:100vh;width:280px;transition:left .18s ease}
+  .sidebar:hover{width:280px} .sidebar.open{left:0}
+  .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
+  .sideOverlay.hidden{display:none}
+}
+.kanbanWrap{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
+.kcol{min-width:320px;max-width:340px}
+.khead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
+.khead .ttl{font-weight:900}
+.klist{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:60px}
+.kcard{padding:10px;border:1px solid var(--stroke);border-radius:16px;background:rgba(255,255,255,.05);cursor:grab;user-select:none;touch-action:none}
+.kmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:var(--muted);font-size:12px}
+.badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);background:var(--card)}
+.dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
+@media (max-width:900px){
+  .kanbanWrap{flex-direction:column;overflow:visible}
+  .kcol{min-width:auto;max-width:none}
+}
+/* ===== FIX PACK (desktop) ===== */
 
+/* Sidebar brand text hidden when collapsed */
+.brand .brandText{
+  opacity:0;
+  transform:translateX(-6px);
+  transition:.18s ease;
+  pointer-events:none;
+}
+.sidebar:hover .brandText,
+.sidebar.open .brandText{
+  opacity:1;
+  transform:translateX(0);
+  pointer-events:auto;
+}
+
+/* Content should fill full height */
+.wrap{min-height:100vh}
+.main{min-height:100vh}
+.content{flex:1; overflow:auto}
+
+/* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
-  --cols:7;
+  --cols:5;
   display:grid;
   grid-template-columns:repeat(var(--cols), minmax(260px, 1fr));
   gap:12px;
@@ -1171,66 +1215,41 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
   padding-bottom:12px;
   padding-top:15px;
 }
+.kcol{min-width:260px; max-width:none}
+.klist{min-height:80px}
 
-/* ✅ drop target на всю высоту */
-.kcol{
-  min-width:260px;
-  max-width:none;
-  display:flex;
-  flex-direction:column;
-  height:100%;
-}
-.khead{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
-.khead .ttl{font-weight:900}
-.klist{
-  flex:1 1 auto;
-  padding:10px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  min-height:140px;
-  transition:background .12s ease, outline-color .12s ease, box-shadow .12s ease;
-}
-
-/* ✅ подсветка + анимация */
-.klist.drop,.klist.dropHover{
-  outline:2px dashed rgba(255,208,90,.55);
-  outline-offset:2px;
-  background:rgba(255,208,90,.06);
-  box-shadow: inset 0 0 0 1px rgba(255,208,90,.12);
-}
-.kcard{
-  padding:10px;border:1px solid var(--stroke);
-  border-radius:16px;background:rgba(255,255,255,.05);
-  cursor:grab;user-select:none;touch-action:none;
-  position:relative;
-  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-}
-.kcard:hover{box-shadow:0 12px 28px rgba(0,0,0,.25)}
-.kcard.dragging{opacity:.55;transform:scale(.98)}
-.kmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:var(--muted);font-size:12px}
-.badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);background:var(--card)}
-.dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
-
-/* hover actions (не добавляет "строки") */
-.kact{
-  position:absolute;top:8px;right:8px;
-  display:flex;gap:6px;
-  opacity:0;transform:translateY(-2px);
-  transition:.15s ease;
-  pointer-events:none;
-}
-.kcard:hover .kact{opacity:1;transform:translateY(0);pointer-events:auto}
-.kact .iconBtn{padding:6px 8px;border-radius:10px}
-
-.kcardActions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
-.btn.mini{padding:6px 10px; border-radius:10px; font-size:12px}
-
+/* Keep mobile as is */
 @media (max-width:900px){
   .kanbanWrap{display:flex; flex-direction:column; overflow:visible}
   .kcol{min-width:auto}
 }
 
+/* Card actions + dragging visuals */
+.kcard.dragging{opacity:.55}
+.kcardActions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
+.btn.mini{padding:6px 10px; border-radius:10px; font-size:12px}
+
+/* ===== USERS ===== */
+.uToolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.uList{display:flex; flex-direction:column; gap:10px}
+.uCard{padding:12px; border:1px solid var(--stroke); border-radius:18px; background:rgba(255,255,255,.05)}
+.uRow{display:grid; grid-template-columns:70px 1.4fr 1fr 1fr 120px 140px auto; gap:10px; align-items:center}
+.uId{font-family:var(--mono); color:var(--muted2); font-size:12px}
+.uName{font-weight:900}
+.uMeta{color:var(--muted); font-size:12px}
+.uActions{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap}
+.badge.ok{border-color:rgba(37,211,102,.35)}
+.badge.off{border-color:rgba(255,77,77,.35)}
+@media (max-width:1100px){
+  .uRow{grid-template-columns:70px 1.2fr 1fr 120px auto}
+  .uHideLg{display:none}
+}
+@media (max-width:720px){
+  .uRow{display:flex; flex-direction:column; align-items:flex-start}
+  .uActions{width:100%; justify-content:flex-start}
+}
+
+/* === FIX: native SELECT dark dropdown === */
 select{
   background: rgba(255,255,255,.06);
   color: var(--text);
@@ -1244,30 +1263,119 @@ select:focus{
   border-color: rgba(255,208,90,.55);
   box-shadow: 0 0 0 3px rgba(255,208,90,.12);
 }
-select option{background:#0f1714;color:#e7f1ea}
+select option{
+  background: #0f1714;
+  color: #e7f1ea;
+}
+
+/* === FIX: move header actions into sidebar on mobile === */
+.sidebar{ display:flex; flex-direction:column; }
+.nav{ flex:1 1 auto; padding-bottom:10px; }
+.sideActionsSlot{
+  margin-top:auto;
+  padding:12px 10px 12px;
+  border-top:1px solid var(--stroke);
+}
+@media (min-width:901px){
+  .sideActionsSlot{ display:none; }
+}
+.hdrActions.inSidebar{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:100%;
+}
+.hdrActions.inSidebar .seg{ width:100%; }
+.hdrActions.inSidebar .pill{ width:100%; justify-content:center; }
+.hdrActions.inSidebar .iconBtn{ width:100%; justify-content:center; }
+.hdrActions.inSidebar .hdrRow{
+  display:flex;
+  gap:10px;
+  width:100%;
+}
+.hdrActions.inSidebar .hdrRow .iconBtn{
+  width:100%;
+}
+
+/* ==========================================================
+   ✅ KANBAN DnD UPGRADE PACK (ТОЛЬКО ДОБАВКИ, НЕ ЛОМАЕМ СТАРОЕ)
+   - drop target на всю высоту
+   - подсветка
+   - анимация
+   - мышь + touch (визуал + ховер)
+   ========================================================== */
+
+/* drop-zone реально "высокая" даже если карточек мало */
+.kanbanWrap .kcol{
+  display:flex;
+  flex-direction:column;
+  align-self:stretch;
+}
+.kanbanWrap .khead{flex:0 0 auto}
+.kanbanWrap .klist{
+  flex:1 1 auto;
+  /* главное: зона дропа высокая */
+  min-height:max(160px, calc(100vh - 260px));
+  transition: background .12s ease, outline-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+/* подсветка / ховер */
+.kanbanWrap .klist.drop,
+.kanbanWrap .klist.dropHover,
+.kanbanWrap .klist[data-drop].dropHover{
+  outline:2px dashed rgba(255,208,90,.55);
+  outline-offset:2px;
+  background:rgba(255,208,90,.06);
+  box-shadow: inset 0 0 0 1px rgba(255,208,90,.14);
+  animation: gsoftDropPulse .55s ease-in-out infinite alternate;
+}
+
+@keyframes gsoftDropPulse{
+  from{ box-shadow: inset 0 0 0 1px rgba(255,208,90,.10); }
+  to{ box-shadow: inset 0 0 0 1px rgba(255,208,90,.22), 0 0 0 3px rgba(255,208,90,.06); }
+}
+
+/* плавность и ощущение "живого" drag */
+.kanbanWrap .kcard{
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, opacity .12s ease;
+}
+.kanbanWrap .kcard:hover{box-shadow:0 12px 28px rgba(0,0,0,.25)}
+.kanbanWrap .kcard.dragging{
+  opacity:.55;
+  transform: scale(.985);
+}
+
+/* на телефоне: не заставляем канбан быть высоким "как десктоп" */
+@media (max-width:900px){
+  .kanbanWrap .klist{
+    min-height:140px;
+  }
+}
 `.trim();
 
   document.head.appendChild(el("style", { id: "gsoftStyles" }, css));
 
-  // ✅ глобальная подсветка drop зоны для мыши (Tasks/Projects)
-  if (!window.__gsoftDnDHi) {
-    window.__gsoftDnDHi = 1;
-    let last = null;
+  // ✅ подсветка drop-зоны для мыши (HTML5 Drag&Drop)
+  if (!window.__gsoftDnDHoverInit) {
+    window.__gsoftDnDHoverInit = 1;
 
+    let last = null;
     const clear = () => {
-      if (last) {
-        last.classList.remove("dropHover");
-        last.classList.remove("drop");
-        last = null;
-      }
+      if (!last) return;
+      last.classList.remove("dropHover", "drop");
+      last = null;
+    };
+
+    const pickList = (x, y) => {
+      const elAt = document.elementFromPoint(x, y);
+      if (!elAt) return null;
+      // поддержим и .klist, и [data-drop]
+      return elAt.closest?.(".klist") || elAt.closest?.("[data-drop]") || null;
     };
 
     document.addEventListener("dragover", (e) => {
-      const dragging = document.querySelector(".kcard.dragging");
-      if (!dragging) return;
-      const under = document.elementFromPoint(e.clientX, e.clientY);
-      const list = under && under.closest ? under.closest("[data-drop]") : null;
-      if (list && list.classList && list.classList.contains("klist")) {
+      const list = pickList(e.clientX, e.clientY);
+      if (list && list.classList) {
         if (last !== list) {
           clear();
           last = list;
@@ -1278,11 +1386,19 @@ select option{background:#0f1714;color:#e7f1ea}
       }
     }, true);
 
+    document.addEventListener("dragleave", () => {
+      // leave иногда срабатывает "ложно", поэтому чистим мягко
+      // (реально зачистка произойдёт на drop/dragend)
+    }, true);
+
     document.addEventListener("drop", clear, true);
     document.addEventListener("dragend", clear, true);
+    document.addEventListener("dragstart", () => clear(), true);
     document.addEventListener("pointerup", clear, true);
+    window.addEventListener("blur", clear, true);
   }
 }
+
 
 
   function allowedRoutesByRole(role) {
@@ -1811,93 +1927,138 @@ select option{background:#0f1714;color:#e7f1ea}
     }
   };
 
-  function bindTouchDrag(cardEl, onDrop) {
-  let ghost = null;
+   function bindTouchDrag(cardEl, onDrop) {
+  // поддержка: Pointer Events (touch + pen + мышь)
   let dragging = false;
+  let started = false;
   let startX = 0, startY = 0;
-  let lastTarget = null;
+  let dx = 0, dy = 0;
+  let ghost = null;
+  let pointerId = null;
+  let lastList = null;
 
-  const cleanup = () => {
-    dragging = false;
-    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-    ghost = null;
-    if (lastTarget) lastTarget.classList.remove("drop");
-    lastTarget = null;
-    cardEl.classList.remove("dragging");
+  const clearHover = () => {
+    if (lastList) {
+      lastList.classList.remove("dropHover", "drop");
+      lastList = null;
+    }
   };
 
-  cardEl.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse") return; 
-    if (e.button != null && e.button !== 0) return;
-    if (e.target && e.target.closest && e.target.closest("button,a,input,select,textarea,label")) return;
+  const pickListAt = (x, y) => {
+    const elAt = document.elementFromPoint(x, y);
+    if (!elAt) return null;
+    return elAt.closest?.(".klist") || elAt.closest?.("[data-drop]") || null;
+  };
 
-    const id = Number(cardEl.getAttribute("data-id"));
-    if (!id) return;
+  const makeGhost = () => {
+    const r = cardEl.getBoundingClientRect();
+    ghost = cardEl.cloneNode(true);
+    ghost.classList.add("drag-ghost");
+    ghost.style.position = "fixed";
+    ghost.style.left = r.left + "px";
+    ghost.style.top = r.top + "px";
+    ghost.style.width = r.width + "px";
+    ghost.style.zIndex = 9999;
+    ghost.style.pointerEvents = "none";
+    ghost.style.transform = "translate(0px,0px)";
+    ghost.style.opacity = "0.92";
+    ghost.style.boxShadow = "0 18px 50px rgba(0,0,0,.45)";
+    document.body.appendChild(ghost);
+  };
 
+  const moveGhost = (x, y) => {
+    if (!ghost) return;
+    ghost.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
+  const onDown = (e) => {
+    // только touch/pen — мышь пусть работает через native drag
+    if (e.pointerType === "mouse") return;
+
+    pointerId = e.pointerId;
+    started = true;
+    dragging = false;
+    dx = dy = 0;
     startX = e.clientX;
     startY = e.clientY;
+
+    try { cardEl.setPointerCapture(pointerId); } catch {}
+
+    // запретим скролл страницы пока держим карточку
+    e.preventDefault();
+  };
+
+  const onMove = (e) => {
+    if (!started) return;
+    if (pointerId != null && e.pointerId !== pointerId) return;
+
+    dx = e.clientX - startX;
+    dy = e.clientY - startY;
+
+    // порог начала перетаскивания
+    if (!dragging) {
+      if (Math.hypot(dx, dy) < 6) return;
+      dragging = true;
+      cardEl.classList.add("dragging");
+      makeGhost();
+    }
+
+    e.preventDefault();
+    moveGhost(dx, dy);
+
+    // подсветка колонки под пальцем
+    const list = pickListAt(e.clientX, e.clientY);
+    if (list && list.classList) {
+      if (lastList !== list) {
+        clearHover();
+        lastList = list;
+        lastList.classList.add("dropHover");
+      }
+    } else {
+      clearHover();
+    }
+  };
+
+  const finish = (e) => {
+    if (!started) return;
+    if (pointerId != null && e.pointerId !== pointerId) return;
+
+    try { cardEl.releasePointerCapture(pointerId); } catch {}
+
+    started = false;
+
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
+    // cleanup визуала
+    if (ghost) ghost.remove();
+    ghost = null;
+
+    // если реально перетаскивали — делаем drop
+    if (dragging) {
+      const target = lastList || pickListAt(clientX, clientY);
+
+      // здесь ожидается, что у drop-зоны есть data-drop (как у тебя)
+      // если drop-зона это .klist — бери статус из dataset:
+      const status = target?.dataset?.drop || target?.getAttribute?.("data-drop") || null;
+
+      if (status) {
+        onDrop?.(status);
+      }
+    }
+
     dragging = false;
+    pointerId = null;
+    cardEl.classList.remove("dragging");
+    clearHover();
+  };
 
-    try { cardEl.setPointerCapture(e.pointerId); } catch {}
-
-    const onMove = (ev) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-
-      if (!dragging) {
-        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-        dragging = true;
-
-        const r = cardEl.getBoundingClientRect();
-        ghost = cardEl.cloneNode(true);
-        ghost.classList.add("dragGhost");
-        ghost.style.position = "fixed";
-        ghost.style.left = r.left + "px";
-        ghost.style.top = r.top + "px";
-        ghost.style.width = r.width + "px";
-        ghost.style.zIndex = 9999;
-        ghost.style.pointerEvents = "none";
-        ghost.style.opacity = "0.98";
-        ghost.style.transform = "translate3d(0,0,0)";
-        document.body.appendChild(ghost);
-
-        cardEl.classList.add("dragging");
-      }
-
-      if (ghost) ghost.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
-
-      const elAt = document.elementFromPoint(ev.clientX, ev.clientY);
-      const targetList = elAt ? elAt.closest && elAt.closest(".klist[data-drop]") : null;
-
-      if (targetList !== lastTarget) {
-        if (lastTarget) lastTarget.classList.remove("drop");
-        if (targetList) targetList.classList.add("drop");
-        lastTarget = targetList;
-      }
-
-      ev.preventDefault();
-    };
-
-    const onUp = async (ev) => {
-      const target = lastTarget;
-      cleanup();
-      cardEl.removeEventListener("pointermove", onMove);
-      cardEl.removeEventListener("pointerup", onUp);
-      cardEl.removeEventListener("pointercancel", onUp);
-
-      if (!target) return;
-      const status = target.getAttribute("data-drop");
-      if (!status) return;
-
-      try { await onDrop(id, status); } catch {}
-      ev.preventDefault();
-    };
-
-    cardEl.addEventListener("pointermove", onMove);
-    cardEl.addEventListener("pointerup", onUp);
-    cardEl.addEventListener("pointercancel", onUp);
-  });
+  cardEl.addEventListener("pointerdown", onDown, { passive: false });
+  cardEl.addEventListener("pointermove", onMove, { passive: false });
+  cardEl.addEventListener("pointerup", finish, { passive: false });
+  cardEl.addEventListener("pointercancel", finish, { passive: false });
 }
+
 
 
   App.renderTasks = async function (host) {
