@@ -755,23 +755,21 @@ palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 
 
   // ===== TRY LISTS (non-blocking) =====
   usersTryList: async () => {
-  try {
-    const r = await apiFetch("/api/users");
-    return r.data || [];
-  } catch {
-    return [];
-  }
-},
+    try {
+      const r = await apiFetch("/api/users");
+      return r.data || [];
+    } catch {
+      return null;
+    }
+  },
   projectsTryList: async () => {
-  try {
-    // ✅ lookup=1 → выдаём облегчённый список для селектов задач
-    const r = await apiFetch("/api/projects?lookup=1");
-    return r.data || [];
-  } catch {
-    return [];
-  }
-},
-
+    try {
+      const r = await apiFetch("/api/projects");
+      return r.data || [];
+    } catch {
+      return null;
+    }
+  },
 
   // ===== TASKS =====
   tasks: {
@@ -2161,21 +2159,15 @@ App.routeNow = async function () {
     host.append(toolbar, board);
 
 
-    // ✅ users list нужен всем (для назначения задач)
-if (!App.state.cache.users) {
-  const list = await API.usersTryList();
-  App.state.cache.users = list || [];
-}
-
-if (isAdmin && usersSel) {
-  // фильтр исполнителя сверху только для админа
-  usersSel.innerHTML = "";
-  usersSel.appendChild(el("option", { value:"" }, `${t("assignee")}: —`));
-  for (const u of App.state.cache.users) {
-    usersSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
-  }
-}
-
+    if (isAdmin && !App.state.cache.users) {
+      const list = await API.usersTryList();
+      App.state.cache.users = list || [];
+      for (const u of App.state.cache.users) {
+        usersSel.appendChild(el("option", {
+          value: String(u.id)
+        }, `${u.full_name} (${u.role})`));
+      }
+    }
 
     if (!App.state.cache.projects) {
       const pr = await API.projectsTryList();
@@ -2538,9 +2530,8 @@ if (String(q.open_create || "") === "1") {
         const role = App.state.user.role;
         const isAdmin = role === "admin";
         const isRop = role === "rop";
-        const canEdit = isAdmin || isRop || x.created_by === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
-        const canStart = isAdmin || isRop || x.assignee_user_id === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
-
+        const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+        const canStart = (x.assignee_user_id === App.state.user.id) || isAdmin || isRop;
 
         const actions = [];
 
