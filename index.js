@@ -755,21 +755,23 @@ palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 
 
   // ===== TRY LISTS (non-blocking) =====
   usersTryList: async () => {
-    try {
-      const r = await apiFetch("/api/users");
-      return r.data || [];
-    } catch {
-      return null;
-    }
-  },
+  try {
+    const r = await apiFetch("/api/users");
+    return r.data || [];
+  } catch {
+    return [];
+  }
+},
   projectsTryList: async () => {
-    try {
-      const r = await apiFetch("/api/projects");
-      return r.data || [];
-    } catch {
-      return null;
-    }
-  },
+  try {
+    // ✅ lookup=1 → выдаём облегчённый список для селектов задач
+    const r = await apiFetch("/api/projects?lookup=1");
+    return r.data || [];
+  } catch {
+    return [];
+  }
+},
+
 
   // ===== TASKS =====
   tasks: {
@@ -2091,596 +2093,570 @@ App.routeNow = async function () {
 
 
 
-  App.renderTasks = async function (host) {
-    const role = App.state.user.role; 
-    const isAdmin = role === "admin";
-    const isRop = role === "rop";
+ App.renderTasks = async function (host) {
+  const role = App.state.user.role;
+  const isAdmin = role === "admin";
+  const isRop = role === "rop";
 
-    const toolbar = el("div", {
-      class: "card cardPad vcol gap12"
-    });
-    const qRow = el("div", {
-      class: "hrow gap10",
-      style: "flex-wrap:wrap; align-items:center"
-    });
-    const hint = el("div", {
-      class: "muted2",
-      style: "font-size:12px"
-    }, t("touch_drag_hint"));
-    const searchInp = el("input", {
-      placeholder: t("search"),
-      style: "min-width:220px; flex:1"
-    });
+  const toolbar = el("div", { class: "card cardPad vcol gap12" });
+  const qRow = el("div", {
+    class: "hrow gap10",
+    style: "flex-wrap:wrap; align-items:center"
+  });
 
-    let usersSel = null;
-    if (isAdmin) {
-      usersSel = el("select", {
-        style: "min-width:220px"
-      }, el("option", {
-        value: ""
-      }, `${t("assignee")}: —`));
-      qRow.append(usersSel);
-    }
-    qRow.append(searchInp);
+  const hint = el("div", { class: "muted2", style: "font-size:12px" }, t("touch_drag_hint"));
 
-    const createBtn = el("button", {
-      class: "btn primary",
-      type: "button"
-    }, t("create"));
-    qRow.append(createBtn);
-
-    toolbar.append(
-      el("div", {
-          class: "hrow gap10",
-          style: "justify-content:space-between; align-items:flex-start; flex-wrap:wrap"
-        },
-        el("div", {
-          class: "vcol gap8"
-        }, el("div", {
-          style: "font-weight:900"
-        }, t("route_tasks")), hint),
-        el("div", {
-            class: "hrow gap10",
-            style: "align-items:center; flex-wrap:wrap"
-          },
-          el("span", {
-            class: "pill"
-          }, `${t("me")}: ${App.state.user.full_name||App.state.user.login}`)
-        )
-      ),
-      qRow
+  let usersSel = null;
+  if (isAdmin) {
+    usersSel = el("select", { class: "sel" },
+      el("option", { value: "" }, `${t("assignee")}: ${t("filter_all") || "All"}`)
     );
-
-    const board = el("div", {
-      class: "kanbanWrap",
-      id: "taskBoard",
-      style: "--cols:5"
-    });
-    host.append(toolbar, board);
-
-
-    // ✅ users list нужен всем (для назначения задач)
-if (!App.state.cache.users) {
-  const list = await API.usersTryList();
-  App.state.cache.users = list || [];
-}
-
-if (isAdmin && usersSel) {
-  // фильтр исполнителя сверху только для админа
-  usersSel.innerHTML = "";
-  usersSel.appendChild(el("option", { value:"" }, `${t("assignee")}: —`));
-  for (const u of App.state.cache.users) {
-    usersSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
-  }
-}
-
-
-    if (!App.state.cache.projects) {
-      const pr = await API.projectsTryList();
-      App.state.cache.projects = pr || [];
-    }
-
-    // ✅ Project filter (по ТЗ)
-let projectSel = null;
-const qpid0 = (App.state.current.query && App.state.current.query.project_id)
-  ? String(App.state.current.query.project_id)
-  : "";
-
-if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) {
-  projectSel = el("select", { class: "sel" });
-  projectSel.appendChild(el("option", { value: "" }, `${t("filter_project")}: ${t("filter_project_all")}`));
-
-  for (const p of App.state.cache.projects) {
-    const title = (p.company_name || p.client_company_name || `#${p.id}`);
-    const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "");
-    projectSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} — ${svc}` : title));
   }
 
-  projectSel.value = qpid0;
-  qRow.appendChild(projectSel);
+  const createBtn = el("button", { class: "btn primary", type: "button" }, t("create"));
 
-  // меняем hash → Tasks перерендерится сам
-  projectSel.addEventListener("change", () => {
-  const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
-  if (projectSel.value) sp.set("project_id", projectSel.value);
-  else sp.delete("project_id");
+  const searchInp = el("input", {
+    class: "input",
+    placeholder: t("search"),
+    style: "min-width:220px"
+  });
 
-  // одноразовые флаги нельзя тянуть дальше, иначе будет мусор
-  sp.delete("open_create");
-  sp.delete("open");
+  toolbar.append(
+    el("div", {
+      class: "hrow gap10",
+      style: "justify-content:space-between; align-items:flex-start; flex-wrap:wrap"
+    },
+      el("div", { class: "vcol gap8" },
+        el("div", { style: "font-weight:900" }, t("route_tasks")),
+        hint
+      ),
+      el("div", { class: "hrow gap10", style: "align-items:center; flex-wrap:wrap" },
+        usersSel ? usersSel : null,
+        searchInp,
+        createBtn
+      )
+    ),
+    qRow
+  );
 
-  const qs = sp.toString();
-  window.location.hash = qs ? `#/tasks?${qs}` : "#/tasks";
-});
+  const board = el("div", {
+    class: "kanbanWrap",
+    id: "taskBoard",
+    style: "--cols:5"
+  });
 
-}
+  host.append(toolbar, board);
 
+  // --- view guard (fix slow navigation / stale renders) ---
+  const __viewId = (App.state.__viewSeq = (App.state.__viewSeq || 0) + 1);
+  const viewAlive = () => (App.state.__viewSeq === __viewId) && host && host.isConnected;
 
-    const cols = [{
-        key: "new",
-        label: t("t_new")
-      },
-      {
-        key: "pause",
-        label: t("t_pause")
-      },
-      {
-        key: "in_progress",
-        label: t("t_in_progress")
-      },
-      {
-        key: "done",
-        label: t("t_done")
-      },
-      {
-        key: "canceled",
-        label: t("t_canceled")
-      },
-    ];
+  // --- meta for Tasks (users/projects for assign & project picker) ---
+  async function ensureTasksMeta(force = false) {
+    const cache = App.state.cache || (App.state.cache = {});
+    const now = Date.now();
+    const ttl = 10 * 60 * 1000; // 10 min
 
-    const colEls = {};
-    board.innerHTML = "";
-    for (const c of cols) {
-      const col = el("div", {
-          class: "card kcol",
-          "data-status": c.key
-        },
-        el("div", {
-            class: "khead"
-          },
-          el("div", {
-            class: "ttl"
-          }, c.label),
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, "0")
-        ),
-        el("div", {
-          class: "klist",
-          "data-drop": c.key
-        })
-      );
-      board.appendChild(col);
-      colEls[c.key] = col;
+    if (!force && cache._tasks_meta_at && (now - cache._tasks_meta_at) < ttl
+      && Array.isArray(cache.users_pick) && Array.isArray(cache.projects_pick)) {
+      return { users: cache.users_pick, projects: cache.projects_pick };
     }
 
-    let all = [];
-    const openId = App.state.current.query && App.state.current.query.open ? Number(App.state.current.query.open) : null;
+    try {
+      const r = await apiFetch("/api/tasks/meta");
+      cache.users_pick = (r && Array.isArray(r.users)) ? r.users : [];
+      cache.projects_pick = (r && Array.isArray(r.projects)) ? r.projects : [];
+      cache._tasks_meta_at = now;
+      return { users: cache.users_pick, projects: cache.projects_pick };
+    } catch (e) {
+      cache.users_pick = cache.users_pick || [];
+      cache.projects_pick = cache.projects_pick || [];
+      return { users: cache.users_pick, projects: cache.projects_pick };
+    }
+  }
 
-    const refreshCounts = () => {
-      for (const c of cols) {
-        const list = colEls[c.key].querySelector(".klist");
-        colEls[c.key].querySelector(".khead .muted2").textContent = String(list.children.length);
+  // admin filter users list
+  if (isAdmin && usersSel && !App.state.cache.users) {
+    try {
+      // admin can still use /api/users; if it fails we fallback to meta
+      const list = await API.usersTryList();
+      App.state.cache.users = list || [];
+    } catch {
+      App.state.cache.users = [];
+    }
+
+    const fill = (arr) => {
+      for (const u of (arr || [])) {
+        usersSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
       }
     };
 
-    const canEdit = (row) => (row.created_by === App.state.user.id) || isAdmin || isRop;
-    const canStart = (row) => (row.assignee_user_id === App.state.user.id) || isAdmin || isRop;
+    if (App.state.cache.users.length) fill(App.state.cache.users);
+    else {
+      const meta = await ensureTasksMeta();
+      fill(meta.users);
+    }
+  }
 
-    async function doMove(id, status, extra = {}) {
-      try {
-        await API.tasks.move(id, status, extra);
-        Toast.show(t("toast_saved"), "ok");
-        await load();
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-      }
+  // projects list for filter (RBAC safe, we do NOT replace this with "all projects")
+  if (!App.state.cache.projects) {
+    const pr = await API.projectsTryList();
+    App.state.cache.projects = pr || [];
+  }
+
+  // ✅ Project filter (по ТЗ)
+  let projectSel = null;
+  const qpid0 = (App.state.current.query && App.state.current.query.project_id)
+    ? String(App.state.current.query.project_id)
+    : "";
+
+  if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) {
+    projectSel = el("select", { class: "sel" });
+    projectSel.appendChild(el("option", { value: "" }, `${t("filter_project")}: ${t("filter_project_all")}`));
+
+    for (const p of App.state.cache.projects) {
+      const title = (p.company_name || p.client_company_name || `#${p.id}`);
+      const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "");
+      projectSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} — ${svc}` : title));
     }
 
-    function render() {
-      for (const c of cols) colEls[c.key].querySelector(".klist").innerHTML = "";
-      const q = (searchInp.value || "").trim().toLowerCase();
-      const filtered = all.filter(x => {
-        if (!q) return true;
-        const s = `${x.title||""} ${x.description||""} ${x.assignee_name||""} ${x.project_company_name||""}`.toLowerCase();
-        return s.includes(q);
-      });
+    projectSel.value = qpid0;
+    qRow.appendChild(projectSel);
 
-      for (const x of filtered) {
-        const dot = el("span", {
-          class: "dot",
-          style: `background:${statusDotColor(x.status)}`
-        });
-        const head = el("div", {
-            class: "hrow gap8",
-            style: "align-items:center; justify-content:space-between"
-          },
-          el("div", {
-            style: "font-weight:900; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-          }, dot, x.title || `#${x.id}`),
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px; font-family:var(--mono)"
-          }, `#${x.id}`)
-        );
-        const body = el("div", {
-          class: "muted",
-          style: "margin-top:6px; white-space:pre-wrap"
-        }, (x.description || "").slice(0, 180));
-        const meta = el("div", {
-            class: "kmeta"
-          },
-          el("span", {
-            class: "badge"
-          }, `${t("assignee")}: ${x.assignee_name||"—"}`),
-          x.project_company_name ? el("span", {
-            class: "badge"
-          }, `${t("project")}: ${x.project_company_name}`) : null,
-          x.deadline_at ? el("span", {
-            class: "badge"
-          }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`) : null,
-          el("span", {
-            class: "badge"
-          }, `${t("spent")}: ${fmtDuration(x.spent_seconds)}`)
-        );
+    projectSel.addEventListener("change", () => {
+      const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
+      if (projectSel.value) sp.set("project_id", projectSel.value);
+      else sp.delete("project_id");
 
-        const openBtn = el("button", {
-          class: "btn ghost mini",
-          type: "button",
-          onClick: (e) => {
-            e.stopPropagation();
-            openTaskView(x.id);
-          }
-        }, t("open"));
+      sp.delete("open");
+      sp.delete("open_create");
 
-        const actionsRow = el("div", {
-          class: "kcardActions"
-        }, openBtn);
+      const qs = sp.toString();
+      window.location.hash = qs ? `#/tasks?${qs}` : "#/tasks";
+    });
+  }
 
-        const card = el("div", {
-          class: "kcard",
-          draggable: "true",
-          "data-id": String(x.id),
+  // ===== KANBAN setup =====
+  const cols = [
+    { key: "new", label: t("stage_new") || "Yangi" },
+    { key: "pause", label: t("stage_pause") || "Pauza" },
+    { key: "in_progress", label: t("stage_progress") || "Jarayonda" },
+    { key: "done", label: t("stage_done") || "Bajarildi" },
+    { key: "canceled", label: t("stage_cancel") || "Otmen" },
+  ];
 
-          onDragstart: (e) => {
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", String(x.id));
-            card.classList.add("dragging");
-          },
-          onDragend: () => card.classList.remove("dragging")
-        }, head, body, meta, actionsRow);
+  const colEls = {};
+  for (const c of cols) {
+    const col = el("div", { class: "card kcol", "data-status": c.key },
+      el("div", { class: "khead" },
+        el("div", { class: "ttl" }, c.label),
+        el("div", { class: "muted2", style: "font-size:12px" }, "0")
+      ),
+      el("div", { class: "klist", "data-drop": "1" })
+    );
+    board.appendChild(col);
+    colEls[c.key] = col;
+  }
 
+  let all = [];
+  const openId = App.state.current.query && App.state.current.query.open ? Number(App.state.current.query.open) : null;
 
-        bindTouchDrag(card, async (id, targetStatus) => {
-          const row = all.find(z => z.id === id);
-          if (!row || row.status === targetStatus) return;
-          if (targetStatus === "canceled") {
-            const reason = await Modal.prompt(t("reason"), t("need_reason"));
-            if (!reason) return;
-            await doMove(id, targetStatus, {
-              cancel_reason: reason
-            });
-            return;
-          }
-          await doMove(id, targetStatus);
-        });
-
-        const list = colEls[x.status] ?.querySelector(".klist");
-        if (list) list.appendChild(card);
-      }
-      refreshCounts();
-    }
-
-    async function load() {
-      try {
-        const assignee_user_id = isAdmin ? (usersSel?.value || "") : "";
-
-const project_id =
-  (projectSel && projectSel.value) ? projectSel.value :
-  ((App.state.current.query && App.state.current.query.project_id) ? String(App.state.current.query.project_id) : "");
-
-const r = await API.tasks.list({
-  assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null,
-  project_id: project_id ? Number(project_id) : null, // ✅ ВАЖНО по ТЗ
-});
-
-        all = (r.data || []).slice();
-        render();
-        if (openId) openTask(openId);
-
-// one-time: открыть создание задачи из Projects (#/tasks?project_id=..&open_create=1)
-const q = (App.state.current && App.state.current.query) ? App.state.current.query : {};
-if (String(q.open_create || "") === "1") {
-  openTaskCreate({ project_id: q.project_id ? Number(q.project_id) : null });
-
-  // убрать флаг, чтобы модалка не открывалась снова при refresh
-  try {
-    const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    sp.delete("open_create");
-    const qs2 = sp.toString();
-    window.location.hash = qs2 ? `#/tasks?${qs2}` : "#/tasks";
-  } catch {}
-}
-
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-      }
-    }
-
+  const refreshCounts = () => {
     for (const c of cols) {
-      const drop = colEls[c.key].querySelector(".klist");
-      drop.addEventListener("dragover", (e) => e.preventDefault());
-      drop.addEventListener("drop", async (e) => {
+      const list = colEls[c.key].querySelector(".klist");
+      colEls[c.key].querySelector(".khead .muted2").textContent = String(list.children.length);
+    }
+  };
+
+  const canEdit = (row) =>
+    (row.created_by === App.state.user.id) || isAdmin || isRop ||
+    (row.project_pm_user_id && Number(row.project_pm_user_id) === Number(App.state.user.id));
+
+  const canStart = (row) =>
+    (row.assignee_user_id === App.state.user.id) || isAdmin || isRop;
+
+  async function doMove(id, status, extra = {}) {
+    try {
+      await API.tasks.move(id, status, extra);
+      Toast.show(t("toast_saved"), "ok");
+      await load();
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  function render() {
+    for (const c of cols) colEls[c.key].querySelector(".klist").innerHTML = "";
+
+    const q = (searchInp.value || "").trim().toLowerCase();
+    const filtered = all.filter(x => {
+      if (!q) return true;
+      const s = `${x.title || ""} ${x.description || ""} ${x.assignee_name || ""} ${x.project_company_name || ""}`.toLowerCase();
+      return s.includes(q);
+    });
+
+    for (const x of filtered) {
+      const title = x.title || (String(x.description || "").split(/\s+/).slice(0, 3).join(" ") || `#${x.id}`);
+
+      const badges = el("div", { class: "kmeta" },
+        x.project_id ? el("span", { class: "badge" }, `${t("project")}: ${x.project_company_name || ("#" + x.project_id)}`) : el("span", { class: "badge" }, "No PR"),
+        x.deadline_at ? el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`) : null,
+        el("span", { class: "badge" }, `${t("spent")}: ${fmtDuration(x.spent_seconds)}`)
+      );
+
+      const openBtn = el("button", {
+        class: "btn ghost mini",
+        type: "button",
+        onClick: (e) => {
+          e.stopPropagation();
+          openTaskView(x.id);
+        }
+      }, t("open"));
+
+      const actionsRow = el("div", { class: "kcardActions" }, openBtn);
+
+      const card = el("div", {
+        class: "kcard",
+        draggable: "true",
+        "data-id": String(x.id),
+
+        onDragstart: (e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(x.id));
+          card.classList.add("dragging");
+        },
+        onDragend: () => card.classList.remove("dragging"),
+
+        // touch support (pointer) – drag handled globally by your existing logic
+        onPointerdown: () => { }
+      },
+        el("div", { style: "font-weight:900" }, title),
+        el("div", { class: "muted2", style: "font-size:12px; margin-top:4px" }, `${t("assignee")}: ${x.assignee_name || "—"}`),
+        badges,
+        actionsRow
+      );
+
+      card.addEventListener("dragover", (e) => e.preventDefault());
+      card.addEventListener("drop", async (e) => {
         e.preventDefault();
         const id = Number(e.dataTransfer.getData("text/plain"));
         if (!id) return;
-        const row = all.find(x => x.id === id);
-        if (!row || row.status === c.key) return;
-        if (c.key === "canceled") {
+        const targetStatus = x.status;
+        if (targetStatus === "canceled") {
           const reason = await Modal.prompt(t("reason"), t("need_reason"));
           if (!reason) return;
-          await doMove(id, c.key, {
-            cancel_reason: reason
-          });
+          await doMove(id, targetStatus, { cancel_reason: reason });
           return;
         }
-        await doMove(id, c.key);
+        await doMove(id, targetStatus);
       });
+
+      const list = colEls[x.status] ?.querySelector(".klist");
+      if (list) list.appendChild(card);
     }
 
-    async function openTaskView(id) {
-      try {
-        const r = await API.tasks.get(id);
-        const x = r.data;
+    refreshCounts();
+  }
 
-        const view = el("div", {
-            class: "vcol gap10"
-          },
-          el("div", {
-              class: "grid2"
-            },
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("status")),
-              el("div", {
-                style: "font-weight:900"
-              }, taskStatusLabel(x.status))
-            ),
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("spent")),
-              el("div", {
-                style: "font-weight:900"
-              }, fmtDuration(x.spent_seconds))
-            )
+  async function load() {
+    try {
+      const assignee_user_id = isAdmin ? (usersSel?.value || "") : "";
+
+      const project_id =
+        (projectSel && projectSel.value) ? projectSel.value :
+          ((App.state.current.query && App.state.current.query.project_id) ? String(App.state.current.query.project_id) : "");
+
+      const r = await API.tasks.list({
+        assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null,
+        project_id: project_id ? Number(project_id) : null, // ✅ ВАЖНО по ТЗ
+      });
+
+      if (!viewAlive()) return;
+
+      all = (r.data || []).slice();
+      render();
+
+      if (openId) openTask(openId);
+
+      // one-time: open_create from Projects (#/tasks?project_id=..&open_create=1)
+      const q = (App.state.current && App.state.current.query) ? App.state.current.query : {};
+      if (String(q.open_create || "") === "1") {
+        openTaskCreate({ project_id: q.project_id ? Number(q.project_id) : null });
+
+        try {
+          const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
+          sp.delete("open_create");
+          const qs2 = sp.toString();
+          window.location.hash = qs2 ? `#/tasks?${qs2}` : "#/tasks";
+        } catch { }
+      }
+
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  async function openTaskView(id) {
+    try {
+      const r = await API.tasks.get(id);
+      const x = r.data;
+
+      const view = el("div", { class: "vcol gap10" },
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+            el("div", {}, x.title || "—")
           ),
-          el("div", {
-              class: "grid2"
-            },
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("assignee")),
-              el("div", {}, x.assignee_name || "—")
-            ),
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("deadline")),
-              el("div", {}, fmtDate(x.deadline_at))
-            )
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+            el("div", {}, x.project_id ? (x.project_company_name || ("#" + x.project_id)) : "No PR")
+          )
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+          el("div", {}, x.description || "—")
+        ),
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+            el("div", {}, x.assignee_name || "—")
           ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("project")),
-            el("div", {}, x.project_company_name || "—")
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("title")),
-            el("div", {
-              style: "font-weight:900"
-            }, x.title || `#${x.id}`)
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("description")),
-            el("div", {
-              class: "muted",
-              style: "white-space:pre-wrap"
-            }, x.description || "—")
-          ),
-          el("div", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, `Updated: ${fmtDate(x.updated_at)}`)
-        );
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+            el("div", {}, fmtDate(x.deadline_at))
+          )
+        ),
+        el("div", { class: "muted2", style: "font-size:12px" }, `${t("spent")}: ${fmtDuration(x.spent_seconds)}`)
+      );
 
-        const role = App.state.user.role;
-        const isAdmin = role === "admin";
-        const isRop = role === "rop";
-        const canEdit = isAdmin || isRop || x.created_by === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
-        const canStart = isAdmin || isRop || x.assignee_user_id === user.id || (x.project_pm_user_id && x.project_pm_user_id === user.id);
+      const canE = (x.created_by === App.state.user.id) || isAdmin || isRop ||
+        (x.project_pm_user_id && Number(x.project_pm_user_id) === Number(App.state.user.id));
 
+      const canS = (x.assignee_user_id === App.state.user.id) || isAdmin || isRop;
 
-        const actions = [];
+      const actions = [];
 
-        // ✎ Edit
-        if (canEdit) {
-          actions.push({
-            label: "✎ " + (DICT[App.state.lang] ?.edit || "Edit"),
-            kind: "primary",
-            onClick: () => {
-              Modal.close();
-              openTaskEdit(x.id);
-            }
-          });
-        }
-
-        // Status actions
-        const doMove = async (status, extra = {}) => {
-          try {
-            await API.tasks.move(x.id, status, extra);
-            Toast.show(t("toast_saved"), "ok");
-            Modal.close();
-            await load();
-          } catch (e) {
-            Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-          }
-        };
-
-        if (canStart && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
-          actions.push({
-            label: t("action_start"),
-            kind: "ghost",
-            onClick: () => doMove("in_progress")
-          });
-        }
-        if (x.status === "in_progress") {
-          actions.push({
-            label: t("action_pause"),
-            kind: "ghost",
-            onClick: () => doMove("pause")
-          });
-        }
-        if (x.status !== "done" && x.status !== "canceled") {
-          actions.push({
-            label: t("action_done"),
-            kind: "ghost",
-            onClick: () => doMove("done")
-          });
-          actions.push({
-            label: t("action_cancel"),
-            kind: "danger",
-            onClick: async () => {
-              const reason = await Modal.prompt(t("reason"), t("need_reason"));
-              if (!reason) return;
-              await doMove("canceled", {
-                cancel_reason: reason
-              });
-            }
-          });
-        }
-
+      if (canE) {
         actions.push({
-          label: t("close"),
+          label: "✎ " + (DICT[App.state.lang]?.edit || "Edit"),
           kind: "ghost",
-          onClick: () => Modal.close()
+          onClick: () => {
+            Modal.close();
+            openTaskEdit(x.id);
+          }
+        });
+      }
+
+      const doMoveLocal = async (status, extra = {}) => {
+        try {
+          await API.tasks.move(x.id, status, extra);
+          Toast.show(t("toast_saved"), "ok");
+          Modal.close();
+          await load();
+        } catch (e) {
+          Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+        }
+      };
+
+      if (canS && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
+        actions.push({
+          label: t("action_start"),
+          kind: "ghost",
+          onClick: () => doMoveLocal("in_progress")
+        });
+      }
+
+      if (x.status === "in_progress") {
+        actions.push({
+          label: t("action_pause"),
+          kind: "ghost",
+          onClick: () => doMoveLocal("pause")
+        });
+      }
+
+      if (x.status !== "done" && x.status !== "canceled") {
+        actions.push({
+          label: t("action_done"),
+          kind: "ghost",
+          onClick: () => doMoveLocal("done")
         });
 
-        Modal.open(`${t("open")} #${x.id}`, view, actions);
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+        actions.push({
+          label: t("action_cancel"),
+          kind: "danger",
+          onClick: async () => {
+            const reason = await Modal.prompt(t("reason"), t("need_reason"));
+            if (!reason) return;
+            await doMoveLocal("canceled", { cancel_reason: reason });
+          }
+        });
       }
+
+      actions.push({ label: t("close"), kind: "ghost", onClick: () => Modal.close() });
+
+      Modal.open("#" + x.id, view, actions);
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
     }
+  }
 
-    async function openTaskEdit(id) {
-  try {
-    const r = await API.tasks.get(id);
-    const x = r.data;
+  async function openTaskEdit(id) {
+    try {
+      const r = await API.tasks.get(id);
+      const x = r.data;
 
-    const role = App.state.user.role;
-    const isAdmin = role === "admin";
-    const isRop = role === "rop";
-    const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
-    if (!canEdit) return openTaskView(id);
+      const role = App.state.user.role;
+      const isAdmin = role === "admin";
+      const isRop = role === "rop";
 
-    const titleInp = el("input", {
-      class: "input",
-      value: x.title || "",
-      placeholder: t("title")
-    });
+      const canE = (x.created_by === App.state.user.id) || isAdmin || isRop ||
+        (x.project_pm_user_id && Number(x.project_pm_user_id) === Number(App.state.user.id));
 
-    const descInp = el("textarea", {
-      class: "input",
-      rows: 6,
-      placeholder: t("description")
-    }, x.description || "");
+      if (!canE) return openTaskView(id);
 
-    const deadlineInp = el("input", {
-      class: "input",
-      type: "datetime-local"
-    });
+      const meta = await ensureTasksMeta();
+      const projectsPick = (meta && meta.projects && meta.projects.length) ? meta.projects : (App.state.cache.projects || []);
 
-    if (x.deadline_at) {
-      const d = new Date(x.deadline_at * 1000);
-      const pad = (n) => String(n).padStart(2, "0");
-      deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
+      const titleInp = el("input", { class: "input", value: x.title || "", placeholder: t("title") });
+      const descInp = el("textarea", { class: "input", rows: 6, value: x.description || "", placeholder: t("description") });
+      const deadlineInp = el("input", { class: "input", type: "datetime-local" });
 
-    const projectSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
-    for (const p of (App.state.cache.projects || [])) {
-      projectSel.appendChild(el("option", {
-        value: String(p.id),
-        selected: p.id === x.project_id
-      }, p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`));
-    }
+      if (x.deadline_at) {
+        const d = new Date(x.deadline_at * 1000);
+        const pad = (n) => String(n).padStart(2, "0");
+        deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
 
-    let assigneeSel = null;
-    if (isAdmin) {
-      assigneeSel = el("select", { class: "sel" },
-        ...(App.state.cache.users || []).map(u => el("option", {
-          value: String(u.id),
-          selected: u.id === x.assignee_user_id
-        }, `${u.full_name} (${u.role})`))
+      const projectSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
+      for (const p of (projectsPick || [])) {
+        const title = p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`;
+        projectSel.appendChild(el("option", { value: String(p.id), selected: p.id === x.project_id }, title));
+      }
+
+      let assigneeSel = null;
+      if (isAdmin || isRop) {
+        const usersArr = (App.state.cache.users && App.state.cache.users.length) ? App.state.cache.users : meta.users;
+        assigneeSel = el("select", { class: "sel" },
+          ...(usersArr || []).map(u => el("option", {
+            value: String(u.id),
+            selected: u.id === x.assignee_user_id
+          }, `${u.full_name} (${u.role})`))
+        );
+      }
+
+      const form = el("div", { class: "vcol gap10" },
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+            (assigneeSel ? assigneeSel : el("div", {}, x.assignee_name || "—"))
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+            deadlineInp
+          )
+        ),
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+            projectSel
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+            titleInp
+          )
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+          descInp
+        )
       );
+
+      Modal.open("✎ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
+        { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+        {
+          label: t("save"),
+          kind: "primary",
+          onClick: async () => {
+            try {
+              const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
+
+              const body = {
+                title: (titleInp.value || "").trim() || null,
+                description: (descInp.value || "").trim(),
+                deadline_at,
+                project_id: projectSel.value ? Number(projectSel.value) : null,
+              };
+
+              if ((isAdmin || isRop) && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
+
+              if (!body.description) return Toast.show(`${t("toast_error")}: ${t("description")}`, "bad");
+
+              await API.tasks.update(x.id, body);
+              Toast.show(t("toast_saved"), "ok");
+              Modal.close();
+              await load();
+            } catch (e) {
+              Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+            }
+          }
+        }
+      ]);
+
+      setTimeout(() => descInp.focus(), 0);
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  async function openTaskCreate(preset = {}) {
+    const meta = await ensureTasksMeta();
+    const usersPick = (meta && meta.users && meta.users.length) ? meta.users : [];
+    const projectsPick = (meta && meta.projects && meta.projects.length) ? meta.projects : [];
+
+    const titleInp = el("input", { class: "input", placeholder: t("title") });
+    const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
+    const deadlineInp = el("input", { class: "input", type: "datetime-local" });
+
+    const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
+    for (const p of (projectsPick || [])) {
+      const title = p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`;
+      const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "");
+      projSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} — ${svc}` : title));
     }
 
-    const form = el("div", { class: "vcol gap10" },
+    if (preset && preset.project_id) projSel.value = String(preset.project_id);
+    if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
+
+    // ✅ Исполнитель открыт всем
+    const assigneeSel = el("select", { class: "sel" });
+    const srcUsers = usersPick.length ? usersPick : [{ id: App.state.user.id, full_name: (App.state.user.full_name || App.state.user.login), role: App.state.user.role }];
+    for (const u of srcUsers) {
+      assigneeSel.appendChild(el("option", {
+        value: String(u.id),
+        selected: (preset && preset.assignee_user_id) ? (u.id === preset.assignee_user_id) : (u.id === App.state.user.id)
+      }, `${u.full_name} (${u.role})`));
+    }
+
+    const body = el("div", { class: "vcol gap10" },
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-          isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "—")
+          assigneeSel
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
           deadlineInp
         )
       ),
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
-        projectSel
-      ),
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
-        titleInp
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+          projSel
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+          titleInp
+        )
       ),
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
@@ -2688,42 +2664,26 @@ if (String(q.open_create || "") === "1") {
       )
     );
 
-    Modal.open("✎ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
+    Modal.open(t("create") || "Create", body, [
       { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
       {
         label: t("save"),
         kind: "primary",
         onClick: async () => {
           try {
-            const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
-
-            const body = {
+            const payload = {
               title: (titleInp.value || "").trim() || null,
               description: (descInp.value || "").trim(),
-              deadline_at,
-              project_id: projectSel.value ? Number(projectSel.value) : null,
+              assignee_user_id: assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
+              project_id: projSel.value ? Number(projSel.value) : null,
+              deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null,
             };
 
-            if (isAdmin && assigneeSel) body.assignee_user_id = Number(assigneeSel.value);
+            if (!payload.title) return Toast.show(`${t("toast_error")}: ${t("title")}`, "bad");
+            if (!payload.description) return Toast.show(`${t("toast_error")}: ${t("description")}`, "bad");
 
-            await API.tasks.update(x.id, body);
+            await API.tasks.create(payload);
             Toast.show(t("toast_saved"), "ok");
-            Modal.close();
-            await load();
-          } catch (e) {
-            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
-          }
-        }
-      },
-      {
-        label: t("delete"),
-        kind: "danger",
-        onClick: async () => {
-          const ok = await Modal.confirm(t("confirm"), `${t("delete")} #${x.id}?`);
-          if (!ok) return;
-          try {
-            await API.tasks.del(x.id);
-            Toast.show(t("toast_deleted"), "ok");
             Modal.close();
             await load();
           } catch (e) {
@@ -2734,106 +2694,18 @@ if (String(q.open_create || "") === "1") {
     ]);
 
     setTimeout(() => descInp.focus(), 0);
-  } catch (e) {
-    Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
-  }
-}
-
-
-
-    function openTaskCreate(preset = {}) {
-  const titleInp = el("input", { class: "input", placeholder: t("title") });
-  const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
-  const deadlineInp = el("input", { class: "input", type: "datetime-local" });
-
-  const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
-  for (const p of (App.state.cache.projects || [])) {
-    projSel.appendChild(el("option", { value: String(p.id) },
-      p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
-    ));
   }
 
-  if (preset && preset.project_id) projSel.value = String(preset.project_id);
-  // если фильтр сверху выбран — пусть тоже подставляется
-  if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
+  createBtn.addEventListener("click", () => {
+    openTaskCreate({ project_id: (projectSel && projectSel.value) ? Number(projectSel.value) : null });
+  });
 
-  let assigneeSel = null;
-  if (isAdmin) {
-    assigneeSel = el("select", { class: "sel" },
-      ...(App.state.cache.users || []).map(u => el("option", {
-        value: String(u.id),
-        selected: (preset && preset.assignee_user_id) ? (u.id === preset.assignee_user_id) : (u.id === App.state.user.id)
-      }, `${u.full_name} (${u.role})`))
-    );
-  }
+  searchInp.addEventListener("input", () => render());
+  if (usersSel) usersSel.addEventListener("change", () => load());
 
-  const body = el("div", { class: "vcol gap10" },
-    el("div", { class: "grid2" },
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-        el("div", {}, isAdmin ? assigneeSel : (App.state.user.full_name || App.state.user.login))
-      ),
-      el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
-        deadlineInp
-      )
-    ),
-    el("div", { class: "vcol gap8" },
-      el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
-      projSel
-    ),
-    el("div", { class: "vcol gap8" },
-      el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
-      titleInp
-    ),
-    el("div", { class: "vcol gap8" },
-      el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
-      descInp
-    )
-  );
+  await load();
+};
 
-  Modal.open(t("create"), body, [
-    { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
-    {
-      label: t("create"),
-      kind: "primary",
-      onClick: async () => {
-        try {
-          const payload = {
-            title: (titleInp.value || "").trim() || null,
-            description: (descInp.value || "").trim(),
-            assignee_user_id: isAdmin && assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
-            project_id: projSel.value ? Number(projSel.value) : null,
-            deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null,
-          };
-
-          if (!payload.title) return Toast.show(`${t("toast_error")}: ${t("title")}`, "bad");
-          if (!payload.description) return Toast.show(`${t("toast_error")}: ${t("description")}`, "bad");
-
-          await API.tasks.create(payload);
-          Toast.show(t("toast_saved"), "ok");
-          Modal.close();
-          await load();
-        } catch (e) {
-          Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
-        }
-      }
-    }
-  ]);
-
-  setTimeout(() => descInp.focus(), 0);
-}
-
-createBtn.addEventListener("click", () => {
-  openTaskCreate({ project_id: (projectSel && projectSel.value) ? Number(projectSel.value) : null });
-});
-
-
-    searchInp.addEventListener("input", () => render());
-    if (usersSel) usersSel.addEventListener("change", () => load());
-
-    await load();
-  };
 
   App.renderUsers = async function (host) {
     const role = App.state.user.role;
