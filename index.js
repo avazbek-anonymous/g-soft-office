@@ -4903,41 +4903,7 @@ App.renderClients = async function(host){
     );
 
     const qInp = el("input",{class:"input",value:state.q,placeholder:t("clients_search")});
-
-// ✅ Enter — мгновенный поиск
-qInp.addEventListener("keydown",(e)=>{
-  if(e.key==="Enter"){
-    state.q = ((qInp.value||"").trim());
-    state.page = 1;
-    loadList().then(()=>{
-      const qi = $("#clients_q");
-      if(qi){
-        qi.focus();
-        const n = qi.value.length;
-        try{ qi.setSelectionRange(n,n); }catch{}
-      }
-    });
-  }
-});
-
-// ✅ Live search (без кнопки) — debounce чтобы не тормозило
-let __qTimer = null;
-qInp.addEventListener("input", ()=>{
-  clearTimeout(__qTimer);
-  __qTimer = setTimeout(()=>{
-    state.q = ((qInp.value||"").trim());
-    state.page = 1;
-    loadList().then(()=>{
-      const qi = $("#clients_q");
-      if(qi){
-        qi.focus();
-        const n = qi.value.length;
-        try{ qi.setSelectionRange(n,n); }catch{}
-      }
-    });
-  }, 250);
-});
-
+    qInp.addEventListener("keydown",(e)=>{ if(e.key==="Enter") loadList(); });
 
     const createBtn = (state.tab==="company")
       ? el("button",{class:"btn",type:"button",disabled:!canCreateCompany,onClick:()=>openUpsertModal("company",null)}, t("clients_create_company"))
