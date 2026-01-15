@@ -1777,56 +1777,26 @@ select option{
 };
 
 
-  App.routeNow = async function () {
-  const token = (App.state.__routeToken = (App.state.__routeToken || 0) + 1);
+    App.routeNow = function () {
+    const { path, query } = parseHash();
+    App.state.current = { path, query };
 
-  const { path, query } = parseHash();
-  App.state.current = { path, query };
+    App.refreshActiveNav();
+    App.refreshPageTitle();
 
-  App.refreshActiveNav();
-  App.refreshPageTitle();
+    const host = $("#content");
+    if (!host) return;
+    host.innerHTML = "";
 
-  const host = $("#content");
-  if (!host) return;
+    if (path === "/main") return App.renderMain(host);
+    if (path === "/tasks") return App.renderTasks(host);
+    if (path === "/users") return App.renderUsers(host);
+    if (path === "/settings") return App.renderSettings(host);
+    if (path === "/clients") return App.renderClients(host);
+    if (path === "/projects") return App.renderProjects(host);
 
-  // быстрый плейсхолдер, чтобы не было "пустоты"
-  host.innerHTML = "";
-  host.appendChild(el("div", { class: "card cardPad muted2", style: "max-width:520px" }, t("loading") || "Loading…"));
-
-  // рендерим в temp контейнер, чтобы не было гонок при быстрых переходах
-  const tmp = document.createElement("div");
-
-  const safeCall = async (fn) => {
-    try {
-      const p = fn(tmp);
-      if (p && typeof p.then === "function") await p;
-    } catch (e) {
-      tmp.innerHTML = "";
-      tmp.appendChild(
-        el("div", { class: "card cardPad vcol gap10" },
-          el("div", { style: "font-weight:900" }, t("toast_error") || "Ошибка"),
-          el("div", { class: "muted2" }, e?.message || "Render error")
-        )
-      );
-      console.error(e);
-    }
+    return App.renderStub(host);
   };
-
-  if (path === "/main") await safeCall(App.renderMain);
-  else if (path === "/tasks") await safeCall(App.renderTasks);
-  else if (path === "/users") await safeCall(App.renderUsers);
-  else if (path === "/settings") await safeCall(App.renderSettings);
-  else if (path === "/clients") await safeCall(App.renderClients);
-  else if (path === "/projects") await safeCall(App.renderProjects);
-  else await safeCall(App.renderStub);
-
-  // если юзер уже ушёл на другую страницу — ничего не свапаем
-  if (token !== App.state.__routeToken) return;
-
-  host.innerHTML = "";
-  while (tmp.firstChild) host.appendChild(tmp.firstChild);
-};
-
 
 
   App.renderStub = function (host) {
