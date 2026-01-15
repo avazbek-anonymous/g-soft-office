@@ -1041,8 +1041,9 @@ function applyTheme(){
   }
 
   function injectStyles() {
-    if ($("#gsoftStyles")) return;
-    const css = `
+  if ($("#gsoftStyles")) return;
+
+  const css = `
 :root{
   --bg:#06110f; --bg2:#081a16;
   --card:rgba(255,255,255,.06); --card2:rgba(255,255,255,.08);
@@ -1105,14 +1106,10 @@ input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .brandName{font-weight:800;letter-spacing:.6px}
 .nav{display:flex;flex-direction:column;gap:6px;padding:0 6px}
 .nav a{
-display:flex;
-align-items:center;
-gap:12px;
-padding:10px 12px;
-border-radius:14px;
-border:1px solid transparent;
-color:var(--muted);
-text-decoration:none;
+  display:flex; align-items:center; gap:12px;
+  padding:10px 12px; border-radius:14px;
+  border:1px solid transparent;
+  color:var(--muted); text-decoration:none;
 }
 .nav a .txt{white-space:nowrap;opacity:0;transform:translateX(-6px);transition:.18s ease}
 .sidebar:hover .nav a .txt,.sidebar.open .nav a .txt{opacity:1;transform:translateX(0)}
@@ -1163,53 +1160,7 @@ text-decoration:none;
 .modalBody{padding:14px}
 .modalFoot{padding:12px 14px 14px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--stroke)}
 .sideOverlay{display:none}
-@media (max-width:900px){
-  .sidebar{position:fixed;left:-290px;top:0;height:100vh;width:280px;transition:left .18s ease}
-  .sidebar:hover{width:280px} .sidebar.open{left:0}
-  .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
-  .sideOverlay.hidden{display:none}
-}
-.kanbanWrap{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
-.kcol{min-width:320px;max-width:340px}
-.khead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
-.khead .ttl{font-weight:900}
-.klist{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:60px}
-.kcard{padding:10px;border:1px solid var(--stroke);border-radius:16px;background:rgba(255,255,255,.05);cursor:grab;user-select:none;touch-action:none}
-.kmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:var(--muted);font-size:12px}
-.badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);background:var(--card)}
-.dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
-@media (max-width:900px){ 
-.kanbanWrap{
-flex-direction:column;
-overflow:visible
-} 
-.kcol{
-min-width:auto;
-max-width:none
-} 
-}
-/* ===== FIX PACK (desktop) ===== */
 
-/* Sidebar brand text hidden when collapsed */
-.brand .brandText{
-  opacity:0;
-  transform:translateX(-6px);
-  transition:.18s ease;
-  pointer-events:none;
-}
-.sidebar:hover .brandText,
-.sidebar.open .brandText{
-  opacity:1;
-  transform:translateX(0);
-  pointer-events:auto;
-}
-
-/* Content should fill full height */
-.wrap{min-height:100vh}
-.main{min-height:100vh}
-.content{flex:1; overflow:auto}
-
-/* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
   --cols:5;
   display:grid;
@@ -1220,39 +1171,66 @@ max-width:none
   padding-bottom:12px;
   padding-top:15px;
 }
-.kcol{min-width:260px; max-width:none}
-.klist{min-height:80px}
 
-/* Keep mobile as is */
+/* ✅ drop target на всю высоту */
+.kcol{
+  min-width:260px;
+  max-width:none;
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+.khead{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
+.khead .ttl{font-weight:900}
+.klist{
+  flex:1 1 auto;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:140px;
+  transition:background .12s ease, outline-color .12s ease, box-shadow .12s ease;
+}
+
+/* ✅ подсветка + анимация */
+.klist.drop,.klist.dropHover{
+  outline:2px dashed rgba(255,208,90,.55);
+  outline-offset:2px;
+  background:rgba(255,208,90,.06);
+  box-shadow: inset 0 0 0 1px rgba(255,208,90,.12);
+}
+.kcard{
+  padding:10px;border:1px solid var(--stroke);
+  border-radius:16px;background:rgba(255,255,255,.05);
+  cursor:grab;user-select:none;touch-action:none;
+  position:relative;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.kcard:hover{box-shadow:0 12px 28px rgba(0,0,0,.25)}
+.kcard.dragging{opacity:.55;transform:scale(.98)}
+.kmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:var(--muted);font-size:12px}
+.badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);background:var(--card)}
+.dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
+
+/* hover actions (не добавляет "строки") */
+.kact{
+  position:absolute;top:8px;right:8px;
+  display:flex;gap:6px;
+  opacity:0;transform:translateY(-2px);
+  transition:.15s ease;
+  pointer-events:none;
+}
+.kcard:hover .kact{opacity:1;transform:translateY(0);pointer-events:auto}
+.kact .iconBtn{padding:6px 8px;border-radius:10px}
+
+.kcardActions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
+.btn.mini{padding:6px 10px; border-radius:10px; font-size:12px}
+
 @media (max-width:900px){
   .kanbanWrap{display:flex; flex-direction:column; overflow:visible}
   .kcol{min-width:auto}
 }
 
-/* Card actions + dragging visuals */
-.kcard.dragging{opacity:.55}
-.kcardActions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
-.btn.mini{padding:6px 10px; border-radius:10px; font-size:12px}
-/* ===== USERS ===== */
-.uToolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-.uList{display:flex; flex-direction:column; gap:10px}
-.uCard{padding:12px; border:1px solid var(--stroke); border-radius:18px; background:rgba(255,255,255,.05)}
-.uRow{display:grid; grid-template-columns:70px 1.4fr 1fr 1fr 120px 140px auto; gap:10px; align-items:center}
-.uId{font-family:var(--mono); color:var(--muted2); font-size:12px}
-.uName{font-weight:900}
-.uMeta{color:var(--muted); font-size:12px}
-.uActions{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap}
-.badge.ok{border-color:rgba(37,211,102,.35)}
-.badge.off{border-color:rgba(255,77,77,.35)}
-@media (max-width:1100px){
-  .uRow{grid-template-columns:70px 1.2fr 1fr 120px auto}
-  .uHideLg{display:none}
-}
-@media (max-width:720px){
-  .uRow{display:flex; flex-direction:column; align-items:flex-start}
-  .uActions{width:100%; justify-content:flex-start}
-}
-/* === FIX: native SELECT dark dropdown === */
 select{
   background: rgba(255,255,255,.06);
   color: var(--text);
@@ -1266,52 +1244,46 @@ select:focus{
   border-color: rgba(255,208,90,.55);
   box-shadow: 0 0 0 3px rgba(255,208,90,.12);
 }
-select option{
-  background: #0f1714;
-  color: #e7f1ea;
-}
-/* === FIX: move header actions into sidebar on mobile === */
+select option{background:#0f1714;color:#e7f1ea}
+`.trim();
 
-/* sidebar needs column flow to push bottom slot down */
-.sidebar{ display:flex; flex-direction:column; }
-.nav{ flex:1 1 auto; padding-bottom:10px; }
+  document.head.appendChild(el("style", { id: "gsoftStyles" }, css));
 
-/* bottom slot (only useful on mobile) */
-.sideActionsSlot{
-  margin-top:auto;
-  padding:12px 10px 12px;
-  border-top:1px solid var(--stroke);
-}
-@media (min-width:901px){
-  .sideActionsSlot{ display:none; }
-}
+  // ✅ глобальная подсветка drop зоны для мыши (Tasks/Projects)
+  if (!window.__gsoftDnDHi) {
+    window.__gsoftDnDHi = 1;
+    let last = null;
 
-/* actions when inside sidebar */
-.hdrActions.inSidebar{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  width:100%;
-}
-.hdrActions.inSidebar .seg{ width:100%; }
-.hdrActions.inSidebar .pill{ width:100%; justify-content:center; }
-.hdrActions.inSidebar .iconBtn{ width:100%; justify-content:center; }
+    const clear = () => {
+      if (last) {
+        last.classList.remove("dropHover");
+        last.classList.remove("drop");
+        last = null;
+      }
+    };
 
-/* optional nice row (icons) */
-.hdrActions.inSidebar .hdrRow{
-  display:flex;
-  gap:10px;
-  width:100%;
-}
-.hdrActions.inSidebar .hdrRow .iconBtn{
-  width:100%;
-}
+    document.addEventListener("dragover", (e) => {
+      const dragging = document.querySelector(".kcard.dragging");
+      if (!dragging) return;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const list = under && under.closest ? under.closest("[data-drop]") : null;
+      if (list && list.classList && list.classList.contains("klist")) {
+        if (last !== list) {
+          clear();
+          last = list;
+          last.classList.add("dropHover");
+        }
+      } else {
+        clear();
+      }
+    }, true);
 
-    `.trim();
-    document.head.appendChild(el("style", {
-      id: "gsoftStyles"
-    }, css));
+    document.addEventListener("drop", clear, true);
+    document.addEventListener("dragend", clear, true);
+    document.addEventListener("pointerup", clear, true);
   }
+}
+
 
   function allowedRoutesByRole(role) {
     const all = [{
