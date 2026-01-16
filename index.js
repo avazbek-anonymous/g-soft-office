@@ -4276,7 +4276,7 @@ App.renderProjects = async function (host) {
     })();
   }
 
-  const openCreate = (prefill = {}) => {
+  const openCreate = async (prefill = {}) => {
     const canPickPm = isAdmin || isRop;
 
     const companySel = el("select", { class: "sel" },
