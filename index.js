@@ -4458,7 +4458,7 @@ pmSel.addEventListener("change", () => {
         ),
       ),
       el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})),
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный",uz:"Mas'ul",en:"Responsible"})),
         pmSel, pmAnySel
       ),
       el("div", { class: "vcol gap8" },
@@ -4611,7 +4611,7 @@ pmSel.addEventListener("change", () => {
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), curSel),
       ),
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})), pmSel, pmAnySel),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный",uz:"Mas'ul",en:"Responsible"})), pmSel, pmAnySel),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
     );
 
