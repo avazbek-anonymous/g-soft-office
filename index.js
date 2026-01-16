@@ -4291,14 +4291,52 @@ App.renderProjects = async function (host) {
       )
     );
 
-    const pmSel = canPickPm
-      ? el("select", { class: "sel" },
-          el("option", { value: "" }, "—"),
-          ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
-        )
-      : el("select", { class: "sel", disabled: true },
-          el("option", { value: String(App.state.user.id) }, App.state.user.full_name)
-        );
+    // --- PM picker: PM list + "Other" => show all users ---
+if (!App.state.cache.users) {
+  const list = await API.usersTryList();
+  App.state.cache.users = list || [];
+}
+const allUsers = App.state.cache.users || [];
+const pmUsers = allUsers.filter(u => u.role === "pm");
+
+const otherLabel =
+  (App.state.lang === "uz") ? "Boshqa" :
+  (App.state.lang === "en") ? "Another" :
+  "Другой";
+
+const pmSel = el("select", { class: "sel" });
+pmSel.appendChild(el("option", { value: "" }, "—"));
+for (const u of pmUsers) {
+  pmSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+}
+pmSel.appendChild(el("option", { value: "__other__" }, otherLabel));
+
+const pmAnySel = el("select", { class: "sel", style: "display:none" });
+pmAnySel.appendChild(el("option", { value: "" }, "—"));
+for (const u of allUsers) {
+  pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+}
+
+// default: ставим текущего пользователя (чтобы не "обязательность руками")
+const presetId = Number(App.state.user?.id || 0);
+const presetIsPm = pmUsers.some(u => Number(u.id) === presetId);
+if (presetId && !presetIsPm) {
+  pmSel.value = "__other__";
+  pmAnySel.style.display = "";
+  pmAnySel.value = String(presetId);
+} else if (presetId) {
+  pmSel.value = String(presetId);
+}
+
+pmSel.addEventListener("change", () => {
+  if (pmSel.value === "__other__") {
+    pmAnySel.style.display = "";
+    if (!pmAnySel.value && presetId) pmAnySel.value = String(presetId);
+  } else {
+    pmAnySel.style.display = "none";
+  }
+});
+
 
     const meetInp = el("input", { class: "input", type: "datetime-local" });
     const dlInp = el("input", { class: "input", type: "datetime-local" });
@@ -4401,7 +4439,7 @@ App.renderProjects = async function (host) {
       ),
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})),
-        pmSel
+        pmSel, pmAnySel
       ),
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"),
@@ -4416,7 +4454,7 @@ App.renderProjects = async function (host) {
             const payload = {
               client_id: companySel.value ? Number(companySel.value) : null,
               service_type_id: svcSel.value ? Number(svcSel.value) : null,
-              pm_user_id: pmSel.value ? Number(pmSel.value) : null,
+              pm_user_id: (pmSel.value === "__other__" ? Number(pmAnySel.value || 0) : Number(pmSel.value || 0)),
               meeting_at: fromLocalInput(meetInp.value),
               deadline_at: fromLocalInput(dlInp.value),
               amount: isAdmin ? (amountInp.value ? Number(amountInp.value) : null) : null,
@@ -4473,14 +4511,51 @@ App.renderProjects = async function (host) {
     );
     svcSel.value = String(p.service_type_id || "");
 
-    const pmSel = (isAdmin || isRop)
-      ? el("select", { class: "sel" },
-          el("option", { value: "" }, "—"),
-          ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
-        )
-      : el("select", { class: "sel", disabled: true },
-          el("option", { value: String(App.state.user.id) }, App.state.user.full_name)
-        );
+    if (!App.state.cache.users) {
+  const list = await API.usersTryList();
+  App.state.cache.users = list || [];
+}
+const allUsers = App.state.cache.users || [];
+const pmUsers = allUsers.filter(u => u.role === "pm");
+
+const otherLabel =
+  (App.state.lang === "uz") ? "Boshqa" :
+  (App.state.lang === "en") ? "Another" :
+  "Другой";
+
+const pmSel = el("select", { class: "sel" });
+pmSel.appendChild(el("option", { value: "" }, "—"));
+for (const u of pmUsers) {
+  pmSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+}
+pmSel.appendChild(el("option", { value: "__other__" }, otherLabel));
+
+const pmAnySel = el("select", { class: "sel", style: "display:none" });
+pmAnySel.appendChild(el("option", { value: "" }, "—"));
+for (const u of allUsers) {
+  pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
+}
+
+// preset: текущий pm_user_id проекта
+const presetId = Number(project.pm_user_id || 0); // ⚠️ project = твой объект проекта в edit
+const presetIsPm = pmUsers.some(u => Number(u.id) === presetId);
+if (presetId && !presetIsPm) {
+  pmSel.value = "__other__";
+  pmAnySel.style.display = "";
+  pmAnySel.value = String(presetId);
+} else if (presetId) {
+  pmSel.value = String(presetId);
+}
+
+pmSel.addEventListener("change", () => {
+  if (pmSel.value === "__other__") {
+    pmAnySel.style.display = "";
+    if (!pmAnySel.value && presetId) pmAnySel.value = String(presetId);
+  } else {
+    pmAnySel.style.display = "none";
+  }
+});
+
     pmSel.value = String(p.pm_user_id || App.state.user.id);
 
     const meetInp = el("input", { class: "input", type: "datetime-local", value: toLocalInput(p.meeting_at) });
@@ -4516,7 +4591,7 @@ App.renderProjects = async function (host) {
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), curSel),
       ),
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})), pmSel),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный PM",uz:"Mas'ul PM",en:"Responsible PM"})), pmSel, pmAnySel),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
     );
 
@@ -4527,7 +4602,7 @@ App.renderProjects = async function (host) {
             const payload = {
               client_id: companySel.value ? Number(companySel.value) : null,
               service_type_id: svcSel.value ? Number(svcSel.value) : null,
-              pm_user_id: pmSel.value ? Number(pmSel.value) : null,
+              pm_user_id: (pmSel.value === "__other__" ? Number(pmAnySel.value || 0) : Number(pmSel.value || 0)),
               meeting_at: fromLocalInput(meetInp.value),
               deadline_at: fromLocalInput(dlInp.value),
               amount: isAdmin ? (amountInp.value ? Number(amountInp.value) : null) : null,
