@@ -1574,7 +1574,7 @@ select option{
   const iconsRow = el("div", { class: "hdrRow" }, themeBtn, eyeBtn);
 
   const userPill = el("div", { class: "pill" },
-    //el("span", { class: "muted2", style: "font-family:var(--mono); font-size:11px" }, App.state.user.role),
+    el("span", { class: "muted2", style: "font-family:var(--mono); font-size:11px" }, App.state.user.role),
     el("span", {}, App.state.user.full_name || App.state.user.login)
   );
 
