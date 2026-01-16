@@ -2149,15 +2149,20 @@ select option{
     host.append(toolbar, board);
 
 
-    if (isAdmin && !App.state.cache.users) {
+    if (!App.state.cache.users) {
       const list = await API.usersTryList();
       App.state.cache.users = list || [];
-      for (const u of App.state.cache.users) {
-        usersSel.appendChild(el("option", {
-          value: String(u.id)
-        }, `${u.full_name} (${u.role})`));
+
+      // dropdown сверху только у admin — поэтому проверяем
+      if (usersSel) {
+        for (const u of App.state.cache.users) {
+          usersSel.appendChild(el("option", {
+            value: String(u.id)
+          }, `${u.full_name} (${u.role})`));
+        }
       }
     }
+
 
     if (!App.state.cache.projects) {
       const pr = await API.projectsTryList();
@@ -2725,36 +2730,42 @@ if (String(q.open_create || "") === "1") {
 
 
     function openTaskCreate(preset = {}) {
-  const titleInp = el("input", { class: "input", placeholder: t("title") });
-  const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
-  const deadlineInp = el("input", { class: "input", type: "datetime-local" });
+      const titleInp = el("input", { class: "input", placeholder: t("title") });
+      const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
+      const deadlineInp = el("input", { class: "input", type: "datetime-local" });
 
-  const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
-  for (const p of (App.state.cache.projects || [])) {
-    projSel.appendChild(el("option", { value: String(p.id) },
-      p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
-    ));
-  }
+      const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "—"));
+      for (const p of (App.state.cache.projects || [])) {
+        projSel.appendChild(el("option", { value: String(p.id) },
+          p.company_name ? `#${p.id} · ${p.company_name}` : `#${p.id}`
+        ));
+      }
 
-  if (preset && preset.project_id) projSel.value = String(preset.project_id);
-  // если фильтр сверху выбран — пусть тоже подставляется
-  if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
+      if (preset && preset.project_id) projSel.value = String(preset.project_id);
+      // если фильтр сверху выбран — пусть тоже подставляется
+      if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
 
-  let assigneeSel = null;
-  if (isAdmin) {
-    assigneeSel = el("select", { class: "sel" },
-      ...(App.state.cache.users || []).map(u => el("option", {
-        value: String(u.id),
-        selected: (preset && preset.assignee_user_id) ? (u.id === preset.assignee_user_id) : (u.id === App.state.user.id)
-      }, `${u.full_name} (${u.role})`))
-    );
-  }
+      let assigneeSel = el("select", { class: "sel" });
 
-  const body = el("div", { class: "vcol gap10" },
-    el("div", { class: "grid2" },
+      const usersForSelect = (App.state.cache.users && App.state.cache.users.length)
+      ? App.state.cache.users
+      : [{ id: App.state.user.id, full_name: (App.state.user.full_name || App.state.user.login), role: App.state.user.role }];
+
+      for (const u of usersForSelect) {
+        assigneeSel.appendChild(el("option", {
+          value: String(u.id),
+          selected: (preset && preset.assignee_user_id)
+          ? (u.id === preset.assignee_user_id)
+          : (u.id === App.state.user.id)
+        }, `${u.full_name}${u.role ? ` (${u.role})` : ""}`));
+      }
+
+
+      const body = el("div", { class: "vcol gap10" },
+      el("div", { class: "grid2" },
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-        el("div", {}, isAdmin ? assigneeSel : (App.state.user.full_name || App.state.user.login))
+        el("div", {}, assigneeSel)
       ),
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
@@ -2785,7 +2796,7 @@ if (String(q.open_create || "") === "1") {
           const payload = {
             title: (titleInp.value || "").trim() || null,
             description: (descInp.value || "").trim(),
-            assignee_user_id: isAdmin && assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
+            assignee_user_id: assigneeSel ? Number(assigneeSel.value) : App.state.user.id,
             project_id: projSel.value ? Number(projSel.value) : null,
             deadline_at: deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null,
           };
