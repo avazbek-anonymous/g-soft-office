@@ -1063,6 +1063,7 @@ function applyTheme(){
   --focus:0 0 0 3px rgba(255,208,90,.25);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  --icon: invert(1);
 }
 [data-theme="light"]{
   --bg:#f6f7fb; --bg2:#ffffff;
@@ -1071,6 +1072,7 @@ function applyTheme(){
   --text:rgba(10,10,10,.88); --muted:rgba(10,10,10,.62); --muted2:rgba(10,10,10,.45);
   --shadow:0 18px 50px rgba(0,0,0,.12);
   --focus:0 0 0 3px rgba(0,58,47,.16);
+  --icon: none;
 }
 [data-eye="1"]{
   --card:rgba(255,255,255,.045); --card2:rgba(255,255,255,.065);
@@ -1127,7 +1129,16 @@ text-decoration:none;
 .sidebar:hover .nav a .txt,.sidebar.open .nav a .txt{opacity:1;transform:translateX(0)}
 .nav a.active{background:var(--card);border-color:var(--stroke);color:var(--text)}
 .nav a:hover{background:var(--card2);color:var(--text)}
-.ico{width:18px;height:18px;fill:currentColor}
+.topLeft .iconBtn .icoWrap .ico {
+  width:18px!important;
+  height:18px!important;
+}
+.ico{
+  width:25px;
+  height:25px;
+  fill:currentColor;
+  filter:var(--icon);
+}
 .icoWrap{display:inline-flex;align-items:center;justify-content:center}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{
