@@ -1792,6 +1792,7 @@ select option{
     if (path === "/tasks") return App.renderTasks(host);
     if (path === "/users") return App.renderUsers(host);
     if (path === "/settings") return App.renderSettings(host);
+    if (path === "/courses") return App.renderCourses(host);
     if (path === "/clients") return App.renderClients(host);
     if (path === "/projects") return App.renderProjects(host);
 
@@ -4564,6 +4565,665 @@ App.renderProjects = async function (host) {
 };
 
 
+App.renderCourses = async function (host) {
+  // ---- styles (local) ----
+  if (!document.getElementById("courseStyles")) {
+    const st = document.createElement("style");
+    st.id = "courseStyles";
+    st.textContent = `
+      .cLine{font-size:12px;color:var(--muted);margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+      .cLine b{color:var(--text);font-weight:700}
+      .cActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+      .btn.mini{padding:8px 10px;border-radius:12px;font-size:12px}
+      .sel option, select option{background:rgba(6,26,20,.98);color:var(--text)}
+      .cSug{border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.04)}
+      .cSug .it{display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:0;border-bottom:1px solid var(--stroke);cursor:pointer}
+      .cSug .it:last-child{border-bottom:0}
+      .cSug .it:hover{background:rgba(255,208,90,.07)}
+      .cChip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--stroke);border-radius:999px;background:rgba(255,255,255,.04);font-size:12px}
+    `;
+    document.head.appendChild(st);
+  }
+
+  const role = App.state.user?.role || "";
+  const isAdmin = role === "admin";
+  const isRop = role === "rop";
+  const isSale = role === "sale";
+  if (!(isAdmin || isRop || isSale)) {
+    host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+      el("div", { style: "font-weight:900" }, t("route_courses")),
+      el("div", { class: "muted" }, "No access")
+    ));
+    return;
+  }
+
+  const lang = App.state.lang || "ru";
+  const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
+
+  const statusCols = [
+    { key: "new",       label: { ru: "Новый",            uz: "Yangi",                 en: "New" } },
+    { key: "need_call", label: { ru: "Нужно звонить",    uz: "Qo‘ng‘iroq kerak",      en: "Need call" } },
+    { key: "thinking",  label: { ru: "Думает",           uz: "O‘ylab ko‘rmoqda",      en: "Thinking" } },
+    { key: "enrolled",  label: { ru: "Записан",          uz: "Kursga yozildi",        en: "Enrolled" } },
+    { key: "studying",  label: { ru: "Учится",           uz: "O‘qishda",              en: "Studying" } },
+    { key: "canceled",  label: { ru: "Отмена",           uz: "Otmen",                 en: "Canceled" } },
+  ];
+
+  const fmtMoney = (amount, currency) => {
+    if (amount == null || amount === "") return "—";
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    const cur = currency || "UZS";
+    return `${n.toLocaleString(undefined)} ${cur}`;
+  };
+
+  const toDateInput = (tsSec) => {
+    if (!tsSec) return "";
+    const d = new Date(Number(tsSec) * 1000);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  };
+
+  const fmtDateOnly = (tsSec) => {
+    if (!tsSec) return "—";
+    const d = new Date(Number(tsSec) * 1000);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+  };
+
+  // ---- load refs ----
+  const [ctRes, companiesRes, leadsRes] = await Promise.all([
+    API.settings.dictList("course_types").catch(() => ({ data: [] })),
+    API.clients.list("company", "").catch(() => ({ data: [] })),
+    API.clients.list("lead", "").catch(() => ({ data: [] })),
+  ]);
+
+  const courseTypes = (ctRes && ctRes.data) ? ctRes.data : [];
+  const companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
+  const leads = (leadsRes && leadsRes.data) ? leadsRes.data : [];
+
+  const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
+  const companyLabel = (c) => (c && (c.company_name || c.full_name || `#${c.id}`)) || "";
+  const leadLabel = (l) => {
+    if (!l) return "";
+    const fio = l.full_name || `#${l.id}`;
+    const ph = l.phone1 ? ` • ${l.phone1}` : "";
+    return `${fio}${ph}`;
+  };
+
+  // ---- toolbar ----
+  const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
+
+  const companySel = el("select", { class: "sel" },
+    el("option", { value: "" }, "—"),
+    ...companies.filter(x => Number(x.is_active) === 1).map(c =>
+      el("option", { value: String(c.id) }, companyLabel(c))
+    )
+  );
+
+  const typeSel = el("select", { class: "sel" },
+    el("option", { value: "" }, "—"),
+    ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
+      el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
+    )
+  );
+
+  const createBtn = el("button", { class: "btn primary", type: "button" }, t("create") || "Create");
+  createBtn.onclick = () => openCreate();
+
+  const row = el("div", { class: "hrow gap10", style: "flex-wrap:wrap;justify-content:space-between" },
+    el("div", { class: "hrow gap10", style: "flex:1;min-width:260px;flex-wrap:wrap" },
+      qInp,
+      el("div", { style: "min-width:220px" }, companySel),
+      el("div", { style: "min-width:220px" }, typeSel),
+    ),
+    createBtn
+  );
+
+  const toolbar = el("div", { class: "card cardPad vcol gap10" }, row);
+  const board = el("div", { class: "kanbanWrap", id: "courseBoard" });
+  host.innerHTML = "";
+  host.append(toolbar, board);
+
+  // ---- columns DOM ----
+  const colEls = {};
+  for (const c of statusCols) {
+    const countEl = el("div", { class: "muted2", style: "font-size:12px" }, "0");
+    const list = el("div", { class: "klist", "data-drop": c.key });
+
+    list.addEventListener("dragover", (e) => { e.preventDefault(); list.classList.add("drop"); });
+    list.addEventListener("dragenter", () => list.classList.add("drop"));
+    list.addEventListener("dragleave", () => list.classList.remove("drop"));
+    list.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      list.classList.remove("drop");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      if (!id) return;
+      await doMove(id, c.key);
+    });
+
+    const col = el("div", { class: "card kcol" },
+      el("div", { class: "khead" },
+        el("div", { class: "ttl" }, tr(c.label)),
+        countEl
+      ),
+      list
+    );
+
+    board.appendChild(col);
+    colEls[c.key] = { col, list, countEl };
+  }
+
+  // ---- data ----
+  let raw = [];
+
+  const filterRows = () => {
+    const q = String(qInp.value || "").trim().toLowerCase();
+    if (!q) return raw;
+    return raw.filter(x => {
+      const s = `${x.lead_full_name || ""} ${x.lead_phone1 || ""} ${x.company_name || ""} ${x.course_type_name || ""}`.toLowerCase();
+      return s.includes(q);
+    });
+  };
+
+  const askCancelReason = () => new Promise((resolve) => {
+    const inp = el("textarea", { class: "input", style: "min-height:110px", placeholder: t("reason") || "Reason..." });
+    Modal.open(tr({ ru: "Причина отмены", uz: "Bekor qilish sababi", en: "Cancel reason" }),
+      el("div", { class: "vcol gap10" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Укажи причину отмены:", uz: "Sababni yozing:", en: "Provide a reason:" })),
+        inp
+      ),
+      [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+        { label: t("save") || "Save", kind: "primary", onClick: () => {
+            const v = (inp.value || "").trim();
+            if (!v) { Toast.show(tr({ ru: "Причина обязательна", uz: "Sabab majburiy", en: "Reason required" }), "bad"); return; }
+            Modal.close(); resolve(v);
+          }
+        }
+      ]
+    );
+  });
+
+  const askPaidAmount = (titleObj) => new Promise((resolve) => {
+    const inp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
+    Modal.open(tr(titleObj),
+      el("div", { class: "vcol gap10" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Укажи сумму оплаты:", uz: "To‘lov summasini kiriting:", en: "Enter paid amount:" })),
+        inp
+      ),
+      [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+        { label: t("save") || "Save", kind: "primary", onClick: () => {
+            const v = (inp.value || "").trim();
+            const n = Number(v);
+            if (!v || !Number.isFinite(n)) { Toast.show(tr({ ru: "Сумма обязательна", uz: "Summa majburiy", en: "Amount required" }), "bad"); return; }
+            Modal.close(); resolve(n);
+          }
+        }
+      ]
+    );
+  });
+
+  const doMove = async (id, status) => {
+    try {
+      const cur = raw.find(x => Number(x.id) === Number(id));
+      if (cur && String(cur.status) === String(status)) return;
+
+      let extra = {};
+      if (status === "canceled") {
+        const reason = await askCancelReason();
+        if (!reason) return;
+        extra.cancel_reason = reason;
+      }
+      if (status === "enrolled" || status === "studying") {
+        const paid = await askPaidAmount({ ru: "Оплата", uz: "To‘lov", en: "Payment" });
+        if (paid == null) return;
+        extra.paid_amount = paid;
+      }
+
+      await apiFetch(`/api/course_leads/${id}/move`, {
+        method: "POST",
+        body: { status, ...extra },
+      });
+
+      await load();
+      Toast.show(t("toast_saved") || "Saved", "ok");
+    } catch (e) {
+      Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+    }
+  };
+
+  const cardFor = (x) => {
+    const st = x.status || "new";
+
+    const leadName = x.lead_full_name || `#${x.lead_client_id || x.id}`;
+    const phone = x.lead_phone1 || "";
+    const company = x.company_name || "";
+    const courseName = x.course_type_name || "";
+
+    const lines = [];
+
+    if (st === "studying") {
+      lines.push(el("div", { style: "font-weight:900" }, leadName));
+    } else if (st === "canceled") {
+      lines.push(el("div", { style: "font-weight:900" }, leadName));
+      if (x.cancel_reason) lines.push(el("div", { class: "muted2", style: "font-size:12px" }, x.cancel_reason));
+    } else {
+      lines.push(el("div", { style: "font-weight:900" }, leadName));
+      const meta = [];
+      if (phone) meta.push(el("span", {}, phone));
+      if (company) meta.push(el("span", {}, company));
+      if (courseName) meta.push(el("span", {}, courseName));
+      if (meta.length) lines.push(el("div", { class: "cLine" }, ...meta));
+
+      const nums = [];
+      if (x.course_start_date) nums.push(el("span", {}, `${tr({ ru: "Старт", uz: "Start", en: "Start" })}: `, el("b", {}, fmtDateOnly(x.course_start_date))));
+      if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
+      if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To‘lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
+      if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
+    }
+
+    const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(x.id); } }, t("open") || "Open");
+    const actions = el("div", { class: "cActions" }, btnOpen);
+
+    const card = el("div", {
+      class: "kcard",
+      draggable: true,
+      "data-id": String(x.id),
+      onDragstart: (e) => {
+        e.dataTransfer.setData("text/plain", String(x.id));
+        e.dataTransfer.effectAllowed = "move";
+        card.classList.add("dragging");
+      },
+      onDragend: () => card.classList.remove("dragging"),
+    }, ...lines, actions);
+
+    bindTouchDrag(card, (status) => doMove(x.id, status));
+
+    return { st, card };
+  };
+
+  const render = () => {
+    for (const c of statusCols) colEls[c.key].list.innerHTML = "";
+
+    const counts = {};
+    for (const c of statusCols) counts[c.key] = 0;
+
+    const rows = filterRows();
+    for (const x of rows) {
+      const obj = cardFor(x);
+      if (!colEls[obj.st]) continue;
+      colEls[obj.st].list.appendChild(obj.card);
+      counts[obj.st]++;
+    }
+    for (const c of statusCols) colEls[c.key].countEl.textContent = String(counts[c.key] || 0);
+  };
+
+  let loadTimer = null;
+  const load = async () => {
+    const company_id = companySel.value ? Number(companySel.value) : null;
+    const course_type_id = typeSel.value ? Number(typeSel.value) : null;
+
+    const sp = new URLSearchParams();
+    if (company_id) sp.set("company_id", String(company_id));
+    if (course_type_id) sp.set("course_type_id", String(course_type_id));
+    const qs = sp.toString();
+
+    const r = await apiFetch(`/api/course_leads${qs ? "?" + qs : ""}`).catch(() => ({ data: [] }));
+    raw = (r && r.data) ? r.data : [];
+    render();
+  };
+
+  qInp.addEventListener("input", () => {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(render, 150);
+  });
+  companySel.addEventListener("change", load);
+  typeSel.addEventListener("change", load);
+
+  // ---- MODALS ----
+  function openCreate() {
+    let selectedLead = null;
+
+    const fioInp = el("input", { class: "input", placeholder: tr({ ru: "ФИО (поиск)", uz: "FIO (qidiruv)", en: "Full name (search)" }) });
+    const phoneInp = el("input", { class: "input", placeholder: tr({ ru: "Телефон (поиск)", uz: "Telefon (qidiruv)", en: "Phone (search)" }) });
+
+    const sug = el("div", { class: "cSug", style: "display:none" });
+    const pickChip = el("div", { class: "cChip", style: "display:none" });
+
+    const company2 = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...companies.filter(x => Number(x.is_active) === 1).map(c =>
+        el("option", { value: String(c.id) }, companyLabel(c))
+      )
+    );
+
+    const type2 = el("select", { class: "sel" },
+      el("option", { value: "" }, "—"),
+      ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
+        el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
+      )
+    );
+
+    const priceInp = el("input", { class: "input", disabled: true, placeholder: "—" });
+    const startInp = el("input", { class: "input", type: "date", disabled: true });
+
+    const agreedInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
+    const paidInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
+    const commentInp = el("textarea", { class: "input", rows: 4, placeholder: t("comment") || "Comment..." });
+
+    const refreshCourseSnapshot = () => {
+      const id = type2.value ? Number(type2.value) : null;
+      const ct = id ? ctById.get(id) : null;
+      if (!ct) { priceInp.value = ""; startInp.value = ""; return; }
+      priceInp.value = fmtMoney(ct.price || 0, ct.currency || "UZS");
+      startInp.value = toDateInput(ct.start_date);
+    };
+
+    const renderSuggest = () => {
+      const q1 = String(fioInp.value || "").trim().toLowerCase();
+      const q2 = String(phoneInp.value || "").trim().toLowerCase();
+      const q = (q1 || q2);
+      if (!q) { sug.style.display = "none"; sug.innerHTML = ""; return; }
+
+      const items = leads
+        .filter(l => Number(l.is_active) === 1)
+        .filter(l => (`${l.full_name || ""} ${l.phone1 || ""}`.toLowerCase()).includes(q))
+        .slice(0, 8);
+
+      sug.innerHTML = "";
+      if (!items.length) { sug.style.display = "none"; return; }
+
+      for (const l of items) {
+        sug.appendChild(el("button", { class: "it", type: "button", onClick: () => {
+          selectedLead = l;
+          fioInp.value = l.full_name || "";
+          phoneInp.value = l.phone1 || "";
+          sug.style.display = "none";
+          pickChip.style.display = "";
+          pickChip.innerHTML = "";
+          pickChip.appendChild(el("div", {}, tr({ ru: "Выбран:", uz: "Tanlandi:", en: "Selected:" }), " ", el("b", {}, leadLabel(l))));
+        } }, leadLabel(l)));
+      }
+      sug.style.display = "";
+    };
+
+    fioInp.addEventListener("input", renderSuggest);
+    phoneInp.addEventListener("input", renderSuggest);
+    type2.addEventListener("change", refreshCourseSnapshot);
+    refreshCourseSnapshot();
+
+    const body = el("div", { class: "vcol gap10" },
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Создание лида по курсу (статус всегда: Новый)", uz: "Kurs lead yaratish (status doim: Yangi)", en: "Create course lead (status is always: New)" })),
+
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
+          fioInp,
+          phoneInp,
+          sug,
+          pickChip
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
+          company2
+        ),
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
+        type2
+      ),
+
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
+          priceInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
+          startInp
+        ),
+      ),
+
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
+          agreedInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To‘lov", en: "Paid" })),
+          paidInp
+        ),
+      ),
+
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"),
+        commentInp
+      )
+    );
+
+    Modal.open(t("route_courses"), body, [
+      { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+      { label: t("save") || "Save", kind: "primary", onClick: async () => {
+          try {
+            if (!selectedLead || !selectedLead.id) { Toast.show(tr({ ru: "Выбери лида", uz: "Lead tanlang", en: "Select lead" }), "bad"); return; }
+            const course_type_id = type2.value ? Number(type2.value) : null;
+            if (!course_type_id) { Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad"); return; }
+
+            const agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
+            const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
+            if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto‘g‘ri", en: "Invalid agreed amount" }), "bad"); return; }
+            if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To‘lov noto‘g‘ri", en: "Invalid paid amount" }), "bad"); return; }
+
+            const body = {
+              lead_client_id: Number(selectedLead.id),
+              company_id: company2.value ? Number(company2.value) : null,
+              course_type_id,
+              agreed_amount,
+              paid_amount,
+              comment: (commentInp.value || "").trim() || null,
+            };
+
+            const r = await apiFetch("/api/course_leads", { method: "POST", body });
+            const newId = r?.data?.id;
+            Modal.close();
+            await load();
+            if (newId) openView(newId);
+            Toast.show(t("toast_saved") || "Saved", "ok");
+          } catch (e) {
+            Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+          }
+        }
+      }
+    ]);
+  }
+
+  async function openView(id) {
+    try {
+      const r = await apiFetch(`/api/course_leads/${id}`);
+      const x = r?.data;
+      if (!x) return;
+
+      const body = el("div", { class: "vcol gap10" },
+        el("div", { class: "cChip" },
+          el("b", {}, `#${x.id}`),
+          el("span", {}, tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status }))
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
+          el("div", {}, el("b", {}, x.lead_full_name || "—"), x.lead_phone1 ? el("span", { class: "muted2", style: "margin-left:10px" }, x.lead_phone1) : null)
+        ),
+        x.company_name ? el("div", { class: "vcol gap6" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
+          el("div", {}, x.company_name)
+        ) : null,
+
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap6" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
+            el("div", {}, x.course_type_name || "—")
+          ),
+          el("div", { class: "vcol gap6" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
+            el("div", {}, fmtDateOnly(x.course_start_date))
+          ),
+        ),
+
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap6" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
+            el("div", {}, fmtMoney(x.course_price, x.currency))
+          ),
+          el("div", { class: "vcol gap6" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
+            el("div", {}, x.agreed_amount != null ? fmtMoney(x.agreed_amount, x.currency) : "—")
+          ),
+        ),
+
+        el("div", { class: "vcol gap6" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To‘lov", en: "Paid" })),
+          el("div", {}, x.paid_amount != null ? fmtMoney(x.paid_amount, x.currency) : "—")
+        ),
+
+        x.comment ? el("div", { class: "vcol gap6" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"),
+          el("div", {}, x.comment)
+        ) : null,
+
+        x.cancel_reason ? el("div", { class: "vcol gap6" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Причина отмены", uz: "Bekor qilish sababi", en: "Cancel reason" })),
+          el("div", {}, x.cancel_reason)
+        ) : null,
+      );
+
+      Modal.open(t("route_courses"), body, [
+        { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() },
+        { label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } },
+      ]);
+    } catch (e) {
+      Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  async function openEdit(id) {
+    try {
+      const r = await apiFetch(`/api/course_leads/${id}`);
+      const x = r?.data;
+      if (!x) return;
+
+      const company2 = el("select", { class: "sel" },
+        el("option", { value: "" }, "—"),
+        ...companies.filter(c => Number(c.is_active) === 1).map(c =>
+          el("option", { value: String(c.id), selected: (Number(x.company_id) === Number(c.id)) ? "selected" : null }, companyLabel(c))
+        )
+      );
+
+      const type2 = el("select", { class: "sel" },
+        el("option", { value: "" }, "—"),
+        ...courseTypes.filter(ct => Number(ct.is_active) === 1).map(ct =>
+          el("option", { value: String(ct.id), selected: (Number(x.course_type_id) === Number(ct.id)) ? "selected" : null }, ct.name || `#${ct.id}`)
+        )
+      );
+
+      const priceInp = el("input", { class: "input", disabled: true });
+      const startInp = el("input", { class: "input", type: "date", disabled: true });
+
+      const agreedInp = el("input", { class: "input", type: "number", step: "0.01", value: (x.agreed_amount == null ? "" : String(x.agreed_amount)) });
+      const paidInp = el("input", { class: "input", type: "number", step: "0.01", value: (x.paid_amount == null ? "" : String(x.paid_amount)) });
+      const commentInp = el("textarea", { class: "input", rows: 4 }, x.comment || "");
+
+      const refreshCourseSnapshot = () => {
+        const ct = type2.value ? ctById.get(Number(type2.value)) : null;
+        if (!ct) { priceInp.value = ""; startInp.value = ""; return; }
+        priceInp.value = fmtMoney(ct.price || 0, ct.currency || "UZS");
+        startInp.value = toDateInput(ct.start_date);
+      };
+      type2.addEventListener("change", refreshCourseSnapshot);
+      refreshCourseSnapshot();
+
+      const body = el("div", { class: "vcol gap10" },
+        el("div", { class: "cChip" }, el("b", {}, `#${x.id}`), el("span", {}, x.lead_full_name || "—")),
+
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
+            company2
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
+            type2
+          )
+        ),
+
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
+            priceInp
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
+            startInp
+          ),
+        ),
+
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
+            agreedInp
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To‘lov", en: "Paid" })),
+            paidInp
+          ),
+        ),
+
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"),
+          commentInp
+        ),
+      );
+
+      Modal.open(t("route_courses"), body, [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+        { label: t("save") || "Save", kind: "primary", onClick: async () => {
+            try {
+              const agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
+              const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
+              if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto‘g‘ri", en: "Invalid agreed amount" }), "bad"); return; }
+              if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To‘lov noto‘g‘ri", en: "Invalid paid amount" }), "bad"); return; }
+
+              const body = {
+                company_id: company2.value ? Number(company2.value) : null,
+                course_type_id: type2.value ? Number(type2.value) : null,
+                agreed_amount,
+                paid_amount,
+                comment: (commentInp.value || "").trim() || null,
+              };
+
+              await apiFetch(`/api/course_leads/${id}`, { method: "PUT", body });
+              Modal.close();
+              await load();
+              Toast.show(t("toast_saved") || "Saved", "ok");
+            } catch (e) {
+              Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+            }
+          }
+        }
+      ]);
+    } catch (e) {
+      Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  // ---- init ----
+  await load();
+
+  const openId = App.state.current?.query?.open ? Number(App.state.current.query.open) : null;
+  if (openId) openView(openId);
+}
 
 
 async function loadDictCacheIfAny(){
