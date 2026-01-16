@@ -551,23 +551,31 @@ filter_project_all: "All",
   }
 
   const ICONS = {
-    burger: `<svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>`,
-    home: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 3 3 10v11h6v-7h6v7h6V10z"/></svg>`,
-    tasks: `<svg viewBox="0 0 24 24" class="ico"><path d="M7 7h14v2H7zM7 11h14v2H7zM7 15h14v2H7z"/><path d="M3 7h2v2H3zM3 11h2v2H3zM3 15h2v2H3z"/></svg>`,
-    projects: `<svg viewBox="0 0 24 24" class="ico"><path d="M10 4h4l1 2h6v4H3V6h6z"/><path d="M3 10h18v10H3z"/></svg>`,
-    courses: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 3 1 9l11 6 9-4.91V17h2V9z"/><path d="M5 13v5l7 3 7-3v-5l-7 3z"/></svg>`,
-    clients: `<svg viewBox="0 0 24 24" class="ico"><path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0z"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7z"/></svg>`,
-    settings: `<svg viewBox="0 0 24 24" class="ico"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L1.71 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L1.83 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.51.41 1.05.71 1.63.94l.36 2.54c.04.2.22.42.49.42h3.8c.27 0 .45-.22.49-.42l.36-2.54c.58-.23 1.12-.53 1.63-.94l2.39.96c.21.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>`,
-    users: `<svg viewBox="0 0 24 24" class="ico"><path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0z"/><path d="M2 21c0-4 4-7 10-7s10 3 10 7z"/></svg>`,
-    sun: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
-    moon: `<svg viewBox="0 0 24 24" class="ico"><path d="M21 12.8A8.5 8.5 0 0 1 11.2 3a7 7 0 1 0 9.8 9.8z"/></svg>`,
-    eye: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 5c7 0 10 7 10 7s-3 7-10 7S2 12 2 12s3-7 10-7z"/><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`,
-    edit:`<svg viewBox="0 0 24 24" class="ico"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
-trash:`<svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>`,
-plus:`<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
-palette:`<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 2 0 0 0 2-2c0-1.1-.9-2-2-2h-1a3 3 0 0 1 0-6h6a4 4 0 0 0 0-8h-6z"/></svg>`,
+  burger: `<svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>`,
 
+  // меню
+  home: `<img src="./icons/asosiy.svg" class="ico" alt="">`,
+  tasks: `<img src="./icons/tasks.svg" class="ico" alt="">`,
+  projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
+  courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
+  clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
+  settings: `<img src="./icons/settings.svg" class="ico" alt="">`,
+  users: `<img src="./icons/users.svg" class="ico" alt="">`,
+
+  // темы/защита глаз
+  sun: `<img src="./icons/light.svg" class="ico" alt="">`,
+  moon: `<img src="./icons/dark.svg" class="ico" alt="">`,
+  eye: `<img src="./icons/eye.svg" class="ico" alt="">`,
+
+  // действия
+  edit: `<img src="./icons/edit.svg" class="ico" alt="">`,
+  trash: `<img src="./icons/delete.svg" class="ico" alt="">`,
+
+  // оставляем как было (у тебя их в списке иконок нет)
+  plus: `<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
+  palette: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 2 0 0 0 2-2c0-1.1-.9-2-2-2h-1a3 3 0 0 1 0-6h6a4 4 0 0 0 0-8h-6z"/></svg>`,
   };
+
 
   const Toast = {
     host: null,
