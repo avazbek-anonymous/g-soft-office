@@ -1928,7 +1928,7 @@ select option{
     }
   };
 
-   function bindTouchDrag(cardEl, onDrop) {
+  function bindTouchDrag(cardEl, onDrop) {
   // поддержка: Pointer Events (touch + pen + мышь)
   let dragging = false;
   let started = false;
@@ -1937,6 +1937,17 @@ select option{
   let ghost = null;
   let pointerId = null;
   let lastList = null;
+
+  const getCardId = () => {
+    // у тебя на карточках стоит data-id
+    const raw =
+      (cardEl && cardEl.dataset && (cardEl.dataset.id || cardEl.dataset.taskId || cardEl.dataset.projectId || cardEl.dataset.courseId)) ||
+      cardEl.getAttribute?.("data-id") ||
+      null;
+
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : raw; // в норме будет number
+  };
 
   const clearHover = () => {
     if (lastList) {
@@ -2044,7 +2055,14 @@ select option{
       const status = target?.dataset?.drop || target?.getAttribute?.("data-drop") || null;
 
       if (status) {
-        onDrop?.(status);
+        const id = getCardId();
+
+        // ✅ FIX: если обработчик ждёт (id, status) — передаём так
+        // ✅ иначе оставляем старое поведение (status)
+        if (typeof onDrop === "function") {
+          if (onDrop.length >= 2) onDrop(id, status);
+          else onDrop(status);
+        }
       }
     }
 
@@ -2059,6 +2077,7 @@ select option{
   cardEl.addEventListener("pointerup", finish, { passive: false });
   cardEl.addEventListener("pointercancel", finish, { passive: false });
 }
+
 
 
 
@@ -5504,8 +5523,11 @@ App.renderClients = async function(host){
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
-                  location.hash="#/courses";
-                  Toast.show("Courses → (open later)", "ok");
+                  Modal.close(); // закрыть карточку компании
+                  setHash("/courses", {
+                    open: String(x.id),           // открыть конкретный курс
+                    company_id: String(c.id || "")// (опционально) фильтр по компании
+                  });
                 }}, t("clients_open"))
               )
           )))
