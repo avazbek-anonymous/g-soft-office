@@ -1132,6 +1132,7 @@ text-decoration:none;
 .topLeft .iconBtn .icoWrap .ico {
   width:18px!important;
   height:18px!important;
+  filter: none!important;
 }
 .ico{
   width:25px;
