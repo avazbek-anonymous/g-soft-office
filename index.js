@@ -1208,7 +1208,7 @@ text-decoration:none;
 .kanbanWrap{
   --cols:7;
   display:grid;
-  grid-template-columns:repeat(var(--cols), minmax(260px, 1fr));
+  grid-template-columns:repeat(var(--cols), minmax(290px, 1fr));
   gap:12px;
   align-items:stretch;
   overflow:auto;
