@@ -2284,8 +2284,6 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
       }
     };
 
-    const canEdit = (row) => (row.created_by === App.state.user.id) || isAdmin || isRop;
-    const canStart = (row) => (row.assignee_user_id === App.state.user.id) || isAdmin || isRop;
 
     async function doMove(id, status, extra = {}) {
       try {
