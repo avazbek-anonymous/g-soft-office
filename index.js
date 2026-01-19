@@ -4137,6 +4137,9 @@ App.renderProjects = async function (host) {
       if (p.pm_name) {
         bodyParts.push(el("div", { class: "pLine" }, "👤 ", el("b", {}, p.pm_name)));
       }
+      if (p.comment) {
+        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "💬 ", el("b", {}, p.comment)));
+      }
     }
 
     const btnTasks = el("button", { class: "btn ghost mini", type: "button", onClick: (e) => { e.stopPropagation(); openTasks(p.id); } }, t("open_tasks") || "Tasks");
