@@ -4163,27 +4163,45 @@ App.renderProjects = async function (host) {
   };
 
   const render = () => {
-    // clear
-    for (const c of statusCols) {
-      colEls[c.key].list.innerHTML = "";
-    }
+  const q = (qInp.value || "").trim().toLowerCase();
 
-    // group + render
-    const counts = {};
-    for (const c of statusCols) counts[c.key] = 0;
+  const listSrc = !q ? all : all.filter(p => {
+    const hay = [
+      p.id,
+      p.company_name,
+      p.owner_full_name, p.owner_phone1, p.owner_phone2,
+      p.service_name_ru, p.service_name_uz, p.service_name_en,
+      p.pm_name,
+      p.status,
+      p.comment,
+      p.cancel_reason,
+      p.amount, p.currency,
+      p.meeting_at ? fmtDate(p.meeting_at) : "",
+      p.deadline_at ? fmtDate(p.deadline_at) : "",
+    ].filter(Boolean).join(" ").toLowerCase();
 
-    for (const p of all) {
-      const obj = cardFor(p);
-      const key = obj.st;
-      if (!colEls[key]) continue;
-      colEls[key].list.appendChild(obj.card);
-      counts[key]++;
-    }
+    return hay.includes(q);
+  });
 
-    for (const c of statusCols) {
-      colEls[c.key].countEl.textContent = String(counts[c.key] || 0);
-    }
-  };
+  // clear
+  for (const c of statusCols) colEls[c.key].list.innerHTML = "";
+
+  const counts = {};
+  for (const c of statusCols) counts[c.key] = 0;
+
+  for (const p of listSrc) {
+    const obj = cardFor(p);
+    const key = obj.st;
+    if (!colEls[key]) continue;
+    colEls[key].list.appendChild(obj.card);
+    counts[key]++;
+  }
+
+  for (const c of statusCols) {
+    colEls[c.key].countEl.textContent = String(counts[c.key] || 0);
+  }
+};
+
 
   let loadTimer = null;
   const load = async () => {
@@ -4199,8 +4217,9 @@ App.renderProjects = async function (host) {
   // debounce search
   qInp.addEventListener("input", () => {
     clearTimeout(loadTimer);
-    loadTimer = setTimeout(load, 250);
+    loadTimer = setTimeout(render, 150);
   });
+
   if (pmSel) pmSel.addEventListener("change", load);
   svcSelFilter.addEventListener("change", load);
 
@@ -4531,12 +4550,13 @@ pmSel.addEventListener("change", () => {
     );
     svcSel.value = String(p.service_type_id || "");
 
-    if (!App.state.cache.users) {
+    // --- PM picker: PM list + "Other" => show all users ---
+if (!App.state.cache.users) {
   const list = await API.usersTryList();
   App.state.cache.users = list || [];
 }
-const allUsers = App.state.cache.users || [];
-const pmUsers = allUsers.filter(u => u.role === "pm");
+const allUsers = (App.state.cache.users || []).filter(u => Number(u.is_active) === 1);
+const pmUsers  = allUsers.filter(u => u.role === "pm");
 
 const otherLabel =
   (App.state.lang === "uz") ? "Boshqa" :
@@ -4557,14 +4577,16 @@ for (const u of allUsers) {
 }
 
 // preset: текущий pm_user_id проекта
-const presetId = Number(project.pm_user_id || 0); // ⚠️ project = твой объект проекта в edit
+const presetId   = Number(p.pm_user_id || 0);
 const presetIsPm = pmUsers.some(u => Number(u.id) === presetId);
+
 if (presetId && !presetIsPm) {
   pmSel.value = "__other__";
   pmAnySel.style.display = "";
   pmAnySel.value = String(presetId);
 } else if (presetId) {
   pmSel.value = String(presetId);
+  pmAnySel.style.display = "none";
 }
 
 pmSel.addEventListener("change", () => {
@@ -4576,7 +4598,6 @@ pmSel.addEventListener("change", () => {
   }
 });
 
-    pmSel.value = String(p.pm_user_id || App.state.user.id);
 
     const meetInp = el("input", { class: "input", type: "datetime-local", value: toLocalInput(p.meeting_at) });
     const dlInp   = el("input", { class: "input", type: "datetime-local", value: toLocalInput(p.deadline_at) });
