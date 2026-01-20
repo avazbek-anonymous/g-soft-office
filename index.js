@@ -210,6 +210,7 @@ pm_label: "PM",
 open_tasks: "Открыть задачи",
 filter_project: "Проект",
 filter_project_all: "Все",
+telegram_id: "Telegram ID",
 
 
     },
@@ -358,6 +359,7 @@ pm_label: "PM",
 open_tasks: "Vazifalarni ochish",
 filter_project: "Loyiha",
 filter_project_all: "Barchasi",
+telegram_id: "Telegram ID",
 
     },
     en: {
@@ -505,6 +507,7 @@ pm_label: "PM",
 open_tasks: "Open tasks",
 filter_project: "Project",
 filter_project_all: "All",
+telegram_id: "Telegram ID",
 
     }
   };
@@ -2847,664 +2850,646 @@ createBtn.addEventListener("click", () => {
     await load();
   };
 
-  App.renderUsers = async function (host) {
-    const role = App.state.user.role;
-    if (role !== "admin") {
-      host.innerHTML = "";
-      host.appendChild(el("div", {
-          class: "card cardPad vcol gap10"
-        },
-        el("div", {
-          style: "font-weight:900"
-        }, "Forbidden"),
-        el("div", {
-          class: "muted"
-        }, "Only admin")
-      ));
-      return;
-    }
+App.renderUsers = async function(host) {
+  if (!isAdmin()) {
+    host.appendChild(el("div", { class: "card cardPad" }, t("no_access")));
+    return;
+  }
 
-    const top = el("div", {
-        class: "card cardPad vcol gap12"
+  const state = {
+    users: [],
+    loading: true,
+    error: null
+  };
+
+  const load = async () => {
+    state.loading = true;
+    state.error = null;
+    render();
+    try {
+      const r = await API.users.list();
+      state.users = (r && r.data) ? r.data : [];
+    } catch (e) {
+      state.error = e.message || "error";
+    } finally {
+      state.loading = false;
+      render();
+    }
+  };
+
+  const wrap = el("div", {
+      class: "vcol gap12"
+    },
+    el("div", {
+        class: "hrow gap10 wrap"
       },
       el("div", {
-        style: "font-weight:900"
-      }, t("route_users")),
+        class: "hTitle"
+      }, t("users")),
+      el("div", {
+        class: "hspacer"
+      }),
+      el("button", {
+        class: "btn primary",
+        id: "uCreateBtn"
+      }, t("create"))
+    ),
+    el("div", {
+        class: "card cardPad vcol gap10"
+      },
       el("div", {
           class: "uToolbar"
         },
         el("input", {
+          class: "inp",
           id: "uSearch",
-          placeholder: t("search"),
-          style: "min-width:240px; flex:1"
+          placeholder: t("search")
         }),
         el("div", {
-            class: "seg",
-            title: "Filter"
+            class: "seg"
           },
           el("button", {
-            type: "button",
-            id: "uOnlyActiveBtn",
-            class: "active"
-          }, t("only_active")),
+            class: "segBtn active",
+            id: "uOnlyActive"
+          }, t("active")),
           el("button", {
-            type: "button",
-            id: "uAllBtn"
-          }, t("all_users"))
+            class: "segBtn",
+            id: "uAll"
+          }, t("all"))
+        )
+      ),
+      el("div", {
+        id: "uList",
+        class: "vcol gap8"
+      })
+    )
+  );
+
+  host.appendChild(wrap);
+
+  const listEl = $("#uList");
+  const searchInp = $("#uSearch");
+  const onlyActiveBtn = $("#uOnlyActive");
+  const allBtn = $("#uAll");
+  const createBtn = $("#uCreateBtn");
+
+  let onlyActive = true;
+
+  function render() {
+    listEl.innerHTML = "";
+
+    if (state.loading) {
+      listEl.appendChild(el("div", {
+        class: "muted"
+      }, t("loading")));
+      return;
+    }
+    if (state.error) {
+      listEl.appendChild(el("div", {
+        class: "muted"
+      }, `${t("toast_error")}: ${state.error}`));
+      return;
+    }
+
+    const q = (searchInp.value || "").trim().toLowerCase();
+
+    let rows = state.users.slice();
+
+    if (onlyActive) {
+      rows = rows.filter(u => Number(u.is_active) === 1);
+    }
+
+    if (q) {
+      rows = rows.filter(u => {
+        const s = `${u.id} ${u.full_name||""} ${u.login||""} ${u.phone||""} ${u.telegram_id||""} ${u.role||""}`.toLowerCase();
+        return s.includes(q);
+      });
+    }
+
+    if (!rows.length) {
+      listEl.appendChild(el("div", {
+        class: "muted"
+      }, t("empty")));
+      return;
+    }
+
+    for (const u of rows) {
+      const activeBadge = el("span", {
+        class: "badge " + (Number(u.is_active) ? "ok" : "bad")
+      }, Number(u.is_active) ? "ON" : "OFF");
+
+      const uTitle = `${u.full_name || "—"}`;
+      const uMeta = `${t("role")}: ${u.role} • ${t("login")}: ${u.login} • ${t("telegram_id")}: ${u.telegram_id || "—"}`;
+
+      const row = el("div", {
+          class: "uRow"
+        },
+        el("div", {
+          class: "uId"
+        }, `#${u.id}`),
+        el("div", {
+            class: "vcol"
+          },
+          el("div", {
+            class: "uTitle"
+          }, uTitle),
+          el("div", {
+            class: "uMeta"
+          }, uMeta)
         ),
-        el("button", {
-          class: "btn primary",
-          type: "button",
-          id: "uCreateBtn"
-        }, t("user_create"))
+        el("div", {
+          class: "uHideLg"
+        }, u.phone || "—"),
+        el("div", {
+          class: "uHideLg"
+        }, u.last_login_at ? fmtDateTime(u.last_login_at) : "—"),
+        el("div", {}, activeBadge),
+        el("div", {
+          class: "uHideLg"
+        }, u.created_at ? fmtDateTime(u.created_at) : "—"),
+        el("div", {
+            class: "hrow gap8"
+          },
+          el("button", {
+            class: "btn icon",
+            title: t("view"),
+            onClick: () => openUserView(u)
+          }, ICONS.eye),
+          el("button", {
+            class: "btn icon",
+            title: t("edit"),
+            onClick: () => openUserEdit(u)
+          }, ICONS.edit),
+          el("button", {
+            class: "btn icon",
+            title: t("delete"),
+            onClick: () => openDeactivate(u)
+          }, ICONS.delete),
+          el("button", {
+            class: "btn",
+            title: t("reset_password"),
+            onClick: () => openReset(u)
+          }, t("reset_password_short"))
+        )
+      );
+
+      listEl.appendChild(row);
+    }
+  }
+
+  function openUserView(u) {
+    Modal.open(t("user_view"), el("div", {
+        class: "vcol gap10"
+      },
+      el("div", {
+          class: "grid2"
+        },
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, "ID"),
+          el("div", {}, `#${u.id}`)
+        ),
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("status")),
+          el("div", {}, Number(u.is_active) ? "Active" : "Inactive")
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("full_name")),
+          el("div", {}, u.full_name || "—")
+        ),
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("role")),
+          el("div", {}, u.role || "—")
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("login")),
+          el("div", {}, u.login || "—")
+        ),
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("phone")),
+          el("div", {}, u.phone || "—")
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("telegram_id")),
+          el("div", {}, u.telegram_id || "—")
+        ),
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("active")),
+          el("div", {}, Number(u.is_active) ? "ON" : "OFF")
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("created_at")),
+          el("div", {}, u.created_at ? fmtDateTime(u.created_at) : "—")
+        ),
+        el("div", {
+            class: "vcol gap6"
+          },
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("last_login")),
+          el("div", {}, u.last_login_at ? fmtDateTime(u.last_login_at) : "—")
+        )
+      )
+    ), [{
+      label: t("close"),
+      kind: "primary",
+      onClick: () => Modal.close()
+    }]);
+  }
+
+  function openUserEdit(u) {
+    const fullName = el("input", {
+      value: u.full_name || "",
+      placeholder: t("full_name")
+    });
+    const phone = el("input", {
+      value: u.phone || "",
+      placeholder: t("phone")
+    });
+    const login = el("input", {
+      value: u.login || "",
+      placeholder: t("login")
+    });
+    const telegram = el("input", {
+      value: u.telegram_id || "",
+      placeholder: t("telegram_id")
+    });
+
+    const roleSel = el("select", {});
+    for (const rr of ROLES) {
+      roleSel.appendChild(el("option", {
+        value: rr,
+        selected: rr === u.role
+      }, rr));
+    }
+
+    const activeSel = el("select", {});
+    activeSel.appendChild(el("option", {
+      value: "1",
+      selected: Number(u.is_active) === 1
+    }, "ON"));
+    activeSel.appendChild(el("option", {
+      value: "0",
+      selected: Number(u.is_active) === 0
+    }, "OFF"));
+
+    const form = el("div", {
+        class: "vcol gap10"
+      },
+      el("div", {
+          class: "grid2"
+        },
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("full_name")),
+          fullName
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("phone")),
+          phone
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("login")),
+          login
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("role")),
+          roleSel
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("telegram_id")),
+          telegram
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("active")),
+          activeSel
+        )
       )
     );
 
-    const listWrap = el("div", {
-        class: "card cardPad vcol gap10"
+    Modal.open(t("user_edit"), form, [{
+        label: t("cancel"),
+        kind: "ghost",
+        onClick: () => Modal.close()
       },
-      el("div", {
-        class: "muted2",
-        id: "uCount",
-        style: "font-size:12px"
-      }, ""),
-      el("div", {
-        class: "uList",
-        id: "uList"
-      }, el("div", {
-        class: "muted"
-      }, t("loading")))
-    );
-
-    host.append(top, listWrap);
-
-    const searchInp = $("#uSearch", host);
-    const onlyActiveBtn = $("#uOnlyActiveBtn", host);
-    const allBtn = $("#uAllBtn", host);
-    const createBtn = $("#uCreateBtn", host);
-    const uList = $("#uList", host);
-    const uCount = $("#uCount", host);
-
-    let onlyActive = true;
-    let all = [];
-
-    const ROLES = ["admin", "pm", "fin", "sale", "rop"];
-
-    function fmtTs(ts) {
-      if (!ts) return "—";
-      try {
-        return fmtDate(ts);
-      } catch {
-        return "—";
-      }
-    }
-
-    function render() {
-      const q = (searchInp.value || "").trim().toLowerCase();
-      const rows = all.filter(u => {
-        if (onlyActive && !Number(u.is_active)) return false;
-        if (!q) return true;
-        const s = `${u.id} ${u.full_name||""} ${u.login||""} ${u.phone||""} ${u.role||""}`.toLowerCase();
-        return s.includes(q);
-      });
-
-      uCount.textContent = `${t("users_total")}: ${rows.length}`;
-
-      uList.innerHTML = "";
-      if (!rows.length) {
-        uList.appendChild(el("div", {
-          class: "muted"
-        }, t("no_data")));
-        return;
-      }
-
-      for (const u of rows) {
-        const activeBadge = Number(u.is_active) ?
-          el("span", {
-            class: "badge ok"
-          }, "ON") :
-          el("span", {
-            class: "badge off"
-          }, "OFF");
-
-        const actions = el("div", {
-            class: "uActions hdrActions"
-          },
-          el("button", {
-            class: "btn mini ghost",
-            type: "button",
-            onClick: () => openUserView(u)
-          }, t("open")),
-          el("button", {
-            class: "btn mini ghost",
-            type: "button",
-            onClick: () => openUserEdit(u)
-          }, "✎ " + t("edit")),
-          el("button", {
-            class: "btn mini ghost",
-            type: "button",
-            onClick: () => openResetPassword(u)
-          }, t("reset_password")),
-          Number(u.is_active) ?
-          el("button", {
-            class: "btn mini danger",
-            type: "button",
-            onClick: () => deactivateUser(u)
-          }, t("deactivate")) :
-          el("button", {
-            class: "btn mini primary",
-            type: "button",
-            onClick: () => activateUser(u)
-          }, t("activate"))
-        );
-
-        const row = el("div", {
-            class: "uCard"
-          },
-          el("div", {
-              class: "uRow"
-            },
-            el("div", {
-              class: "uId"
-            }, `#${u.id}`),
-            el("div", {
-                class: "vcol gap8"
-              },
-              el("div", {
-                class: "uName"
-              }, u.full_name || "—"),
-              el("div", {
-                class: "uMeta"
-              }, `${t("role")}: ${u.role}  •  ${t("login")}: ${u.login}`)
-            ),
-            el("div", {
-                class: "vcol gap8 uHideLg"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("phone")),
-              el("div", {}, u.phone || "—")
-            ),
-            el("div", {
-                class: "vcol gap8 uHideLg"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("last_login")),
-              el("div", {}, fmtTs(u.last_login_at))
-            ),
-            el("div", {
-              class: "hrow gap8",
-              style: "align-items:center"
-            }, activeBadge, el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("active"))),
-            el("div", {
-                class: "vcol gap8 uHideLg"
-              },
-              el("div", {
-                class: "muted2",
-                style: "font-size:12px"
-              }, t("created_at")),
-              el("div", {}, fmtTs(u.created_at))
-            ),
-            actions
-          )
-        );
-
-        uList.appendChild(row);
-      }
-    }
-
-    async function load() {
-      try {
-        const r = await API.users.list();
-        all = (r.data || []).slice();
-        App.state.cache.users = all; // чтобы tasks-admin фильтр всегда был актуальным
-        render();
-      } catch (e) {
-        uList.innerHTML = "";
-        uList.appendChild(el("div", {
-          class: "muted"
-        }, `${t("toast_error")}: ${e.message||"error"}`));
-      }
-    }
-
-    function openUserView(u) {
-      const body = el("div", {
-          class: "vcol gap10"
-        },
-        el("div", {
-            class: "grid2"
-          },
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("full_name")),
-            el("div", {
-              style: "font-weight:900"
-            }, u.full_name || "—")
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("role")),
-            el("div", {
-              style: "font-weight:900"
-            }, u.role)
-          )
-        ),
-        el("div", {
-            class: "grid2"
-          },
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("login")),
-            el("div", {}, u.login)
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("phone")),
-            el("div", {}, u.phone || "—")
-          )
-        ),
-        el("div", {
-            class: "grid2"
-          },
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("created_at")),
-            el("div", {}, fmtTs(u.created_at))
-          ),
-          el("div", {
-              class: "vcol gap8"
-            },
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("last_login")),
-            el("div", {}, fmtTs(u.last_login_at))
-          )
-        ),
-        el("div", {
-          class: "muted2",
-          style: "font-size:12px"
-        }, `${t("updated_at")}: ${fmtTs(u.updated_at)}`)
-      );
-
-      Modal.open(`${t("open")} #${u.id}`, body, [{
-          label: "✎ " + t("edit"),
-          kind: "primary",
-          onClick: () => {
-            Modal.close();
-            openUserEdit(u);
-          }
-        },
-        {
-          label: t("reset_password"),
-          kind: "ghost",
-          onClick: () => {
-            Modal.close();
-            openResetPassword(u);
-          }
-        },
-        {
-          label: t("close"),
-          kind: "ghost",
-          onClick: () => Modal.close()
-        }
-      ]);
-    }
-
-    function openUserEdit(u) {
-      const fullName = el("input", {
-        value: u.full_name || "",
-        placeholder: t("full_name")
-      });
-      const phone = el("input", {
-        value: u.phone || "",
-        placeholder: t("phone")
-      });
-      const login = el("input", {
-        value: u.login || "",
-        placeholder: t("login")
-      });
-
-      const roleSel = el("select", {});
-      for (const rr of ROLES) {
-        roleSel.appendChild(el("option", {
-          value: rr,
-          selected: rr === u.role
-        }, rr));
-      }
-
-      const activeSel = el("select", {});
-      activeSel.appendChild(el("option", {
-        value: "1",
-        selected: Number(u.is_active) === 1
-      }, "ON"));
-      activeSel.appendChild(el("option", {
-        value: "0",
-        selected: Number(u.is_active) === 0
-      }, "OFF"));
-
-      const form = el("div", {
-          class: "vcol gap10"
-        },
-        el("div", {
-            class: "grid2"
-          },
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("full_name")),
-            fullName
-          ),
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("phone")),
-            phone
-          )
-        ),
-        el("div", {
-            class: "grid2"
-          },
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("login")),
-            login
-          ),
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("role")),
-            roleSel
-          )
-        ),
-        el("div", {
-            class: "grid2"
-          },
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("active")),
-            activeSel
-          ),
-          el("div", {})
-        )
-      );
-
-      Modal.open("✎ " + t("edit"), form, [{
-          label: t("cancel"),
-          kind: "ghost",
-          onClick: () => Modal.close()
-        },
-        {
-          label: t("save"),
-          kind: "primary",
-          onClick: async () => {
-            try {
-              await API.users.update(u.id, {
-                full_name: (fullName.value || "").trim() || null,
-                phone: (phone.value || "").trim() || null,
-                login: (login.value || "").trim() || null,
-                role: roleSel.value,
-                is_active: Number(activeSel.value) ? 1 : 0
-              });
-              Toast.show(t("user_updated"), "ok");
-              Modal.close();
-              await load();
-            } catch (e) {
-              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-            }
-          }
-        }
-      ]);
-    }
-
-    function openResetPassword(u) {
-      const pass = el("input", {
-        type: "password",
-        placeholder: t("new_password")
-      });
-      const body = el("div", {
-          class: "vcol gap10"
-        },
-        el("div", {
-          class: "muted"
-        }, `${u.full_name || u.login} (#${u.id})`),
-        el("label", {
-            class: "vcol gap8"
-          },
-          el("span", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, t("new_password")),
-          pass
-        )
-      );
-
-      Modal.open(t("reset_password"), body, [{
-          label: t("cancel"),
-          kind: "ghost",
-          onClick: () => Modal.close()
-        },
-        {
-          label: t("confirm"),
-          kind: "primary",
-          onClick: async () => {
-            const np = (pass.value || "").trim();
-            if (!np) return;
-            try {
-              await API.users.resetPassword(u.id, np);
-              Toast.show(t("password_changed"), "ok");
-              Modal.close();
-            } catch (e) {
-              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-            }
-          }
-        }
-      ]);
-
-      setTimeout(() => pass.focus(), 0);
-    }
-
-    async function deactivateUser(u) {
-      const ok = await Modal.confirm(t("confirm"), `${t("deactivate")} #${u.id}?`);
-      if (!ok) return;
-      try {
-        await API.users.deactivate(u.id);
-        Toast.show(t("user_deactivated"), "ok");
-        await load();
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-      }
-    }
-
-    async function activateUser(u) {
-      try {
-        await API.users.update(u.id, {
-          is_active: 1
-        });
-        Toast.show(t("user_updated"), "ok");
-        await load();
-      } catch (e) {
-        Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-      }
-    }
-
-    function openCreate() {
-      const fullName = el("input", {
-        placeholder: t("full_name")
-      });
-      const phone = el("input", {
-        placeholder: t("phone")
-      });
-      const login = el("input", {
-        placeholder: t("login")
-      });
-      const pass = el("input", {
-        type: "password",
-        placeholder: t("new_password")
-      });
-
-      const roleSel = el("select", {});
-      for (const rr of ROLES) {
-        roleSel.appendChild(el("option", {
-          value: rr
-        }, rr));
-      }
-
-      const form = el("div", {
-          class: "vcol gap10"
-        },
-        el("div", {
-            class: "grid2"
-          },
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("full_name")),
-            fullName
-          ),
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("phone")),
-            phone
-          )
-        ),
-        el("div", {
-            class: "grid2"
-          },
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("login")),
-            login
-          ),
-          el("label", {
-              class: "vcol gap8"
-            },
-            el("span", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, t("role")),
-            roleSel
-          )
-        ),
-        el("label", {
-            class: "vcol gap8"
-          },
-          el("span", {
-            class: "muted2",
-            style: "font-size:12px"
-          }, t("new_password")),
-          pass
-        )
-      );
-
-      Modal.open(t("user_create"), form, [{
-          label: t("cancel"),
-          kind: "ghost",
-          onClick: () => Modal.close()
-        },
-        {
-          label: t("create"),
-          kind: "primary",
-          onClick: async () => {
-            const payload = {
+      {
+        label: t("save"),
+        kind: "primary",
+        onClick: async () => {
+          try {
+            await API.users.update(u.id, {
               full_name: (fullName.value || "").trim(),
               phone: (phone.value || "").trim() || null,
+              telegram_id: (telegram.value || "").trim() || null,
               login: (login.value || "").trim(),
               role: roleSel.value,
-              new_password: (pass.value || "").trim()
-            };
-            if (!payload.full_name || !payload.login || !payload.new_password) return;
-            try {
-              await API.users.create(payload);
-              Toast.show(t("user_created"), "ok");
-              Modal.close();
-              await load();
-            } catch (e) {
-              Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
-            }
+              is_active: Number(activeSel.value) ? 1 : 0
+            });
+            Toast.show(t("user_updated"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
           }
         }
-      ]);
+      }
+    ]);
+  }
 
-      setTimeout(() => fullName.focus(), 0);
+  function openReset(u) {
+    const np = prompt(t("enter_new_password"));
+    if (!np) return;
+    API.users.resetPassword(u.id, np)
+      .then(() => Toast.show(t("password_reset_ok"), "ok"))
+      .catch(e => Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad"));
+  }
+
+  function openDeactivate(u) {
+    Modal.open(t("confirm"), el("div", {
+      class: "vcol gap10"
+    }, el("div", {
+      style: "font-weight:800"
+    }, t("user_deactivate_q")), el("div", {
+      class: "muted2"
+    }, u.full_name || "")), [{
+        label: t("cancel"),
+        kind: "ghost",
+        onClick: () => Modal.close()
+      },
+      {
+        label: t("delete"),
+        kind: "danger",
+        onClick: async () => {
+          try {
+            await API.users.deactivate(u.id);
+            Toast.show(t("user_deactivated"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+          }
+        }
+      }
+    ]);
+  }
+
+  async function activateUser(u) {
+    try {
+      await API.users.update(u.id, {
+        is_active: 1
+      });
+      Toast.show(t("user_updated"), "ok");
+      await load();
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+    }
+  }
+
+  function openCreate() {
+    const fullName = el("input", {
+      placeholder: t("full_name")
+    });
+    const phone = el("input", {
+      placeholder: t("phone")
+    });
+    const login = el("input", {
+      placeholder: t("login")
+    });
+    const telegram = el("input", {
+      placeholder: t("telegram_id")
+    });
+    const pass = el("input", {
+      type: "password",
+      placeholder: t("new_password")
+    });
+
+    const roleSel = el("select", {});
+    for (const rr of ROLES) {
+      roleSel.appendChild(el("option", {
+        value: rr
+      }, rr));
     }
 
-    onlyActiveBtn.addEventListener("click", () => {
-      onlyActive = true;
-      onlyActiveBtn.classList.add("active");
-      allBtn.classList.remove("active");
-      render();
-    });
-    allBtn.addEventListener("click", () => {
-      onlyActive = false;
-      allBtn.classList.add("active");
-      onlyActiveBtn.classList.remove("active");
-      render();
-    });
-    searchInp.addEventListener("input", () => render());
-    createBtn.addEventListener("click", () => openCreate());
+    const form = el("div", {
+        class: "vcol gap10"
+      },
+      el("div", {
+          class: "grid2"
+        },
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("full_name")),
+          fullName
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("phone")),
+          phone
+        )
+      ),
+      el("div", {
+          class: "grid2"
+        },
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("login")),
+          login
+        ),
+        el("label", {
+            class: "vcol gap8"
+          },
+          el("span", {
+            class: "muted2",
+            style: "font-size:12px"
+          }, t("role")),
+          roleSel
+        )
+      ),
+      el("label", {
+          class: "vcol gap8"
+        },
+        el("span", {
+          class: "muted2",
+          style: "font-size:12px"
+        }, t("telegram_id")),
+        telegram
+      ),
+      el("label", {
+          class: "vcol gap8"
+        },
+        el("span", {
+          class: "muted2",
+          style: "font-size:12px"
+        }, t("new_password")),
+        pass
+      )
+    );
 
-    await load();
-  };
+    Modal.open(t("user_create"), form, [{
+        label: t("cancel"),
+        kind: "ghost",
+        onClick: () => Modal.close()
+      },
+      {
+        label: t("create"),
+        kind: "primary",
+        onClick: async () => {
+          const payload = {
+            full_name: (fullName.value || "").trim(),
+            phone: (phone.value || "").trim() || null,
+            telegram_id: (telegram.value || "").trim() || null,
+            login: (login.value || "").trim(),
+            role: roleSel.value,
+            new_password: (pass.value || "").trim()
+          };
+          if (!payload.full_name || !payload.login || !payload.new_password) return;
+          try {
+            await API.users.create(payload);
+            Toast.show(t("user_created"), "ok");
+            Modal.close();
+            await load();
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`, "bad");
+          }
+        }
+      }
+    ]);
+
+    setTimeout(() => fullName.focus(), 0);
+  }
+
+  onlyActiveBtn.addEventListener("click", () => {
+    onlyActive = true;
+    onlyActiveBtn.classList.add("active");
+    allBtn.classList.remove("active");
+    render();
+  });
+  allBtn.addEventListener("click", () => {
+    onlyActive = false;
+    allBtn.classList.add("active");
+    onlyActiveBtn.classList.remove("active");
+    render();
+  });
+  searchInp.addEventListener("input", () => render());
+  createBtn.addEventListener("click", () => openCreate());
+
+  await load();
+};
 
 
   
 
-    function isLoginPage(){
+  function isLoginPage(){
     const p = ((location.pathname || "/").replace(/\/+$/,"")) || "/";
     return (
       p === "/login" ||
