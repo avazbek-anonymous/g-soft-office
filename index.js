@@ -4562,6 +4562,16 @@ App.renderCourses = async function (host) {
       if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
       if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To‘lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
       if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
+            // Коммент курса (course_lead.comment) — показываем на карточке
+      if (x.comment) {
+        lines.push(
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px;margin-top:6px;white-space:pre-wrap"
+          }, x.comment)
+        );
+      }
+
     }
 
     const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(x.id); } }, t("open") || "Open");
@@ -4791,10 +4801,38 @@ App.renderCourses = async function (host) {
           el("b", {}, `#${x.id}`),
           el("span", {}, tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status }))
         ),
-        el("div", { class: "vcol gap8" },
+                el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
-          el("div", {}, el("b", {}, x.lead_full_name || "—"), x.lead_phone1 ? el("span", { class: "muted2", style: "margin-left:10px" }, x.lead_phone1) : null)
+
+          (() => {
+            // пробуем разные возможные поля (на случай как у тебя отдает API)
+            const source = x.lead_source_name || x.source_name || x.lead_source || "";
+            const sphere = x.lead_sphere_name || x.sphere_name || x.lead_sphere || "";
+            const city   = x.lead_city_name   || x.city_name   || x.lead_city   || "";
+            const lcomm  = x.lead_comment || x.lead_client_comment || x.lead_note || "";
+
+            const short = (s, n=80) => (String(s || "").length > n ? String(s).slice(0, n) + "…" : String(s || ""));
+
+            const parts = [];
+
+            // ФИО
+            parts.push(el("span", {}, el("b", {}, x.lead_full_name || "—")));
+
+            // Телефон
+            if (x.lead_phone1) parts.push(el("span", {}, x.lead_phone1));
+
+            // Источник / Сфера / Город
+            if (source) parts.push(el("span", {}, `${tr({ru:"Источник",uz:"Manba",en:"Source"})}: `, el("b", {}, source)));
+            if (sphere) parts.push(el("span", {}, `${tr({ru:"Сфера",uz:"Soha",en:"Sphere"})}: `, el("b", {}, sphere)));
+            if (city)   parts.push(el("span", {}, `${tr({ru:"Город",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
+
+            // Коммент лида (в одной строке, но аккуратно подрезаем)
+            if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"Комм.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
+
+            return el("div", { class: "cLine" }, ...parts);
+          })()
         ),
+
         x.company_name ? el("div", { class: "vcol gap6" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
           el("div", {}, x.company_name)
