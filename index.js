@@ -3552,20 +3552,52 @@ App.renderProjects = async function (host) {
     return `${n.toLocaleString(undefined)} ${cur}`;
   };
 
+    const dictListSafe = async (...keys) => {
+    for (const k of keys) {
+      try {
+        const r = await API.settings.dictList(k);
+        if (r && Array.isArray(r.data)) return r;
+      } catch (e) {}
+    }
+    return { data: [] };
+  };
+
   // ---- load refs ----
-  const [svcRes, pmListRaw, companiesRes] = await Promise.all([
-    API.settings.dictList("service_types").catch(() => ({ data: [] })),
-    (isAdmin || isRop) ? API.usersTryList().catch(() => []) : Promise.resolve([]),
+  const [ctRes, companiesRes, leadsRes, citiesRes, sourcesRes, spheresRes] = await Promise.all([
+    API.settings.dictList("course_types").catch(() => ({ data: [] })),
     API.clients.list("company", "").catch(() => ({ data: [] })),
+    API.clients.list("lead", "").catch(() => ({ data: [] })),
+
+    // пробуем разные ключи, потому что у бэка могут быть разные названия
+    dictListSafe("cities", "dict_cities").catch(() => ({ data: [] })),
+    dictListSafe("sources", "dict_sources").catch(() => ({ data: [] })),
+    dictListSafe("spheres", "dict_spheres").catch(() => ({ data: [] })),
   ]);
 
-  const serviceTypes = (svcRes && svcRes.data) ? svcRes.data : [];
-  const pmList = Array.isArray(pmListRaw) ? pmListRaw.filter(u => u.role === "pm" && Number(u.is_active) === 1) : [];
-  let companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
+  const courseTypes = (ctRes && ctRes.data) ? ctRes.data : [];
+  const companies   = (companiesRes && companiesRes.data) ? companiesRes.data : [];
+  const leads       = (leadsRes && leadsRes.data) ? leadsRes.data : [];
 
-  const companyById = (id) => companies.find(x => String(x.id) === String(id));
-  const serviceById = (id) => serviceTypes.find(x => String(x.id) === String(id));
-  const pmById = (id) => pmList.find(x => String(x.id) === String(id));
+  const refs = {
+    cities:  (citiesRes && citiesRes.data)  ? citiesRes.data  : [],
+    sources: (sourcesRes && sourcesRes.data) ? sourcesRes.data : [],
+    spheres: (spheresRes && spheresRes.data) ? spheresRes.data : [],
+  };
+
+  const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
+  const leadById = new Map(leads.map(l => [Number(l.id), l]));
+
+  const pickDictName = (it) => {
+    const nm = it?.name ?? it?.title ?? it?.label ?? "";
+    if (nm && typeof nm === "object") return tr(nm);
+    return String(nm || "");
+  };
+
+  const dictLabel = (arr, id) => {
+    if (!id) return "";
+    const it = (arr || []).find(x => Number(x.id) === Number(id));
+    return it ? (pickDictName(it) || `#${id}`) : `#${id}`;
+  };
 
   // ---- toolbar ----
   const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
@@ -4801,37 +4833,31 @@ App.renderCourses = async function (host) {
           el("b", {}, `#${x.id}`),
           el("span", {}, tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status }))
         ),
-                el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
+                (() => {
+          const leadId = Number(x.lead_client_id || x.lead_id || x.client_id || 0);
+          const l = leadById.get(leadId);
 
-          (() => {
-            // пробуем разные возможные поля (на случай как у тебя отдает API)
-            const source = x.lead_source_name || x.source_name || x.lead_source || "";
-            const sphere = x.lead_sphere_name || x.sphere_name || x.lead_sphere || "";
-            const city   = x.lead_city_name   || x.city_name   || x.lead_city   || "";
-            const lcomm  = x.lead_comment || x.lead_client_comment || x.lead_note || "";
+          const fio   = (l?.full_name || x.lead_full_name || "—");
+          const phone = (l?.phone1 || x.lead_phone1 || "");
+          const city  = l?.city_id ? dictLabel(refs.cities, l.city_id) : "";
+          const src   = l?.source_id ? dictLabel(refs.sources, l.source_id) : "";
+          const sph   = l?.sphere_id ? dictLabel(refs.spheres, l.sphere_id) : "";
+          const lcomm = (l?.comment || "").trim();
 
-            const short = (s, n=80) => (String(s || "").length > n ? String(s).slice(0, n) + "…" : String(s || ""));
+          const parts = [];
+          parts.push(el("span", {}, el("b", {}, fio)));
+          if (phone) parts.push(el("span", {}, phone));
+          if (src)   parts.push(el("span", {}, `${t("client_source") || "Источник"}: `, el("b", {}, src)));
+          if (sph)   parts.push(el("span", {}, `${t("client_sphere") || "Сфера"}: `, el("b", {}, sph)));
+          if (city)  parts.push(el("span", {}, `${t("client_city")   || "Город"}: `, el("b", {}, city)));
+          if (lcomm) parts.push(el("span", { title: lcomm }, `${t("comment") || "Коммент"}: `, el("b", {}, lcomm)));
 
-            const parts = [];
+          return el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
+            el("div", { class: "cLine" }, ...parts)
+          );
+        })(),
 
-            // ФИО
-            parts.push(el("span", {}, el("b", {}, x.lead_full_name || "—")));
-
-            // Телефон
-            if (x.lead_phone1) parts.push(el("span", {}, x.lead_phone1));
-
-            // Источник / Сфера / Город
-            if (source) parts.push(el("span", {}, `${tr({ru:"Источник",uz:"Manba",en:"Source"})}: `, el("b", {}, source)));
-            if (sphere) parts.push(el("span", {}, `${tr({ru:"Сфера",uz:"Soha",en:"Sphere"})}: `, el("b", {}, sphere)));
-            if (city)   parts.push(el("span", {}, `${tr({ru:"Город",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
-
-            // Коммент лида (в одной строке, но аккуратно подрезаем)
-            if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"Комм.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
-
-            return el("div", { class: "cLine" }, ...parts);
-          })()
-        ),
 
         x.company_name ? el("div", { class: "vcol gap6" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
