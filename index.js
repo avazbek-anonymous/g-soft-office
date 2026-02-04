@@ -4395,15 +4395,8 @@ App.renderCourses = async function (host) {
   // ---- toolbar ----
   const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
 
-  const companySel = el("select", { class: "sel" },
-    el("option", { value: "" }, "—"),
-    ...companies.filter(x => Number(x.is_active) === 1).map(c =>
-      el("option", { value: String(c.id) }, companyLabel(c))
-    )
-  );
-
   const typeSel = el("select", { class: "sel" },
-    el("option", { value: "" }, "—"),
+    el("option", { value: "" }, "Kurs turi"),
     ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
       el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
     )
