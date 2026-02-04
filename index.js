@@ -3053,11 +3053,12 @@ createBtn.addEventListener("click", () => {
   }
 
   function openCreate() {
-    const fullName = el("input", {});
-    const phone = el("input", {});
-    const login = el("input", {});
+    const fullName = el("input", {placeholder: t("full_name")});
+    const phone = el("input", {placeholder: t("phone")});
+    const login = el("input", {placeholder: t("login")});
     const telegram = el("input", { placeholder: "Telegram ID" });
-    const pass = el("input", { type: "password" });
+    const pass = el("input", { type: "password" ,
+        placeholder: t("new_password")});
 
     const roleSel = el("select", {});
     ROLES.forEach(r => roleSel.appendChild(el("option", { value: r }, r)));
