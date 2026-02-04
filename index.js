@@ -3573,13 +3573,13 @@ App.renderProjects = async function (host) {
 
   const pmSel = (isAdmin || isRop)
     ? el("select", { class: "sel" },
-        el("option", { value: "" }, "—"),
+        el("option", { value: "" }, "{Barcha PM'lar}"),
         ...pmList.map(u => el("option", { value: String(u.id) }, u.full_name))
       )
     : null;
 
   const svcSelFilter = el("select", { class: "sel" },
-    el("option", { value: "" }, "—"),
+    el("option", { value: "" }, "{Barcha xizmatlar}"),
     ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
       el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
     )
