@@ -4679,7 +4679,7 @@ App.renderCourses = async function (host) {
     const sourceSel = el("select", { class: "input" });
     const sphereSel = el("select", { class: "input" });
     const fillSel = (sel, list) => {
-      sel.appendChild(el("option", { value: "" }, "—”"));
+      sel.appendChild(el("option", { value: "" }, "—"));
       (list || []).forEach(it => {
         const label = (it[`name_${App.state.lang}`] || it.name_uz || it.name_ru || it.name_en || `#${it.id}`);
         sel.appendChild(el("option", { value: String(it.id) }, label));
