@@ -729,25 +729,40 @@ telegram_id: "Telegram ID",
 
   async function apiFetch(path, opts = {}) {
     const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-    const res = await fetch(url, {
-      method: opts.method || "GET",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(opts.headers || {})
-      },
-      body: opts.body ? JSON.stringify(opts.body) : undefined
-    });
-    const ct = res.headers.get("Content-Type") || "";
-    const json = ct.includes("application/json") ? await res.json().catch(() => null) : null;
-    if (!res.ok) {
-      const msg = (json && json.error && json.error.message) ? json.error.message : `HTTP ${res.status}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      err.payload = json;
-      throw err;
+    const controller = new AbortController();
+    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 15000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: opts.method || "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(opts.headers || {})
+        },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        signal: controller.signal
+      });
+      const ct = res.headers.get("Content-Type") || "";
+      const json = ct.includes("application/json") ? await res.json().catch(() => null) : null;
+      if (!res.ok) {
+        const msg = (json && json.error && json.error.message) ? json.error.message : `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.status = res.status;
+        err.payload = json;
+        throw err;
+      }
+      return json;
+    } catch (e) {
+      if (e && e.name === "AbortError") {
+        const err = new Error("Timeout");
+        err.status = 0;
+        throw err;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
     }
-    return json;
   }
 
  const API = {
@@ -1027,9 +1042,12 @@ function applyTheme(){
     };
   }
 
-  function setHash(path, query = {}) {
+  function setHash(path, query = {}, opts = {}) {
     const sp = new URLSearchParams(query);
     const q = sp.toString();
+    if (opts && opts.silent && App && App.state) {
+      App.state.skipRouteOnce = true;
+    }
     window.location.hash = `#${path}${q?"?"+q:""}`;
   }
 
@@ -1792,7 +1810,13 @@ select option{
   };
 
   App.bindRouting = function () {
-  window.addEventListener("hashchange", () => App.routeNow());
+  window.addEventListener("hashchange", () => {
+    if (App.state.skipRouteOnce) {
+      App.state.skipRouteOnce = false;
+      return;
+    }
+    App.routeNow();
+  });
   window.addEventListener("resize", () => {
     App.setSidebar(false);
     if (App.reflowHeaderActions) App.reflowHeaderActions();
@@ -1803,6 +1827,8 @@ select option{
     App.routeNow = function () {
     const { path, query } = parseHash();
     App.state.current = { path, query };
+    App.state.routeId = (App.state.routeId || 0) + 1;
+    const routeId = App.state.routeId;
 
     App.refreshActiveNav();
     App.refreshPageTitle();
@@ -1811,13 +1837,13 @@ select option{
     if (!host) return;
     host.innerHTML = "";
 
-    if (path === "/main") return App.renderMain(host);
-    if (path === "/tasks") return App.renderTasks(host);
-    if (path === "/users") return App.renderUsers(host);
-    if (path === "/settings") return App.renderSettings(host);
-    if (path === "/courses") return App.renderCourses(host);
-    if (path === "/clients") return App.renderClients(host);
-    if (path === "/projects") return App.renderProjects(host);
+    if (path === "/main") return App.renderMain(host, routeId);
+    if (path === "/tasks") return App.renderTasks(host, routeId);
+    if (path === "/users") return App.renderUsers(host, routeId);
+    if (path === "/settings") return App.renderSettings(host, routeId);
+    if (path === "/courses") return App.renderCourses(host, routeId);
+    if (path === "/clients") return App.renderClients(host, routeId);
+    if (path === "/projects") return App.renderProjects(host, routeId);
 
     return App.renderStub(host);
   };
@@ -1836,12 +1862,14 @@ select option{
     ));
   };
 
-  App.renderMain = async function (host) {
+  App.renderMain = async function (host, routeId) {
+    const rid = routeId || App.state.routeId;
     host.appendChild(el("div", {
       class: "muted"
     }, t("loading")));
     try {
       const r = await API.main();
+      if (App.state.routeId !== rid) return;
       const data = r.data || {};
       host.innerHTML = "";
       const box = (title, rows) => {
@@ -2104,7 +2132,8 @@ select option{
 
 
 
-  App.renderTasks = async function (host) {
+  App.renderTasks = async function (host, routeId) {
+    const rid = routeId || App.state.routeId;
     const role = App.state.user.role; 
     const isAdmin = role === "admin";
     const isRop = role === "rop";
@@ -2174,6 +2203,7 @@ select option{
 
     if (!App.state.cache.users) {
       const list = await API.usersTryList();
+      if (App.state.routeId !== rid) return;
       App.state.cache.users = list || [];
 
       // dropdown сверху только у admin — поэтому проверяем
@@ -2189,6 +2219,7 @@ select option{
 
     if (!App.state.cache.projects) {
       const pr = await API.projectsTryList();
+      if (App.state.routeId !== rid) return;
       App.state.cache.projects = pr || [];
     }
 
@@ -2405,6 +2436,7 @@ const r = await API.tasks.list({
   project_id: project_id ? Number(project_id) : null, // ✅ ВАЖНО по ТЗ
 });
 
+        if (App.state.routeId !== rid) return;
         all = (r.data || []).slice();
         render();
         if (openId) openTask(openId);
@@ -2418,8 +2450,9 @@ if (String(q.open_create || "") === "1") {
   try {
     const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
     sp.delete("open_create");
-    const qs2 = sp.toString();
-    window.location.hash = qs2 ? `#/tasks?${qs2}` : "#/tasks";
+    const qobj = {};
+    for (const [k, v] of sp.entries()) qobj[k] = v;
+    setHash("/tasks", qobj, { silent: true });
   } catch {}
 }
 
@@ -2850,7 +2883,8 @@ createBtn.addEventListener("click", () => {
     await load();
   };
 
-  App.renderUsers = async function (host) {
+  App.renderUsers = async function (host, routeId) {
+    const rid = routeId || App.state.routeId;
   const role = App.state.user.role;
   if (role !== "admin") {
     host.innerHTML = "";
@@ -2969,7 +3003,8 @@ createBtn.addEventListener("click", () => {
 
   async function load() {
     try {
-      const r = await API.users.list();
+    const r = await API.users.list();
+    if (App.state.routeId !== rid) return;
       all = (r.data || []).slice();
       App.state.cache.users = all;
       render();
@@ -3151,7 +3186,8 @@ async function tryLoadThemeFromServer(){
   }catch{}
 }
 
-App.renderSettings = async function(host){
+App.renderSettings = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
   injectSettingsStyles();
 
   if((App.state.user?.role||"")!=="admin"){
@@ -3431,6 +3467,7 @@ App.renderSettings = async function(host){
     host.appendChild(el("div",{class:"muted"}, t("loading")));
     try{
       await loadAll();
+      if (App.state.routeId !== rid) return;
       render();
     }catch(e){
       host.innerHTML="";
@@ -3487,7 +3524,8 @@ function dictLabel(list,id){
    ===== Projects ==========
    ========================= */
 
-App.renderProjects = async function (host) {
+App.renderProjects = async function (host, routeId) {
+  const rid = routeId || App.state.routeId;
   // ---- styles (local) ----
   if (!document.getElementById("projStyles")) {
     const st = document.createElement("style");
@@ -3553,12 +3591,16 @@ App.renderProjects = async function (host) {
     return `${n.toLocaleString(undefined)} ${cur}`;
   };
 
+  host.innerHTML = "";
+  host.appendChild(el("div", { class: "muted" }, t("loading")));
+
   // ---- load refs ----
   const [svcRes, pmListRaw, companiesRes] = await Promise.all([
     API.settings.dictList("service_types").catch(() => ({ data: [] })),
     (isAdmin || isRop) ? API.usersTryList().catch(() => []) : Promise.resolve([]),
     API.clients.list("company", "").catch(() => ({ data: [] })),
   ]);
+  if (App.state.routeId !== rid) return;
 
   const serviceTypes = (svcRes && svcRes.data) ? svcRes.data : [];
   const pmList = Array.isArray(pmListRaw) ? pmListRaw.filter(u => u.role === "pm" && Number(u.is_active) === 1) : [];
@@ -3804,6 +3846,7 @@ App.renderProjects = async function (host) {
     const service_type_id = svcSelFilter.value ? Number(svcSelFilter.value) : null;
 
     const r = await API.projects.list({ q, pm_user_id, service_type_id }).catch(() => ({ data: [] }));
+    if (App.state.routeId !== rid) return;
     all = (r && r.data) ? r.data : [];
     render();
   };
@@ -4305,7 +4348,8 @@ pmSel.addEventListener("change", () => {
 };
 
 
-App.renderCourses = async function (host) {
+App.renderCourses = async function (host, routeId) {
+  const rid = routeId || App.state.routeId;
   // ---- styles (local) ----
   if (!document.getElementById("courseStyles")) {
     const st = document.createElement("style");
@@ -4372,19 +4416,25 @@ App.renderCourses = async function (host) {
     return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
   };
 
+  host.innerHTML = "";
+  host.appendChild(el("div", { class: "muted" }, t("loading")));
+
   // ---- load refs ----
   const [ctRes, companiesRes, leadsRes] = await Promise.all([
     API.settings.dictList("course_types").catch(() => ({ data: [] })),
     API.clients.list("company", "").catch(() => ({ data: [] })),
     API.clients.list("lead", "").catch(() => ({ data: [] })),
   ]);
+  if (App.state.routeId !== rid) return;
 
   const courseTypes = (ctRes && ctRes.data) ? ctRes.data : [];
   const companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
   const leads = (leadsRes && leadsRes.data) ? leadsRes.data : [];
 
   let refs = await loadDictCacheIfAny();
+  if (App.state.routeId !== rid) return;
   const freshRefs = await refreshDictCacheAdmin();
+  if (App.state.routeId !== rid) return;
   if (freshRefs) refs = freshRefs;
 
   const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
@@ -4626,6 +4676,7 @@ App.renderCourses = async function (host) {
     const qs = sp.toString();
 
     const r = await apiFetch(`/api/course_leads${qs ? "?" + qs : ""}`).catch(() => ({ data: [] }));
+    if (App.state.routeId !== rid) return;
     raw = (r && r.data) ? r.data : [];
     render();
   };
@@ -5158,8 +5209,12 @@ async function refreshDictCacheAdmin(){
   }
 }
 
-App.renderClients = async function(host){
+App.renderClients = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
   injectClientsStyles();
+
+  host.innerHTML = "";
+  host.appendChild(el("div",{class:"muted"}, t("loading")));
 
   // fin has no access in backend — show friendly card
   if((App.state.user?.role||"")==="fin"){
@@ -5180,6 +5235,7 @@ App.renderClients = async function(host){
 
   // if admin — refresh dict cache now
   const fresh = await refreshDictCacheAdmin();
+  if (App.state.routeId !== rid) return;
   if(fresh) state.refs=fresh;
 
   const canCreateCompany = ["admin","rop","sale","pm"].includes(App.state.user.role);
@@ -5188,6 +5244,7 @@ App.renderClients = async function(host){
   const loadCompaniesForSelect = async ()=>{
     try{
       const r = await API.clients.list("company","");
+      if (App.state.routeId !== rid) return;
       state.companies = r.data || [];
     }catch{
       state.companies = [];
@@ -5199,6 +5256,7 @@ App.renderClients = async function(host){
     host.appendChild(el("div",{class:"muted"}, t("loading")));
     try{
       const r = await API.clients.list(state.tab, state.q);
+      if (App.state.routeId !== rid) return;
       state.list = r.data || [];
       render();
     }catch(e){
