@@ -1210,6 +1210,7 @@ text-decoration:none;
   .sidebar:hover{width:280px} .sidebar.open{left:0}
   .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
   .sideOverlay.hidden{display:none}
+  .modalFoot{flex-direction:column;align-items:stretch}
 }
 .kanbanWrap{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
 .kcol{min-width:320px;max-width:340px}
