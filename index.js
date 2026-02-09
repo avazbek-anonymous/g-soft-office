@@ -4383,6 +4383,10 @@ App.renderCourses = async function (host) {
   const companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
   const leads = (leadsRes && leadsRes.data) ? leadsRes.data : [];
 
+  let refs = await loadDictCacheIfAny();
+  const freshRefs = await refreshDictCacheAdmin();
+  if (freshRefs) refs = freshRefs;
+
   const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
   const companyLabel = (c) => (c && (c.company_name || c.full_name || `#${c.id}`)) || "";
   const leadLabel = (l) => {
@@ -4636,12 +4640,15 @@ App.renderCourses = async function (host) {
   // ---- MODALS ----
   function openCreate() {
     let selectedLead = null;
+    let createLeadMode = false;
 
     const fioInp = el("input", { class: "input", placeholder: tr({ ru: "ФИО (поиск)", uz: "FIO (qidiruv)", en: "Full name (search)" }) });
     const phoneInp = el("input", { class: "input", placeholder: tr({ ru: "Телефон (поиск)", uz: "Telefon (qidiruv)", en: "Phone (search)" }) });
 
     const sug = el("div", { class: "cSug", style: "display:none" });
     const pickChip = el("div", { class: "cChip", style: "display:none" });
+    const noLeadHint = el("div", { class: "muted2", style: "font-size:12px;display:none" }, tr({ ru: "Лид не найден", uz: "Lead topilmadi", en: "Lead not found" }));
+    const createLeadToggle = el("button", { class: "btn mini", type: "button", style: "display:none" });
 
     const company2 = el("select", { class: "sel" },
       el("option", { value: "" }, "—"),
@@ -4664,6 +4671,73 @@ App.renderCourses = async function (host) {
     const paidInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
     const commentInp = el("textarea", { class: "input", rows: 4, placeholder: t("comment") || "Comment..." });
 
+    // lead extra fields (for creating from courses)
+    const phone2Inp = el("input", { class: "input", placeholder: t("client_phone2") || "Extra phone", inputmode: "tel" });
+    const tgInp = el("input", { class: "input", placeholder: t("client_tg_group") || "Group link" });
+    const leadCommentInp = el("textarea", { class: "input", rows: 3, placeholder: t("client_comment") || "Comment..." });
+    const citySel = el("select", { class: "input" });
+    const sourceSel = el("select", { class: "input" });
+    const sphereSel = el("select", { class: "input" });
+    const fillSel = (sel, list) => {
+      sel.appendChild(el("option", { value: "" }, "вЂ”"));
+      (list || []).forEach(it => {
+        const label = (it[`name_${App.state.lang}`] || it.name_uz || it.name_ru || it.name_en || `#${it.id}`);
+        sel.appendChild(el("option", { value: String(it.id) }, label));
+      });
+    };
+    fillSel(citySel, refs.cities);
+    fillSel(sourceSel, refs.sources);
+    fillSel(sphereSel, refs.spheres);
+
+    const leadExtraWrap = el("div", { class: "vcol gap10", style: "display:none" },
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2") || tr({ ru: "Доп. телефон", uz: "Qo‘shimcha tel", en: "Extra phone" })),
+          phone2Inp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_tg_group") || tr({ ru: "Ссылка на группу", uz: "Guruh link", en: "Group link" })),
+          tgInp
+        ),
+      ),
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_city") || tr({ ru: "Город", uz: "Shahar", en: "City" })),
+          citySel
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_source") || tr({ ru: "Источник", uz: "Manba", en: "Source" })),
+          sourceSel
+        ),
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("client_sphere") || tr({ ru: "Сфера", uz: "Soha", en: "Sphere" })),
+        sphereSel
+      ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, t("client_comment") || tr({ ru: "Комментарий", uz: "Izoh", en: "Comment" })),
+        leadCommentInp
+      ),
+    );
+
+    const setCreateLeadMode = (on) => {
+      createLeadMode = !!on;
+      leadExtraWrap.style.display = createLeadMode ? "" : "none";
+      noLeadHint.style.display = "none";
+      createLeadToggle.textContent = createLeadMode
+        ? tr({ ru: "Отменить создание", uz: "Bekor qilish", en: "Cancel creation" })
+        : (t("clients_create_lead") || tr({ ru: "Создать лид", uz: "Lead yaratish", en: "Create lead" }));
+      createLeadToggle.style.display = createLeadMode ? "" : "none";
+      if (createLeadMode) {
+        selectedLead = null;
+        pickChip.style.display = "none";
+      }
+    };
+    createLeadToggle.addEventListener("click", () => {
+      setCreateLeadMode(!createLeadMode);
+      renderSuggest();
+    });
+
     const refreshCourseSnapshot = () => {
       const id = type2.value ? Number(type2.value) : null;
       const ct = id ? ctById.get(id) : null;
@@ -4673,10 +4747,17 @@ App.renderCourses = async function (host) {
     };
 
     const renderSuggest = () => {
+      if (createLeadMode) { sug.style.display = "none"; return; }
       const q1 = String(fioInp.value || "").trim().toLowerCase();
       const q2 = String(phoneInp.value || "").trim().toLowerCase();
       const q = (q1 || q2);
-      if (!q) { sug.style.display = "none"; sug.innerHTML = ""; return; }
+      if (!q) {
+        sug.style.display = "none";
+        sug.innerHTML = "";
+        noLeadHint.style.display = "none";
+        createLeadToggle.style.display = "none";
+        return;
+      }
 
       const items = leads
         .filter(l => Number(l.is_active) === 1)
@@ -4684,10 +4765,20 @@ App.renderCourses = async function (host) {
         .slice(0, 8);
 
       sug.innerHTML = "";
-      if (!items.length) { sug.style.display = "none"; return; }
+      if (!items.length) {
+        sug.style.display = "none";
+        noLeadHint.style.display = "";
+        createLeadToggle.style.display = "";
+        createLeadToggle.textContent = t("clients_create_lead") || tr({ ru: "Создать лид", uz: "Lead yaratish", en: "Create lead" });
+        return;
+      }
+
+      noLeadHint.style.display = "none";
+      createLeadToggle.style.display = "none";
 
       for (const l of items) {
         sug.appendChild(el("button", { class: "it", type: "button", onClick: () => {
+          setCreateLeadMode(false);
           selectedLead = l;
           fioInp.value = l.full_name || "";
           phoneInp.value = l.phone1 || "";
@@ -4714,13 +4805,17 @@ App.renderCourses = async function (host) {
           fioInp,
           phoneInp,
           sug,
-          pickChip
+          pickChip,
+          noLeadHint,
+          createLeadToggle
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
           company2
         ),
       ),
+
+      leadExtraWrap,
 
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
@@ -4759,7 +4854,33 @@ App.renderCourses = async function (host) {
       { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
       { label: t("save") || "Save", kind: "primary", onClick: async () => {
           try {
-            if (!selectedLead || !selectedLead.id) { Toast.show(tr({ ru: "Выбери лида", uz: "Lead tanlang", en: "Select lead" }), "bad"); return; }
+            let leadClientId = null;
+            if (createLeadMode) {
+              const full_name = (fioInp.value || "").trim();
+              const phone1 = (phoneInp.value || "").trim();
+              if (!full_name || !phone1) {
+                Toast.show(`${t("toast_error")}: ${t("client_full_name")} / ${t("client_phone1")}`, "bad"); return;
+              }
+              const payload = {
+                type: "lead",
+                full_name,
+                phone1,
+                phone2: (phone2Inp.value || "").trim() || null,
+                city_id: citySel.value ? Number(citySel.value) : null,
+                source_id: sourceSel.value ? Number(sourceSel.value) : null,
+                sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
+                comment: (leadCommentInp.value || "").trim() || null,
+                tg_group_link: (tgInp.value || "").trim() || null,
+                company_id: company2.value ? Number(company2.value) : null,
+              };
+              const res = await API.clients.create(payload);
+              leadClientId =
+                (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) : null;
+              if (!leadClientId) { Toast.show(tr({ ru: "Не удалось создать лида", uz: "Lead yaratilmadi", en: "Failed to create lead" }), "bad"); return; }
+            } else {
+              if (!selectedLead || !selectedLead.id) { Toast.show(tr({ ru: "Выбери лида", uz: "Lead tanlang", en: "Select lead" }), "bad"); return; }
+              leadClientId = Number(selectedLead.id);
+            }
             const course_type_id = type2.value ? Number(type2.value) : null;
             if (!course_type_id) { Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad"); return; }
 
@@ -4769,7 +4890,7 @@ App.renderCourses = async function (host) {
             if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To‘lov noto‘g‘ri", en: "Invalid paid amount" }), "bad"); return; }
 
             const body = {
-              lead_client_id: Number(selectedLead.id),
+              lead_client_id: Number(leadClientId),
               company_id: company2.value ? Number(company2.value) : null,
               course_type_id,
               agreed_amount,
