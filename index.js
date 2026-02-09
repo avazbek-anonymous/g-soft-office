@@ -3703,7 +3703,7 @@ App.renderProjects = async function (host, routeId) {
       let extra = {};
       if (status === "canceled") {
         const reason = await askCancelReason();
-        if (!reason) return;
+        if (!reason) return false;
         extra.cancel_reason = reason;
       }
       await API.projects.move(id, status, extra);
@@ -4563,7 +4563,7 @@ App.renderCourses = async function (host, routeId) {
   const doMove = async (id, status) => {
     try {
       const cur = raw.find(x => Number(x.id) === Number(id));
-      if (cur && String(cur.status) === String(status)) return;
+      if (cur && String(cur.status) === String(status)) return false;
 
       let extra = {};
       if (status === "canceled") {
@@ -4573,7 +4573,7 @@ App.renderCourses = async function (host, routeId) {
       }
       if (status === "enrolled" || status === "studying") {
         const paid = await askPaidAmount({ ru: "Оплата", uz: "To‘lov", en: "Payment" });
-        if (paid == null) return;
+        if (paid == null) return false;
         extra.paid_amount = paid;
       }
 
@@ -4584,8 +4584,10 @@ App.renderCourses = async function (host, routeId) {
 
       await load();
       Toast.show(t("toast_saved") || "Saved", "ok");
+      return true;
     } catch (e) {
       Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      return false;
     }
   };
 
@@ -5049,7 +5051,35 @@ App.renderCourses = async function (host, routeId) {
         ) : null,
       );
 
+      const isMobile = window.matchMedia("(max-width:900px)").matches;
+      const statusIdx = statusCols.findIndex(s => String(s.key) === String(x.status));
+      const nextStatuses = statusCols
+        .slice(statusIdx >= 0 ? statusIdx + 1 : 0)
+        .filter(s => s.key !== "canceled")
+        .slice(0, 2);
+
+      const moveActions = isMobile ? [
+        ...nextStatuses.map(s => ({
+          label: tr(s.label) || s.key,
+          kind: "primary",
+          onClick: async () => {
+            const moved = await doMove(id, s.key);
+            if (moved) Modal.close();
+          }
+        })),
+        {
+          label: t("cancel") || "Cancel",
+          kind: (String(x.status) === "canceled") ? "ghost" : "danger",
+          onClick: async () => {
+            if (String(x.status) === "canceled") return;
+            const moved = await doMove(id, "canceled");
+            if (moved) Modal.close();
+          }
+        }
+      ] : [];
+
       Modal.open(t("route_courses"), body, [
+        ...moveActions,
         { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() },
         { label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } },
       ]);
