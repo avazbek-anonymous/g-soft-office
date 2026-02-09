@@ -4647,7 +4647,9 @@ App.renderCourses = async function (host, routeId) {
       onDragend: () => card.classList.remove("dragging"),
     }, ...lines, actions);
 
-    bindTouchDrag(card, (status) => doMove(x.id, status));
+    if (!window.matchMedia("(max-width:900px)").matches) {
+      bindTouchDrag(card, (status) => doMove(x.id, status));
+    }
 
     return { st, card };
   };
