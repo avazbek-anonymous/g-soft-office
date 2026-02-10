@@ -3711,31 +3711,10 @@ App.renderProjects = async function (host, routeId) {
         if (!reason) return false;
         extra.cancel_reason = reason;
       }
-
-      const row = all.find(x => Number(x.id) === Number(id));
-
-      if (status === "review") {
-        // review stage => keep status done, just set review=1
-        if (row && row.status !== "done") {
-          await API.projects.move(id, "done", {});
-          row.status = "done";
-        }
-        await API.projects.update(id, { review: 1 });
-        if (row) row.review = 1;
-        render();
-        Toast.show(t("toast_saved") || "Saved", "ok");
-        return true;
-      }
-
-      // if leaving done/review => reset review
-      if (status !== "done" && row && Number(row.review) === 1) {
-        await API.projects.update(id, { review: 0 });
-        row.review = 0;
-      }
-
       await API.projects.move(id, status, extra);
 
       // ✅ ускорение: не грузим заново с сервера, обновляем локально
+      const row = all.find(x => Number(x.id) === Number(id));
       if (row) {
         row.status = status;
         if (status === "canceled") row.cancel_reason = extra.cancel_reason || row.cancel_reason;
@@ -3759,7 +3738,7 @@ App.renderProjects = async function (host, routeId) {
   };
 
   const cardFor = (p) => {
-    const st = (p.status === "done" && Number(p.review) === 1) ? "review" : (p.status || "new");
+    const st = (p.status || "new");
     const company = p.company_name || "";
     const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
 
@@ -4384,7 +4363,7 @@ pmSel.addEventListener("change", () => {
     });
 
     const lines = el("div", { class: "vcol gap8" },
-      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===((p.status==="done"&&Number(p.review)===1)?"review":p.status))?.label || {}))),
+      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
       el("div", { class: "pLine" },
         tr({ru:"Отзыв:",uz:"Tasurot:",en:"Review:"}),
         el("b", {}, reviewChk.checked ? tr({ru:"Взят",uz:"Olingan",en:"Taken"}) : tr({ru:"Нет",uz:"Yo‘q",en:"No"})),
@@ -4397,6 +4376,31 @@ pmSel.addEventListener("change", () => {
       (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"Причина отмены:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "—")) : null,
       p.comment ? el("div", { class: "muted2", style: "white-space:pre-wrap;margin-top:6px" }, p.comment) : null,
     );
+
+    if (p.status === "done" || p.status === "review") {
+      const stageChk = el("input", { type: "checkbox" });
+      stageChk.checked = p.status === "review";
+      stageChk.addEventListener("change", async () => {
+        try {
+          const next = stageChk.checked ? "review" : "done";
+          await API.projects.move(p.id, next, {});
+          const row = all.find(x => Number(x.id) === Number(p.id));
+          if (row) row.status = next;
+          p.status = next;
+          render();
+        } catch (e) {
+          Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+        }
+      });
+
+      lines.appendChild(
+        el("div", { class: "pLine" },
+          tr({ru:"Этап:",uz:"Bosqich:",en:"Stage:"}),
+          el("b", {}, stageChk.checked ? tr({ru:"Отзыв",uz:"Tasurot",en:"Review"}) : tr({ru:"Завершено",uz:"Bajarildi",en:"Done"})),
+          el("span", { style: "margin-left:8px" }, stageChk)
+        )
+      );
+    }
 
     const body = el("div", { class: "vcol gap12" }, head, owner, lines);
 

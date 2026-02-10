@@ -33,7 +33,7 @@ const DEFAULT_CORS = [
 const ROLES = ["admin", "pm", "fin", "sale", "rop"];
 
 const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
-const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "canceled"];
+const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "review", "canceled"];
 const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
 
 function nowSec() {
