@@ -129,6 +129,7 @@
       t_pause: "Пауза",
       t_in_progress: "В работе",
       t_done: "Готово",
+      t_review: "Отзыв",
       t_canceled: "Отмена",
       action_start: "Старт",
       action_pause: "Пауза",
@@ -279,6 +280,7 @@ telegram_id: "Telegram ID",
       t_pause: "Pauza",
       t_in_progress: "Jarayonda",
       t_done: "Bajarildi",
+      t_review: "Tasurot",
       t_canceled: "Bekor",
       action_start: "Start",
       action_pause: "Pauza",
@@ -427,6 +429,7 @@ telegram_id: "Telegram ID",
       t_pause: "Paused",
       t_in_progress: "In progress",
       t_done: "Done",
+      t_review: "Review",
       t_canceled: "Canceled",
       action_start: "Start",
       action_pause: "Pause",
@@ -3559,6 +3562,7 @@ App.renderProjects = async function (host, routeId) {
     { key: "in_progress", label: { ru: "В процессе",     uz: "Jarayonda",      en: "In progress" } },
     { key: "later",       label: { ru: "Позже",          uz: "Keyinroq",       en: "Later" } },
     { key: "done",        label: { ru: "Завершено",      uz: "Bajarildi",      en: "Done" } },
+    { key: "review",      label: { ru: "Отзыв",          uz: "Tasurot",        en: "Review" } },
     { key: "canceled",    label: { ru: "Отмена",         uz: "Otmen",          en: "Canceled" } },
   ];
 
@@ -3707,10 +3711,31 @@ App.renderProjects = async function (host, routeId) {
         if (!reason) return false;
         extra.cancel_reason = reason;
       }
+
+      const row = all.find(x => Number(x.id) === Number(id));
+
+      if (status === "review") {
+        // review stage => keep status done, just set review=1
+        if (row && row.status !== "done") {
+          await API.projects.move(id, "done", {});
+          row.status = "done";
+        }
+        await API.projects.update(id, { review: 1 });
+        if (row) row.review = 1;
+        render();
+        Toast.show(t("toast_saved") || "Saved", "ok");
+        return true;
+      }
+
+      // if leaving done/review => reset review
+      if (status !== "done" && row && Number(row.review) === 1) {
+        await API.projects.update(id, { review: 0 });
+        row.review = 0;
+      }
+
       await API.projects.move(id, status, extra);
 
       // ✅ ускорение: не грузим заново с сервера, обновляем локально
-      const row = all.find(x => Number(x.id) === Number(id));
       if (row) {
         row.status = status;
         if (status === "canceled") row.cancel_reason = extra.cancel_reason || row.cancel_reason;
@@ -3734,7 +3759,7 @@ App.renderProjects = async function (host, routeId) {
   };
 
   const cardFor = (p) => {
-    const st = p.status || "new";
+    const st = (p.status === "done" && Number(p.review) === 1) ? "review" : (p.status || "new");
     const company = p.company_name || "";
     const svc = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
 
@@ -3746,10 +3771,14 @@ App.renderProjects = async function (host, routeId) {
     let bodyParts = [title];
 
     // ✅ DONE: only 2 lines (company + service)
-    if (st === "done") {
+    if (st === "done" || st === "review") {
       // no extra lines
       if (p.comment) {
         bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "💬 ", el("b", {}, p.comment)));
+      }
+      const reviewText = tr({ ru: "Отзыв взят", uz: "Tasurot olingan", en: "Review taken" });
+      if (Number(p.review) === 1) {
+        bodyParts.push(el("div", { class: "pLine" }, "✅ ", el("b", {}, reviewText)));
       }
     }
     // ✅ CANCELED: 3 lines (company + service + reason)
@@ -4259,6 +4288,9 @@ pmSel.addEventListener("change", () => {
       el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "—")
     );
 
+    const reviewChkEdit = el("input", { type: "checkbox" });
+    reviewChkEdit.checked = Number(p.review) === 1;
+
     const form = el("div", { class: "vcol gap12" },
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || "Company"), companySel),
@@ -4275,6 +4307,13 @@ pmSel.addEventListener("change", () => {
       ),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный",uz:"Mas'ul",en:"Responsible"})), pmSel, pmAnySel),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Отзыв",uz:"Tasurot",en:"Review"})),
+        el("label", { class: "hrow gap8" },
+          reviewChkEdit,
+          el("span", {}, tr({ru:"Отзыв взят",uz:"Tasurot olingan",en:"Review taken"}))
+        )
+      ),
     );
 
     Modal.open(t("edit") || "Edit", form, [
@@ -4289,7 +4328,8 @@ pmSel.addEventListener("change", () => {
               deadline_at: fromLocalInput(dlInp.value),
               amount: isAdmin ? (amountInp.value ? Number(amountInp.value) : null) : null,
               currency: isAdmin ? (curSel.value || "UZS") : (p.currency || "UZS"),
-              comment: (commentInp.value || "").trim() || null
+              comment: (commentInp.value || "").trim() || null,
+              review: reviewChkEdit.checked ? 1 : 0
             };
             await API.projects.update(id, payload);
 
@@ -4329,8 +4369,27 @@ pmSel.addEventListener("change", () => {
       el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "—")
     );
 
+    const reviewChk = el("input", { type: "checkbox" });
+    reviewChk.checked = Number(p.review) === 1;
+    reviewChk.addEventListener("change", async () => {
+      try {
+        const v = reviewChk.checked ? 1 : 0;
+        await API.projects.update(p.id, { review: v });
+        const row = all.find(x => Number(x.id) === Number(p.id));
+        if (row) row.review = v;
+        render();
+      } catch (e) {
+        Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      }
+    });
+
     const lines = el("div", { class: "vcol gap8" },
-      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
+      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===((p.status==="done"&&Number(p.review)===1)?"review":p.status))?.label || {}))),
+      el("div", { class: "pLine" },
+        tr({ru:"Отзыв:",uz:"Tasurot:",en:"Review:"}),
+        el("b", {}, reviewChk.checked ? tr({ru:"Взят",uz:"Olingan",en:"Taken"}) : tr({ru:"Нет",uz:"Yo‘q",en:"No"})),
+        el("span", { style: "margin-left:8px" }, reviewChk)
+      ),
       p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Встреча:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
       p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Дедлайн:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
       (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"Сумма:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
