@@ -147,6 +147,18 @@ function corsHeaders(env, origin) {
   return h;
 }
 
+function withCors(res, env, origin) {
+  if (!res) return res;
+  const h = new Headers(res.headers || {});
+  const cors = corsHeaders(env, origin);
+  for (const [k, v] of Object.entries(cors)) h.set(k, v);
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: h,
+  });
+}
+
 function tashkentDayBounds(tsSec = nowSec()) {
   // переводим "сейчас" в "локальную" дату Ташкента с помощью сдвига
   const offsetMs = TZ_OFFSET_MIN * 60 * 1000;
@@ -1963,7 +1975,11 @@ export default {
 
     // Only API routes
     if (!url.pathname.startsWith("/api/")) {
-      return jsonResp({ ok: false, error: { code: "not_found", message: "API only" } }, 404, corsHeaders(env, origin));
+      return withCors(
+        jsonResp({ ok: false, error: { code: "not_found", message: "API only" } }, 404),
+        env,
+        origin
+      );
     }
 
     const segments = url.pathname.split("/").filter(Boolean); // ["api", "..."]
@@ -1971,11 +1987,11 @@ export default {
 
     // Public
     if (apiRoot === "health") {
-      return jsonResp({ ok: true, ts: nowSec() }, 200, corsHeaders(env, origin));
+      return withCors(jsonResp({ ok: true, ts: nowSec() }, 200), env, origin);
     }
 
     if (apiRoot === "auth" && segments[2] === "login" && request.method === "POST") {
-      return await handleAuthLogin(env, request, origin);
+      return withCors(await handleAuthLogin(env, request, origin), env, origin);
     }
 
     // Auth required below
@@ -1983,60 +1999,60 @@ export default {
     if (!user) {
       // also allow logout without valid session (will just clear cookie)
       if (apiRoot === "auth" && segments[2] === "logout" && request.method === "POST") {
-        return await handleAuthLogout(env, request, origin);
+        return withCors(await handleAuthLogout(env, request, origin), env, origin);
       }
-      return unauthorized("Сессия истекла или не выполнен вход");
+      return withCors(unauthorized("Сессия истекла или не выполнен вход"), env, origin);
     }
 
     // "вход держится до 23:59:59":contentReference[oaicite:4]{index=4}
     if (apiRoot === "auth" && segments[2] === "me" && request.method === "GET") {
-      return jsonResp({ ok: true, data: { user } }, 200, corsHeaders(env, origin));
+      return withCors(jsonResp({ ok: true, data: { user } }, 200), env, origin);
     }
     if (apiRoot === "auth" && segments[2] === "logout" && request.method === "POST") {
-      return await handleAuthLogout(env, request, origin);
+      return withCors(await handleAuthLogout(env, request, origin), env, origin);
     }
 
     // meta
     if (apiRoot === "meta" && request.method === "GET") {
-      return await handleMeta(env, user, origin);
+      return withCors(await handleMeta(env, user, origin), env, origin);
     }
 
     // main
     if (apiRoot === "main" && request.method === "GET") {
-      return await handleMain(env, user, origin);
+      return withCors(await handleMain(env, user, origin), env, origin);
     }
 
     // users (admin only):contentReference[oaicite:5]{index=5}
     if (apiRoot === "users") {
-      return await handleUsers(env, user, request, origin, segments);
+      return withCors(await handleUsers(env, user, request, origin, segments), env, origin);
     }
 
     // settings (admin only):contentReference[oaicite:6]{index=6}
     if (apiRoot === "settings") {
-      return await handleSettings(env, user, request, origin, segments);
+      return withCors(await handleSettings(env, user, request, origin, segments), env, origin);
     }
 
     // tasks
     if (apiRoot === "tasks") {
-      return await handleTasks(env, user, request, origin, segments);
+      return withCors(await handleTasks(env, user, request, origin, segments), env, origin);
     }
 
     // projects
     if (apiRoot === "projects") {
-      return await handleProjects(env, user, request, origin, segments);
+      return withCors(await handleProjects(env, user, request, origin, segments), env, origin);
     }
 
     // courses
     if (apiRoot === "course_leads") {
-      return await handleCourseLeads(env, user, request, origin, segments);
+      return withCors(await handleCourseLeads(env, user, request, origin, segments), env, origin);
     }
 
     // clients
     if (apiRoot === "clients") {
-      return await handleClients(env, user, request, origin, segments);
+      return withCors(await handleClients(env, user, request, origin, segments), env, origin);
     }
 
-    return notFound();
+    return withCors(notFound(), env, origin);
   },
 };
 
