@@ -1,0 +1,2042 @@
+/**
+ * G-SOFT API (Cloudflare Workers + D1)
+ * - Auth via cookie "gsoft_session" до 23:59:59 (Asia/Tashkent +05:00)
+ * - RBAC: admin/pm/fin/sale/rop
+ * - Soft delete (is_active=0, deleted_at/by)
+ * - Kanban data for tasks/projects/course_leads
+ *
+ * ENV:
+ *   DB                (D1Database) REQUIRED
+ *   CORS_ORIGINS       optional, comma-separated exact origins
+ *   COOKIE_DOMAIN      optional, e.g. ".ofis.gekto.uz"
+ */
+
+const TZ_OFFSET_MIN = 5 * 60; // Tashkent +05:00 (фиксировано)
+const COOKIE_NAME = "gsoft_session";
+
+const PBKDF2_DEFAULT_ITER = 100000;
+const PBKDF2_MAX_ITER = 100000;
+
+function normalizePbkdf2Iter(iter) {
+  const n = Number(iter);
+  if (!Number.isFinite(n) || n <= 0) return PBKDF2_DEFAULT_ITER;
+  return Math.floor(n);
+}
+
+const DEFAULT_CORS = [
+  "https://ofis.gekto.uz",
+  "https://api.ofis.gekto.uz",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const ROLES = ["admin", "pm", "fin", "sale", "rop"];
+
+const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
+const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "canceled"];
+const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
+
+function nowSec() {
+  return Math.floor(Date.now() / 1000);
+}
+
+function jsonResp(data, status = 200, headers = {}) {
+  const body = JSON.stringify(data);
+  return new Response(body, {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...headers,
+    },
+  });
+}
+
+function badRequest(message, code = "bad_request") {
+  return jsonResp({ ok: false, error: { code, message } }, 400);
+}
+function unauthorized(message = "Unauthorized") {
+  return jsonResp({ ok: false, error: { code: "unauthorized", message } }, 401);
+}
+function forbidden(message = "Forbidden") {
+  return jsonResp({ ok: false, error: { code: "forbidden", message } }, 403);
+}
+function notFound(message = "Not found") {
+  return jsonResp({ ok: false, error: { code: "not_found", message } }, 404);
+}
+
+function parseCookies(cookieHeader) {
+  const out = {};
+  if (!cookieHeader) return out;
+  const parts = cookieHeader.split(";");
+  for (const p of parts) {
+    const idx = p.indexOf("=");
+    if (idx === -1) continue;
+    const k = p.slice(0, idx).trim();
+    const v = p.slice(idx + 1).trim();
+    out[k] = v;
+  }
+  return out;
+}
+
+function base64url(bytes) {
+  let str = "";
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  const b64 = btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return b64;
+}
+
+function hexFromBuf(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  for (const b of bytes) s += b.toString(16).padStart(2, "0");
+  return s;
+}
+function bufFromHex(hex) {
+  if (!hex || typeof hex !== "string" || hex.length % 2 !== 0) throw new Error("Invalid hex");
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+async function sha256Hex(str) {
+  const enc = new TextEncoder().encode(str);
+  const digest = await crypto.subtle.digest("SHA-256", enc);
+  return hexFromBuf(digest);
+}
+
+async function pbkdf2Sha256Hex(password, saltHex, iterations = PBKDF2_DEFAULT_ITER, dkLen = 32) {
+  const salt = bufFromHex(saltHex);
+  iterations = normalizePbkdf2Iter(iterations);
+  if (iterations > PBKDF2_MAX_ITER) {
+    throw new Error(`Pbkdf2 failed: iteration counts above ${PBKDF2_MAX_ITER} are not supported (requested ${iterations}).`);
+  }
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    keyMaterial,
+    dkLen * 8
+  );
+  return hexFromBuf(bits);
+}
+
+function getCorsOrigins(env) {
+  const s = (env.CORS_ORIGINS || "").trim();
+  if (!s) return DEFAULT_CORS;
+  return s
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function corsHeaders(env, origin) {
+  const allowed = getCorsOrigins(env);
+  const ok = origin && allowed.includes(origin);
+  const h = {
+    Vary: "Origin",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
+    "Access-Control-Allow-Credentials": "true",
+  };
+  if (ok) h["Access-Control-Allow-Origin"] = origin;
+  return h;
+}
+
+function tashkentDayBounds(tsSec = nowSec()) {
+  // переводим "сейчас" в "локальную" дату Ташкента с помощью сдвига
+  const offsetMs = TZ_OFFSET_MIN * 60 * 1000;
+  const utcMs = tsSec * 1000;
+  const localMs = utcMs + offsetMs;
+  const d = new Date(localMs);
+
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const day = d.getUTCDate();
+
+  // start of day in UTC milliseconds:
+  const startUtcMs = Date.UTC(y, m, day, 0, 0, 0) - offsetMs;
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000 - 1000;
+
+  return {
+    startOfDayUtcSec: Math.floor(startUtcMs / 1000),
+    endOfDayUtcSec: Math.floor(endUtcMs / 1000),
+  };
+}
+
+function buildSetCookie(name, value, opts = {}) {
+  const parts = [`${name}=${value}`];
+  if (opts.expiresAtSec) parts.push(`Expires=${new Date(opts.expiresAtSec * 1000).toUTCString()}`);
+  if (opts.maxAge != null) parts.push(`Max-Age=${opts.maxAge}`);
+  parts.push(`Path=${opts.path || "/"}`);
+  if (opts.domain) parts.push(`Domain=${opts.domain}`);
+  if (opts.httpOnly !== false) parts.push("HttpOnly");
+  if (opts.secure !== false) parts.push("Secure");
+  parts.push(`SameSite=${opts.sameSite || "Lax"}`);
+  return parts.join("; ");
+}
+
+function intId(x) {
+  const n = Number(x);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+function pick(obj, keys) {
+  const out = {};
+  for (const k of keys) if (obj[k] !== undefined) out[k] = obj[k];
+  return out;
+}
+
+async function readJson(request) {
+  const ct = request.headers.get("Content-Type") || "";
+  if (!ct.toLowerCase().includes("application/json")) return null;
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+/** simple string getter used in users endpoints */
+function str(v) {
+  if (v === undefined || v === null) return "";
+  return String(v).trim();
+}
+
+/** hash password for users table (pbkdf2_sha256) */
+async function hashPassword(password, iterations = PBKDF2_DEFAULT_ITER) {
+  const saltBytes = new Uint8Array(16);
+  crypto.getRandomValues(saltBytes);
+  const saltHex = Array.from(saltBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const iter = normalizePbkdf2Iter(iterations);
+  const algo = "pbkdf2_sha256";
+  const hashHex = await pbkdf2Sha256Hex(String(password), saltHex, iter, 32);
+  return { saltHex, hashHex, iter, algo };
+}
+
+let _usersHasTelegramCol = null;
+async function usersHasTelegramIdColumn(env) {
+  if (_usersHasTelegramCol !== null) return _usersHasTelegramCol;
+  const info = await env.DB.prepare("PRAGMA table_info(users)").all();
+  _usersHasTelegramCol = (info.results || []).some((r) => r.name === "telegram_id");
+  return _usersHasTelegramCol;
+}
+
+
+
+/** cleanup: after midnight, any in_progress tasks should drop to pause + close open time logs */
+async function autoPauseOvernight(env) {
+  const ts = nowSec();
+  const { startOfDayUtcSec } = tashkentDayBounds(ts);
+  const endOfYesterday = startOfDayUtcSec - 1;
+
+  // Close any open logs that started before today (safety)
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE task_time_logs
+       SET end_at = ?
+       WHERE end_at IS NULL AND start_at < ?`
+    ).bind(endOfYesterday, startOfDayUtcSec),
+
+    env.DB.prepare(
+      `UPDATE tasks
+       SET status = 'pause'
+       WHERE is_active = 1
+         AND status = 'in_progress'
+         AND updated_at < ?`
+    ).bind(startOfDayUtcSec),
+  ]);
+}
+
+async function getSessionUser(env, request) {
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  const token = cookies[COOKIE_NAME];
+  if (!token) return null;
+
+  const tokenHash = await sha256Hex(token);
+  const ts = nowSec();
+
+  const row = await env.DB.prepare(
+    `SELECT s.user_id, s.expires_at, u.full_name, u.login, u.role, u.is_active
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash_hex = ?`
+  )
+    .bind(tokenHash)
+    .first();
+
+  if (!row) return null;
+  if (row.is_active !== 1) return null;
+  if (row.expires_at <= ts) return null;
+
+  // touch last_seen
+  await env.DB.prepare(`UPDATE sessions SET last_seen_at = ? WHERE user_id = ?`)
+    .bind(ts, row.user_id)
+    .run();
+
+  return {
+    id: row.user_id,
+    full_name: row.full_name,
+    login: row.login,
+    role: row.role,
+    expires_at: row.expires_at,
+  };
+}
+
+function requireRole(user, allowed) {
+  if (!user) return false;
+  if (!allowed || allowed.length === 0) return true;
+  return allowed.includes(user.role);
+}
+
+/** RBAC helpers */
+function canSeeTask(user, taskRow) {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "rop") return true;
+  if (user.role === "fin" || user.role === "sale") {
+    return taskRow.assignee_user_id === user.id;
+  }
+  if (user.role === "pm") {
+    // PM: свои задачи + все задачи своих проектов
+    if (taskRow.assignee_user_id === user.id) return true;
+    return taskRow.project_pm_user_id === user.id;
+  }
+  return taskRow.assignee_user_id === user.id;
+}
+
+function canSeeProject(user, projectRow) {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "rop") return true;
+  if (user.role === "pm") return projectRow.pm_user_id === user.id;
+  if (user.role === "fin") return projectRow._fin_has_task === 1;
+  // sale: по ТЗ не обязателен доступ к проектам
+  return false;
+}
+
+function projectAmountVisible(user) {
+  return user && (user.role === "admin" || user.role === "rop");
+}
+function courseAmountVisible(user) {
+  return user && (user.role === "admin" || user.role === "rop" || user.role === "sale");
+}
+
+async function ensurePaidRequiredForCourseStatus(bodyStatus, paidAmount) {
+  if (bodyStatus === "enrolled" || bodyStatus === "studying") {
+    if (paidAmount === null || paidAmount === undefined || Number.isNaN(Number(paidAmount))) {
+      return "paid_amount_required";
+    }
+  }
+  return null;
+}
+
+async function createSession(env, userId) {
+  const ts = nowSec();
+  const { endOfDayUtcSec } = tashkentDayBounds(ts);
+
+  const tokenBytes = new Uint8Array(32);
+  crypto.getRandomValues(tokenBytes);
+  const token = base64url(tokenBytes);
+  const tokenHash = await sha256Hex(token);
+
+  // 1 session per user: upsert semantics
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId),
+    env.DB.prepare(
+      `INSERT INTO sessions(user_id, token_hash_hex, expires_at, created_at, last_seen_at)
+       VALUES(?,?,?,?,?)`
+    ).bind(userId, tokenHash, endOfDayUtcSec, ts, ts),
+  ]);
+
+  return { token, expires_at: endOfDayUtcSec };
+}
+
+async function deleteSession(env, request) {
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  const token = cookies[COOKIE_NAME];
+  if (!token) return;
+
+  const tokenHash = await sha256Hex(token);
+  await env.DB.prepare(`DELETE FROM sessions WHERE token_hash_hex = ?`).bind(tokenHash).run();
+}
+
+/** minimal input guard */
+function requireFields(obj, fields) {
+  for (const f of fields) {
+    if (obj[f] === undefined || obj[f] === null || obj[f] === "") return f;
+  }
+  return null;
+}
+
+async function listUsers(env) {
+  const hasTg = await usersHasTelegramIdColumn(env);
+  const res = await env.DB
+    .prepare(
+      `SELECT id, full_name, phone${hasTg ? ", telegram_id" : ""}, login, role, is_active, created_at, updated_at, last_login_at
+       FROM users
+       ORDER BY id DESC`
+    )
+    .all();
+  return res.results || [];
+}
+
+
+/** tasks query: includes assignee name, project name, pm id; includes spent_seconds */
+async function queryTasksKanban(env, user, filters) {
+  // filters: assignee_user_id (admin only), project_id
+  const ts = nowSec();
+
+  // Base query pulls pm_user_id for project to support PM visibility
+  // Also compute spent_seconds with a subquery
+  let sql = `
+    SELECT
+      t.id, t.title, t.description, t.assignee_user_id, t.project_id, t.status, t.deadline_at,
+      t.cancel_reason, t.is_active, t.created_by, t.created_at, t.updated_at,
+      u.full_name AS assignee_name,
+      cu.full_name AS created_by_name,
+      p.status AS project_status,
+      p.pm_user_id AS project_pm_user_id,
+      c.company_name AS project_company_name,
+      st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en,
+      COALESCE((
+        SELECT SUM(COALESCE(l.end_at, ?) - l.start_at)
+        FROM task_time_logs l
+        WHERE l.task_id = t.id
+      ),0) AS spent_seconds
+    FROM tasks t
+    JOIN users u ON u.id = t.assignee_user_id
+    JOIN users cu ON cu.id = t.created_by
+    LEFT JOIN projects p ON p.id = t.project_id
+    LEFT JOIN clients c ON c.id = p.client_id
+    LEFT JOIN service_types st ON st.id = p.service_type_id
+    WHERE t.is_active = 1
+  `;
+
+  const binds = [ts];
+
+  // Role-based visibility constraints
+  if (user.role === "admin" || user.role === "rop") {
+    // no constraint
+  } else if (user.role === "pm") {
+    sql += ` AND (t.assignee_user_id = ? OR p.pm_user_id = ?)`;
+    binds.push(user.id, user.id);
+  } else {
+    // fin / sale / others: только свои задачи
+    sql += ` AND t.assignee_user_id = ?`;
+    binds.push(user.id);
+  }
+
+  if (filters.project_id) {
+    sql += ` AND t.project_id = ?`;
+    binds.push(filters.project_id);
+  }
+
+  if (filters.assignee_user_id) {
+    // only admin/rop can filter by someone else; others forced to themselves
+    if (user.role === "admin" || user.role === "rop") {
+      sql += ` AND t.assignee_user_id = ?`;
+      binds.push(filters.assignee_user_id);
+    } else {
+      sql += ` AND t.assignee_user_id = ?`;
+      binds.push(user.id);
+    }
+  }
+
+  sql += ` ORDER BY t.updated_at DESC`;
+
+  const res = await env.DB.prepare(sql).bind(...binds).all();
+  return res.results || [];
+}
+
+async function queryProjectsKanban(env, user, filters) {
+  // filters: pm_user_id, service_type_id
+  const ts = nowSec();
+  let sql = `
+    SELECT
+      p.id, p.client_id, p.service_type_id, p.meeting_at, p.deadline_at,
+      p.amount, p.currency, p.pm_user_id, p.status, p.review, p.comment, p.cancel_reason,
+      p.is_active, p.created_by, p.created_at, p.updated_at,
+
+      c.company_name,
+      c.full_name AS owner_full_name, c.phone1 AS owner_phone1, c.phone2 AS owner_phone2,
+
+      st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en,
+
+      u.full_name AS pm_name,
+      cu.full_name AS created_by_name,
+
+      -- ✅ tasks stats (для прогресса на карточке проекта)
+      COALESCE((SELECT COUNT(1)
+                FROM tasks t
+                WHERE t.is_active = 1 AND t.project_id = p.id), 0) AS tasks_total,
+
+      COALESCE((SELECT COUNT(1)
+                FROM tasks t
+                WHERE t.is_active = 1 AND t.project_id = p.id AND t.status = 'done'), 0) AS tasks_done,
+
+      CASE WHEN EXISTS (
+        SELECT 1 FROM tasks t
+        WHERE t.is_active=1 AND t.project_id=p.id AND t.assignee_user_id=?
+      ) THEN 1 ELSE 0 END AS _fin_has_task
+
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    JOIN service_types st ON st.id = p.service_type_id
+    JOIN users u ON u.id = p.pm_user_id
+    JOIN users cu ON cu.id = p.created_by
+    WHERE p.is_active = 1
+  `;
+
+  const binds = [user.id];
+
+  // Role-based
+  if (user.role === "admin" || user.role === "rop") {
+    // ok
+  } else if (user.role === "pm") {
+    sql += ` AND p.pm_user_id = ?`;
+    binds.push(user.id);
+  } else if (user.role === "fin") {
+    sql += ` AND EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.is_active=1 AND t.project_id=p.id AND t.assignee_user_id=?
+    )`;
+    binds.push(user.id);
+  } else {
+    // sale/other no projects
+    sql += ` AND 1=0`;
+  }
+
+  if (filters.pm_user_id) {
+    if (user.role === "admin" || user.role === "rop") {
+      sql += ` AND p.pm_user_id = ?`;
+      binds.push(filters.pm_user_id);
+    }
+  }
+  if (filters.service_type_id) {
+    sql += ` AND p.service_type_id = ?`;
+    binds.push(filters.service_type_id);
+  }
+
+  sql += ` ORDER BY p.updated_at DESC`;
+
+  const res = await env.DB.prepare(sql).bind(...binds).all();
+  let rows = res.results || [];
+
+  // hide amount for non admin/rop
+  if (!projectAmountVisible(user)) {
+    rows = rows.map((r) => {
+      const copy = { ...r };
+      delete copy.amount;
+      delete copy.currency;
+      return copy;
+    });
+  }
+
+  return rows;
+}
+
+
+async function queryCourseLeadsKanban(env, user, filters) {
+  // accessible for admin/rop/sale
+  if (!(user.role === "admin" || user.role === "rop" || user.role === "sale")) return [];
+
+  let sql = `
+    SELECT
+      cl.id, cl.lead_client_id, cl.company_id, cl.course_type_id,
+      cl.course_price, cl.course_start_date, cl.currency,
+      cl.agreed_amount, cl.paid_amount, cl.status, cl.comment, cl.cancel_reason,
+      cl.is_active, cl.created_by, cl.created_at, cl.updated_at,
+
+      lead.full_name AS lead_full_name,
+      lead.phone1 AS lead_phone1,
+      comp.company_name AS company_name,
+
+      ct.name AS course_type_name,
+      cu.full_name AS created_by_name
+    FROM course_leads cl
+    JOIN clients lead ON lead.id = cl.lead_client_id
+    LEFT JOIN clients comp ON comp.id = cl.company_id
+    JOIN course_types ct ON ct.id = cl.course_type_id
+    JOIN users cu ON cu.id = cl.created_by
+    WHERE cl.is_active = 1
+  `;
+  const binds = [];
+
+  if (filters.company_id) {
+    sql += ` AND cl.company_id = ?`;
+    binds.push(filters.company_id);
+  }
+  if (filters.course_type_id) {
+    sql += ` AND cl.course_type_id = ?`;
+    binds.push(filters.course_type_id);
+  }
+  sql += ` ORDER BY cl.updated_at DESC`;
+
+  const res = await env.DB.prepare(sql).bind(...binds).all();
+  let rows = res.results || [];
+
+  // sale sees course amounts; ok. If ever needed to hide, do it here.
+  if (!courseAmountVisible(user)) {
+    rows = rows.map((r) => {
+      const copy = { ...r };
+      delete copy.course_price;
+      delete copy.agreed_amount;
+      delete copy.paid_amount;
+      delete copy.currency;
+      return copy;
+    });
+  }
+  return rows;
+}
+
+/** Clients list by type with RBAC:
+ * - admin/rop/sale: both
+ * - pm: only companies
+ * - fin: no clients list
+ */
+async function queryClients(env, user, type, q) {
+  if (user.role === "fin") return [];
+  if (user.role === "pm" && type !== "company") return [];
+
+  let sql = `
+    SELECT
+      id, type, company_name, full_name, phone1, phone2,
+      city_id, source_id, sphere_id, comment, tg_group_link, company_id,
+      is_active, created_by, created_at, updated_at
+    FROM clients
+    WHERE is_active = 1
+  `;
+  const binds = [];
+
+  if (type) {
+    sql += ` AND type = ?`;
+    binds.push(type);
+  }
+
+  // RBAC: pm only companies already handled; sale/admin/rop ok
+  if (q && q.trim()) {
+    sql += ` AND (
+      lower(full_name) LIKE ? OR
+      lower(COALESCE(company_name,'')) LIKE ? OR
+      phone1 LIKE ? OR
+      COALESCE(phone2,'') LIKE ?
+    )`;
+    const s = `%${q.trim().toLowerCase()}%`;
+    binds.push(s, s, `%${q.trim()}%`, `%${q.trim()}%`);
+  }
+
+  sql += ` ORDER BY updated_at DESC LIMIT 500`;
+
+  const res = await env.DB.prepare(sql).bind(...binds).all();
+  return res.results || [];
+}
+
+async function getClientCard(env, user, clientId) {
+  if (user.role === "fin") return null;
+
+  const client = await env.DB.prepare(
+    `SELECT
+      id, type, company_name, full_name, phone1, phone2,
+      city_id, source_id, sphere_id, comment, tg_group_link, company_id,
+      is_active, created_by, created_at, updated_at
+     FROM clients
+     WHERE id = ? AND is_active = 1`
+  )
+    .bind(clientId)
+    .first();
+
+  if (!client) return null;
+
+  // RBAC: pm only companies
+  if (user.role === "pm" && client.type !== "company") return null;
+
+  const data = { client };
+
+  if (client.type === "company") {
+    // lists inside company card: course leads + projects
+    const courseLeads = await env.DB.prepare(
+      `SELECT cl.id, cl.status, cl.agreed_amount, cl.paid_amount,
+              ct.name AS course_type_name,
+              lead.full_name AS lead_full_name
+       FROM course_leads cl
+       JOIN course_types ct ON ct.id = cl.course_type_id
+       JOIN clients lead ON lead.id = cl.lead_client_id
+       WHERE cl.is_active=1 AND cl.company_id = ?
+       ORDER BY cl.updated_at DESC LIMIT 200`
+    )
+      .bind(clientId)
+      .all();
+
+    const projects = await env.DB.prepare(
+      `SELECT p.id, p.status, p.pm_user_id, u.full_name AS pm_name,
+              p.amount, p.currency,
+              st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en
+       FROM projects p
+       JOIN users u ON u.id = p.pm_user_id
+       JOIN service_types st ON st.id = p.service_type_id
+       WHERE p.is_active=1 AND p.client_id = ?
+       ORDER BY p.updated_at DESC LIMIT 200`
+    )
+      .bind(clientId)
+      .all();
+
+    let projRows = projects.results || [];
+    if (!projectAmountVisible(user)) {
+      projRows = projRows.map((r) => {
+        const copy = { ...r };
+        delete copy.amount;
+        delete copy.currency;
+        return copy;
+      });
+    }
+
+    let clRows = courseLeads.results || [];
+    if (!courseAmountVisible(user)) {
+      clRows = clRows.map((r) => {
+        const copy = { ...r };
+        delete copy.agreed_amount;
+        delete copy.paid_amount;
+        return copy;
+      });
+    }
+
+    data.course_leads = clRows;
+    data.projects = projRows;
+  }
+
+  return data;
+}
+
+async function listSettingsAll(env) {
+  const [theme, cities, spheres, sources, courseTypes, serviceTypes] = await Promise.all([
+    env.DB.prepare(`SELECT key, value_json, updated_at FROM app_settings WHERE key='theme'`).first(),
+    env.DB.prepare(`SELECT * FROM dict_cities WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM dict_spheres WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM dict_sources WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM course_types WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM service_types WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+  ]);
+
+  return {
+    theme: theme ? { key: theme.key, value: JSON.parse(theme.value_json || "{}"), updated_at: theme.updated_at } : null,
+    dict_cities: cities.results || [],
+    dict_spheres: spheres.results || [],
+    dict_sources: sources.results || [],
+    course_types: courseTypes.results || [],
+    service_types: serviceTypes.results || [],
+  };
+}
+
+async function handleAuthLogin(env, request, origin) {
+  const body = await readJson(request);
+  if (!body) return badRequest("Expected JSON");
+
+  const miss = requireFields(body, ["login", "password"]);
+  if (miss) return badRequest(`Missing: ${miss}`);
+
+  const login = String(body.login).trim();
+  const password = String(body.password);
+
+  const user = await env.DB.prepare(
+    `SELECT id, full_name, login, role, is_active, pass_algo, pass_salt_hex, pass_hash_hex, pass_iter
+     FROM users
+     WHERE login = ?`
+  )
+    .bind(login)
+    .first();
+
+  if (!user || user.is_active !== 1) return unauthorized("Неверный логин или пароль");
+
+  const algo = user.pass_algo || "pbkdf2_sha256";
+  if (algo !== "pbkdf2_sha256") return unauthorized("Unsupported password algo");
+
+  const hashHex = await pbkdf2Sha256Hex(password, user.pass_salt_hex, normalizePbkdf2Iter(user.pass_iter), 32);
+  if (hashHex !== String(user.pass_hash_hex)) return unauthorized("Неверный логин или пароль");
+
+  // create session until end of day tashkent
+  const sess = await createSession(env, user.id);
+
+  // update last_login_at
+  await env.DB.prepare(`UPDATE users SET last_login_at = ? WHERE id = ?`)
+    .bind(nowSec(), user.id)
+    .run();
+
+  const cookieDomain = (env.COOKIE_DOMAIN || "").trim() || undefined;
+  const setCookie = buildSetCookie(COOKIE_NAME, sess.token, {
+    expiresAtSec: sess.expires_at,
+    domain: cookieDomain,
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+  });
+
+  const headers = {
+    ...corsHeaders(env, origin),
+    "Set-Cookie": setCookie,
+  };
+
+  return jsonResp(
+    {
+      ok: true,
+      data: {
+        user: { id: user.id, full_name: user.full_name, login: user.login, role: user.role },
+        session_expires_at: sess.expires_at,
+      },
+    },
+    200,
+    headers
+  );
+}
+
+async function handleAuthLogout(env, request, origin) {
+  await deleteSession(env, request);
+
+  const cookieDomain = (env.COOKIE_DOMAIN || "").trim() || undefined;
+  const clearCookie = buildSetCookie(COOKIE_NAME, "", {
+    expiresAtSec: 0,
+    maxAge: 0,
+    domain: cookieDomain,
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+  });
+
+  return jsonResp({ ok: true }, 200, { ...corsHeaders(env, origin), "Set-Cookie": clearCookie });
+}
+
+/** users: admin only */
+async function handleUsers(env, user, request, origin, segments) {
+  const method = request.method;
+  const id = segments[2] ? intId(segments[2]) : null;
+
+  const normTelegramId = (v) => {
+    if (v === undefined || v === null) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    if (!/^\d+$/.test(s)) throw new Error("Invalid telegram_id");
+    const n = Number(s);
+    if (!Number.isSafeInteger(n) || n <= 0) throw new Error("Invalid telegram_id");
+    return n;
+  };
+
+  // ✅ GET /api/users — доступно всем авторизованным (для назначения задач)
+  if (method === "GET" && !id) {
+    if (!user) return forbidden("No auth");
+    if (user.role === "admin") {
+      const rows = await listUsers(env);
+      return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+    }
+    const rows = await env.DB
+      .prepare(
+        `SELECT id, full_name, login, role, is_active
+         FROM users
+         WHERE is_active=1
+         ORDER BY full_name ASC`
+      )
+      .all();
+    return jsonResp({ ok: true, data: rows.results || [] }, 200, corsHeaders(env, origin));
+  }
+
+  // from here: admin-only routes
+  if (!requireRole(user, ["admin"])) return forbidden("Only admin");
+
+  const hasTgCol = await usersHasTelegramIdColumn(env);
+
+  // ✅ POST /api/users — admin only
+  if (method === "POST" && !id) {
+    const body = await readJson(request);
+    if (!body) return badRequest("Expected JSON");
+
+    const full_name = str(body.full_name);
+    const phone = str(body.phone);
+    const login = str(body.login);
+    const role = str(body.role);
+    const new_password = str(body.new_password);
+
+    if (!full_name || !login || !role || !new_password) return badRequest("Missing fields");
+    if (!["admin", "pm", "fin", "sale", "rop"].includes(role)) return badRequest("Invalid role");
+
+    let telegram_id = null;
+    if (hasTgCol) {
+      try {
+        telegram_id = normTelegramId(body.telegram_id);
+      } catch {
+        return badRequest("Invalid telegram_id");
+      }
+    } else {
+      // if client sends telegram_id but DB doesn't support it -> explicit hint
+      if (body.telegram_id !== undefined && String(body.telegram_id).trim() !== "") {
+        return badRequest("DB schema has no telegram_id column. Run D1 migration to add it.");
+      }
+    }
+
+    const { saltHex, hashHex, iter, algo } = await hashPassword(new_password);
+
+    try {
+      const stmt = hasTgCol
+        ? `INSERT INTO users(full_name, phone, telegram_id, login, role, pass_algo, pass_salt_hex, pass_hash_hex, pass_iter, is_active)
+           VALUES(?,?,?,?,?,?,?,?,?,1)`
+        : `INSERT INTO users(full_name, phone, login, role, pass_algo, pass_salt_hex, pass_hash_hex, pass_iter, is_active)
+           VALUES(?,?,?,?,?,?,?,?,1)`;
+
+      const binds = hasTgCol
+        ? [full_name, phone || null, telegram_id, login, role, algo, saltHex, hashHex, iter]
+        : [full_name, phone || null, login, role, algo, saltHex, hashHex, iter];
+
+      const r = await env.DB.prepare(stmt).bind(...binds).run();
+      return jsonResp({ ok: true, id: r.meta.last_row_id }, 200, corsHeaders(env, origin));
+    } catch {
+      return badRequest("Create failed (duplicate login/telegram_id?)");
+    }
+  }
+
+  // ✅ PUT /api/users/:id — admin only
+  if (method === "PUT" && id) {
+    const body = await readJson(request);
+    if (!body) return badRequest("Expected JSON");
+
+    const allowed = pick(body, ["full_name", "phone", "telegram_id", "login", "role", "is_active"]);
+    if (!hasTgCol) delete allowed.telegram_id;
+
+    if (!Object.keys(allowed).length) return badRequest("Nothing to update");
+    if (allowed.role && !["admin", "pm", "fin", "sale", "rop"].includes(allowed.role)) return badRequest("Invalid role");
+
+    if ("telegram_id" in allowed) {
+      try {
+        allowed.telegram_id = normTelegramId(allowed.telegram_id);
+      } catch {
+        return badRequest("Invalid telegram_id");
+      }
+    }
+
+    const set = Object.keys(allowed).map((k) => `${k}=?`).join(", ");
+    const binds = Object.keys(allowed).map((k) => {
+      const v = allowed[k];
+      if (k === "is_active") return Number(v) ? 1 : 0;
+      return v === "" ? null : v;
+    });
+
+    try {
+      await env.DB.prepare(`UPDATE users SET ${set} WHERE id = ?`).bind(...binds, id).run();
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    } catch {
+      return badRequest("Update failed (duplicate login/telegram_id?)");
+    }
+  }
+
+  // ✅ POST /api/users/:id/reset_password — admin only
+  if (method === "POST" && id && segments[3] === "reset_password") {
+    const body = await readJson(request);
+    if (!body) return badRequest("Expected JSON");
+
+    const new_password = str(body.new_password);
+    if (!new_password) return badRequest("Missing new_password");
+
+    const { saltHex, hashHex, iter, algo } = await hashPassword(new_password);
+    await env.DB
+      .prepare(`UPDATE users SET pass_algo=?, pass_salt_hex=?, pass_hash_hex=?, pass_iter=? WHERE id=?`)
+      .bind(algo, saltHex, hashHex, iter, id)
+      .run();
+
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+
+
+/** settings: admin only */
+async function handleSettings(env, user, request, origin, segments) {
+  const method = request.method;
+  const isAdmin = requireRole(user, ["admin"]);
+  const isRead = method === "GET";
+
+  // GET разрешаем всем авторизованным (нужно для Projects/Clients),
+  // а любые изменения — только admin.
+  if (!isRead && !isAdmin) return forbidden("Only admin");
+
+
+  // GET /api/settings/all
+  if (method === "GET" && segments[2] === "all") {
+    const data = await listSettingsAll(env);
+    return jsonResp({ ok: true, data }, 200, corsHeaders(env, origin));
+  }
+
+  // theme: GET/PUT /api/settings/theme
+  if (segments[2] === "theme") {
+    if (method === "GET") {
+      const row = await env.DB.prepare(`SELECT key, value_json, updated_at FROM app_settings WHERE key='theme'`).first();
+      const data = row ? { key: row.key, value: JSON.parse(row.value_json || "{}"), updated_at: row.updated_at } : null;
+      return jsonResp({ ok: true, data }, 200, corsHeaders(env, origin));
+    }
+    if (method === "PUT") {
+      const body = await readJson(request);
+      if (!body) return badRequest("Expected JSON");
+      // accept anything JSON-ish, store as string
+      const value_json = JSON.stringify(body.value ?? body);
+      await env.DB.prepare(`INSERT OR REPLACE INTO app_settings(key,value_json,updated_at) VALUES('theme',?,?)`)
+        .bind(value_json, nowSec())
+        .run();
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    }
+  }
+
+  // dict CRUD helper
+  async function dictCrud(table, is3lang) {
+    if (method !== "GET" && !isAdmin) return forbidden("Only admin");
+    const id = segments[3] ? intId(segments[3]) : null;
+    const body = await readJson(request);
+
+    if (method === "GET" && !id) {
+      const rows = await env.DB.prepare(`SELECT * FROM ${table} WHERE is_active=1 ORDER BY sort, id DESC`).all();
+      return jsonResp({ ok: true, data: rows.results || [] }, 200, corsHeaders(env, origin));
+    }
+
+    if (method === "POST" && !id) {
+      if (!body) return badRequest("Expected JSON");
+      if (is3lang) {
+        const miss = requireFields(body, ["name_ru", "name_uz", "name_en"]);
+        if (miss) return badRequest(`Missing: ${miss}`);
+        const sort = body.sort == null ? 1000 : Number(body.sort);
+        await env.DB.prepare(
+          `INSERT INTO ${table}(name_ru,name_uz,name_en,sort,is_active) VALUES(?,?,?,?,1)`
+        )
+          .bind(String(body.name_ru).trim(), String(body.name_uz).trim(), String(body.name_en).trim(), sort)
+          .run();
+      } else {
+        // course_types: name, start_date, price, currency, sort
+        const miss = requireFields(body, ["name"]);
+        if (miss) return badRequest(`Missing: ${miss}`);
+        const sort = body.sort == null ? 1000 : Number(body.sort);
+        const start_date = body.start_date == null ? null : Number(body.start_date);
+        const price = body.price == null ? 0 : Number(body.price);
+        const currency = body.currency ? String(body.currency) : "UZS";
+        await env.DB.prepare(
+          `INSERT INTO ${table}(name,start_date,price,currency,sort,is_active) VALUES(?,?,?,?,?,1)`
+        )
+          .bind(String(body.name).trim(), start_date, price, currency, sort)
+          .run();
+      }
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    }
+
+    if (!id) return notFound();
+
+    if (method === "PUT") {
+      if (!isAdmin) return forbidden("Only admin");
+      if (!body) return badRequest("Expected JSON");
+      if (is3lang) {
+        const allowed = pick(body, ["name_ru", "name_uz", "name_en", "sort", "is_active"]);
+        const keys = Object.keys(allowed);
+        if (!keys.length) return badRequest("No fields");
+        const set = keys.map((k) => `${k}=?`).join(",");
+        const binds = keys.map((k) => {
+          const v = allowed[k];
+          if (k.startsWith("name_")) return v == null ? null : String(v).trim();
+          if (k === "sort") return v == null ? 1000 : Number(v);
+          if (k === "is_active") return Number(v) ? 1 : 0;
+          return v;
+        });
+        await env.DB.prepare(`UPDATE ${table} SET ${set} WHERE id=?`).bind(...binds, id).run();
+      } else {
+        const allowed = pick(body, ["name", "start_date", "price", "currency", "sort", "is_active"]);
+        const keys = Object.keys(allowed);
+        if (!keys.length) return badRequest("No fields");
+        const set = keys.map((k) => `${k}=?`).join(",");
+        const binds = keys.map((k) => {
+          const v = allowed[k];
+          if (k === "name" || k === "currency") return v == null ? null : String(v).trim();
+          if (k === "start_date") return v == null ? null : Number(v);
+          if (k === "price") return v == null ? 0 : Number(v);
+          if (k === "sort") return v == null ? 1000 : Number(v);
+          if (k === "is_active") return Number(v) ? 1 : 0;
+          return v;
+        });
+        await env.DB.prepare(`UPDATE ${table} SET ${set} WHERE id=?`).bind(...binds, id).run();
+      }
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    }
+
+    // soft delete: POST /api/settings/{dict}/{id}/delete
+    if (method === "POST" && segments[4] === "delete") {
+      await env.DB.prepare(`UPDATE ${table} SET is_active=0 WHERE id=?`).bind(id).run();
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    }
+
+    return notFound();
+  }
+
+  // dict routes:
+  // /api/settings/cities
+  // /api/settings/spheres
+  // /api/settings/sources
+  // /api/settings/service_types
+  // /api/settings/course_types
+  if (segments[2] === "cities") return dictCrud("dict_cities", true);
+  if (segments[2] === "spheres") return dictCrud("dict_spheres", true);
+  if (segments[2] === "sources") return dictCrud("dict_sources", true);
+  if (segments[2] === "service_types") return dictCrud("service_types", true);
+  if (segments[2] === "course_types") return dictCrud("course_types", false);
+
+  return notFound();
+}
+
+/** tasks endpoints */
+async function handleTasks(env, user, request, origin, segments) {
+  const method = request.method;
+  const id = segments[2] ? intId(segments[2]) : null;
+
+  // GET /api/tasks?assignee_user_id=&project_id=
+  if (method === "GET" && !id) {
+    const url = new URL(request.url);
+    const assignee_user_id = url.searchParams.get("assignee_user_id");
+    const project_id = url.searchParams.get("project_id");
+    const filters = {
+      assignee_user_id: assignee_user_id ? intId(assignee_user_id) : null,
+      project_id: project_id ? intId(project_id) : null,
+    };
+    const rows = await queryTasksKanban(env, user, filters);
+    return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+  }
+
+  const body = await readJson(request);
+
+  // POST /api/tasks (create)
+  if (method === "POST" && !id) {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["description", "assignee_user_id"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const assignee = intId(body.assignee_user_id);
+    if (!assignee) return badRequest("Invalid assignee_user_id");
+
+    // Only admin/rop can assign to others; others can only assign to self
+    //if (!(user.role === "admin" || user.role === "rop") && assignee !== user.id) {
+    //  return forbidden("You can assign only to yourself");
+    //}
+
+    const projectId = body.project_id ? intId(body.project_id) : null;
+    const deadline_at = body.deadline_at == null ? null : Number(body.deadline_at);
+    const title = body.title ? String(body.title).trim() : null;
+
+    const res = await env.DB.prepare(
+      `INSERT INTO tasks(title, description, assignee_user_id, project_id, status, deadline_at, is_active, created_by)
+       VALUES(?,?,?,?, 'new', ?, 1, ?)`
+    )
+      .bind(title, String(body.description).trim(), assignee, projectId, deadline_at, user.id)
+      .run();
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  if (!id) return notFound();
+
+  // GET /api/tasks/:id
+  if (method === "GET") {
+    const ts = nowSec();
+    const row = await env.DB.prepare(
+      `SELECT
+        t.*,
+        u.full_name AS assignee_name,
+        cu.full_name AS created_by_name,
+        p.pm_user_id AS project_pm_user_id,
+        c.company_name AS project_company_name,
+        COALESCE((
+          SELECT SUM(COALESCE(l.end_at, ?) - l.start_at) FROM task_time_logs l WHERE l.task_id=t.id
+        ),0) AS spent_seconds
+       FROM tasks t
+       JOIN users u ON u.id=t.assignee_user_id
+       JOIN users cu ON cu.id=t.created_by
+       LEFT JOIN projects p ON p.id=t.project_id
+       LEFT JOIN clients c ON c.id=p.client_id
+       WHERE t.id=? AND t.is_active=1`
+    )
+      .bind(ts, id)
+      .first();
+
+    if (!row) return notFound();
+    if (!canSeeTask(user, row)) return forbidden();
+
+    return jsonResp({ ok: true, data: row }, 200, corsHeaders(env, origin));
+  }
+
+  // PUT /api/tasks/:id (edit) - only creator or admin can edit title/description/deadline/assignee/project
+  if (method === "PUT") {
+    if (!body) return badRequest("Expected JSON");
+
+    const existing = await env.DB.prepare(
+      `SELECT t.*, p.pm_user_id AS project_pm_user_id FROM tasks t LEFT JOIN projects p ON p.id=t.project_id
+       WHERE t.id=? AND t.is_active=1`
+    )
+      .bind(id)
+      .first();
+
+    if (!existing) return notFound();
+    if (!canSeeTask(user, existing)) return forbidden();
+
+    const isOwner = existing.created_by === user.id;
+    const isAdmin = user.role === "admin" || user.role === "rop";
+    if (!(isOwner || isAdmin)) return forbidden("Only owner/admin can edit task");
+
+    const allowed = pick(body, ["title", "description", "assignee_user_id", "project_id", "deadline_at"]);
+    const keys = Object.keys(allowed);
+    if (!keys.length) return badRequest("No fields");
+
+    // assignee restrictions
+    if (allowed.assignee_user_id != null) {
+      const assignee = intId(allowed.assignee_user_id);
+      if (!assignee) return badRequest("Invalid assignee_user_id");
+      //if (!(user.role === "admin" || user.role === "rop") && assignee !== user.id) {
+      //  return forbidden("You can assign only to yourself");
+      //}
+      allowed.assignee_user_id = assignee;
+    }
+    if (allowed.project_id !== undefined) {
+      allowed.project_id = allowed.project_id ? intId(allowed.project_id) : null;
+    }
+    if (allowed.deadline_at !== undefined) {
+      allowed.deadline_at = allowed.deadline_at == null ? null : Number(allowed.deadline_at);
+    }
+    if (allowed.title !== undefined) {
+      allowed.title = allowed.title ? String(allowed.title).trim() : null;
+    }
+    if (allowed.description !== undefined) {
+      allowed.description = String(allowed.description).trim();
+      if (!allowed.description) return badRequest("description required");
+    }
+
+    const set = keys.map((k) => `${k}=?`).join(",");
+    const binds = keys.map((k) => allowed[k]);
+    await env.DB.prepare(`UPDATE tasks SET ${set} WHERE id=?`).bind(...binds, id).run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/tasks/:id/move { status, cancel_reason? }
+  if (method === "POST" && segments[3] === "move") {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["status"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const status = String(body.status);
+    if (!TASK_STATUSES.includes(status)) return badRequest("Invalid status");
+
+    const task = await env.DB.prepare(`SELECT * FROM tasks WHERE id=? AND is_active=1`).bind(id).first();
+    if (!task) return notFound();
+    if (!canSeeTask(user, task)) return forbidden();
+
+    // cancel requires reason
+    const cancel_reason = body.cancel_reason ? String(body.cancel_reason).trim() : null;
+    if (status === "canceled" && !cancel_reason) return badRequest("cancel_reason_required");
+
+    const ts = nowSec();
+
+    // If moving into in_progress: must be assignee or admin/rop moving for assignee
+    if (status === "in_progress") {
+      // only assignee can start (or admin/rop can start for them)
+      if (!(user.role === "admin" || user.role === "rop") && task.assignee_user_id !== user.id) {
+        return forbidden("Only assignee can start task");
+      }
+
+      // pause any other in_progress for that assignee and close their open logs
+      await env.DB.batch([
+        env.DB.prepare(
+          `UPDATE tasks
+           SET status='pause'
+           WHERE is_active=1 AND assignee_user_id=? AND status='in_progress' AND id<>?`
+        ).bind(task.assignee_user_id, id),
+
+        env.DB.prepare(
+          `UPDATE task_time_logs
+           SET end_at=?
+           WHERE user_id=? AND end_at IS NULL`
+        ).bind(ts, task.assignee_user_id),
+
+        env.DB.prepare(`UPDATE tasks SET status='in_progress', cancel_reason=NULL WHERE id=?`).bind(id),
+
+        env.DB.prepare(
+          `INSERT INTO task_time_logs(task_id,user_id,start_at,end_at)
+           VALUES(?,?,?,NULL)`
+        ).bind(id, task.assignee_user_id, ts),
+      ]);
+
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    }
+
+    // Leaving in_progress: close open log for this task+assignee
+    if (task.status === "in_progress" && status !== "in_progress") {
+      await env.DB.prepare(
+        `UPDATE task_time_logs SET end_at=? WHERE task_id=? AND user_id=? AND end_at IS NULL`
+      )
+        .bind(ts, id, task.assignee_user_id)
+        .run();
+    }
+
+    await env.DB.prepare(
+      `UPDATE tasks SET status=?, cancel_reason=? WHERE id=?`
+    )
+      .bind(status, status === "canceled" ? cancel_reason : null, id)
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/tasks/:id/delete (soft)
+  if (method === "POST" && segments[3] === "delete") {
+    const task = await env.DB.prepare(`SELECT * FROM tasks WHERE id=? AND is_active=1`).bind(id).first();
+    if (!task) return notFound();
+
+    // Only owner (created_by) or admin/rop can delete
+    const isOwner = task.created_by === user.id;
+    const isAdmin = user.role === "admin" || user.role === "rop";
+    if (!(isOwner || isAdmin)) return forbidden("Only owner/admin can delete");
+
+    const ts = nowSec();
+    await env.DB.prepare(
+      `UPDATE tasks SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`
+    )
+      .bind(ts, user.id, id)
+      .run();
+
+    // close open logs
+    await env.DB.prepare(
+      `UPDATE task_time_logs SET end_at=? WHERE task_id=? AND end_at IS NULL`
+    )
+      .bind(ts, id)
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+/** projects endpoints */
+async function handleProjects(env, user, request, origin, segments) {
+  const method = request.method;
+  const id = segments[2] ? intId(segments[2]) : null;
+
+  // GET /api/projects?pm_user_id=&service_type_id=
+  if (method === "GET" && !id) {
+    const url = new URL(request.url);
+    const pm_user_id = url.searchParams.get("pm_user_id");
+    const service_type_id = url.searchParams.get("service_type_id");
+
+    const filters = {
+      pm_user_id: pm_user_id ? intId(pm_user_id) : null,
+      service_type_id: service_type_id ? intId(service_type_id) : null,
+    };
+
+    const rows = await queryProjectsKanban(env, user, filters);
+    return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+  }
+
+  const body = await readJson(request);
+
+  // POST /api/projects (create) - admin/rop/pm only
+  if (method === "POST" && !id) {
+    if (!(user.role === "admin" || user.role === "rop" || user.role === "pm")) {
+      return forbidden("No access");
+    }
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["client_id", "service_type_id", "pm_user_id"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const client_id = intId(body.client_id);
+    const service_type_id = intId(body.service_type_id);
+    const pm_user_id = intId(body.pm_user_id);
+    if (!client_id || !service_type_id || !pm_user_id) return badRequest("Invalid ids");
+
+    // PM can only create projects for themselves as pm_user_id
+    if (user.role === "pm" && pm_user_id !== user.id) return forbidden("PM can set only себя как PM");
+
+    const meeting_at = body.meeting_at == null ? null : Number(body.meeting_at);
+    const deadline_at = body.deadline_at == null ? null : Number(body.deadline_at);
+    const comment = body.comment ? String(body.comment).trim() : null;
+
+    let amount = body.amount == null ? null : Number(body.amount);
+    let currency = body.currency ? String(body.currency).trim() : "UZS";
+
+    // Only admin/rop can set amount
+    if (!projectAmountVisible(user)) {
+      amount = null;
+      currency = "UZS";
+    }
+
+    const res = await env.DB.prepare(
+      `INSERT INTO projects(
+        client_id, service_type_id, meeting_at, deadline_at,
+        amount, currency, pm_user_id, status, comment, is_active, created_by
+      ) VALUES(?,?,?,?,?,?,?, 'new', ?, 1, ?)`
+    )
+      .bind(client_id, service_type_id, meeting_at, deadline_at, amount, currency, pm_user_id, comment, user.id)
+      .run();
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  if (!id) return notFound();
+
+  // GET /api/projects/:id
+  if (method === "GET") {
+    const row = await env.DB.prepare(
+      `SELECT
+        p.*,
+        c.company_name, c.full_name AS owner_full_name, c.phone1 AS owner_phone1, c.phone2 AS owner_phone2,
+        st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en,
+        u.full_name AS pm_name,
+        cu.full_name AS created_by_name,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM tasks t WHERE t.is_active=1 AND t.project_id=p.id AND t.assignee_user_id=?
+        ) THEN 1 ELSE 0 END AS _fin_has_task
+       FROM projects p
+       JOIN clients c ON c.id=p.client_id
+       JOIN service_types st ON st.id=p.service_type_id
+       JOIN users u ON u.id=p.pm_user_id
+       JOIN users cu ON cu.id=p.created_by
+       WHERE p.id=? AND p.is_active=1`
+    )
+      .bind(user.id, id)
+      .first();
+
+    if (!row) return notFound();
+    if (!canSeeProject(user, row)) return forbidden();
+
+    if (!projectAmountVisible(user)) {
+      delete row.amount;
+      delete row.currency;
+    }
+
+    return jsonResp({ ok: true, data: row }, 200, corsHeaders(env, origin));
+  }
+
+  // PUT /api/projects/:id (edit) - admin/rop or PM(owner of project)
+  if (method === "PUT") {
+    if (!body) return badRequest("Expected JSON");
+    const existing = await env.DB.prepare(
+      `SELECT p.*,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM tasks t WHERE t.is_active=1 AND t.project_id=p.id AND t.assignee_user_id=?
+        ) THEN 1 ELSE 0 END AS _fin_has_task
+       FROM projects p WHERE p.id=? AND p.is_active=1`
+    )
+      .bind(user.id, id)
+      .first();
+
+    if (!existing) return notFound();
+    if (!canSeeProject(user, existing)) return forbidden();
+
+    const isAdmin = user.role === "admin" || user.role === "rop";
+    const isPmOwner = user.role === "pm" && existing.pm_user_id === user.id;
+    if (!(isAdmin || isPmOwner)) return forbidden();
+
+    const allowed = pick(body, [
+      "client_id",
+      "service_type_id",
+      "meeting_at",
+      "deadline_at",
+      "amount",
+      "currency",
+      "pm_user_id",
+      "comment",
+      "review",
+    ]);
+
+    if (allowed.client_id !== undefined) allowed.client_id = allowed.client_id ? intId(allowed.client_id) : null;
+    if (allowed.service_type_id !== undefined)
+      allowed.service_type_id = allowed.service_type_id ? intId(allowed.service_type_id) : null;
+    if (allowed.pm_user_id !== undefined) allowed.pm_user_id = allowed.pm_user_id ? intId(allowed.pm_user_id) : null;
+
+    if (!isAdmin) {
+      // PM cannot set amount, cannot change PM away from self
+      delete allowed.amount;
+      delete allowed.currency;
+      if (allowed.pm_user_id != null && allowed.pm_user_id !== user.id) return forbidden("PM cannot change PM");
+    }
+
+    const keys = Object.keys(allowed);
+    if (!keys.length) return badRequest("No fields");
+
+    const set = keys.map((k) => `${k}=?`).join(",");
+    const binds = keys.map((k) => {
+      const v = allowed[k];
+      if (k === "currency") return v == null ? "UZS" : String(v).trim();
+      if (k === "comment") return v == null ? null : String(v).trim();
+      if (k === "review") return (v == null || v === 0 || v === "0" || v === false) ? null : 1;
+      if (k === "amount") return v == null ? null : Number(v);
+      if (k.endsWith("_at")) return v == null ? null : Number(v);
+      return v;
+    });
+
+    await env.DB.prepare(`UPDATE projects SET ${set} WHERE id=?`).bind(...binds, id).run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/projects/:id/move { status, cancel_reason? }
+  if (method === "POST" && segments[3] === "move") {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["status"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const status = String(body.status);
+    if (!PROJECT_STATUSES.includes(status)) return badRequest("Invalid status");
+    const cancel_reason = body.cancel_reason ? String(body.cancel_reason).trim() : null;
+    if (status === "canceled" && !cancel_reason) return badRequest("cancel_reason_required");
+
+    const existing = await env.DB.prepare(
+      `SELECT p.*,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM tasks t WHERE t.is_active=1 AND t.project_id=p.id AND t.assignee_user_id=?
+        ) THEN 1 ELSE 0 END AS _fin_has_task
+       FROM projects p WHERE p.id=? AND p.is_active=1`
+    )
+      .bind(user.id, id)
+      .first();
+
+    if (!existing) return notFound();
+    if (!canSeeProject(user, existing)) return forbidden();
+
+    const isAdmin = user.role === "admin" || user.role === "rop";
+    const isPmOwner = user.role === "pm" && existing.pm_user_id === user.id;
+    if (!(isAdmin || isPmOwner)) return forbidden();
+
+    await env.DB.prepare(`UPDATE projects SET status=?, cancel_reason=? WHERE id=?`)
+      .bind(status, status === "canceled" ? cancel_reason : null, id)
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/projects/:id/delete (soft) admin/rop or PM owner
+  if (method === "POST" && segments[3] === "delete") {
+    const existing = await env.DB.prepare(`SELECT * FROM projects WHERE id=? AND is_active=1`).bind(id).first();
+    if (!existing) return notFound();
+
+    const isAdmin = user.role === "admin" || user.role === "rop";
+    const isPmOwner = user.role === "pm" && existing.pm_user_id === user.id;
+    if (!(isAdmin || isPmOwner)) return forbidden();
+
+    const ts = nowSec();
+    await env.DB.prepare(`UPDATE projects SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`)
+      .bind(ts, user.id, id)
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+/** courses (course_leads) endpoints */
+async function handleCourseLeads(env, user, request, origin, segments) {
+  const method = request.method;
+  const id = segments[2] ? intId(segments[2]) : null;
+
+  // only admin/rop/sale
+  if (!(user.role === "admin" || user.role === "rop" || user.role === "sale")) {
+    return forbidden("No access");
+  }
+
+  // GET /api/course_leads?company_id=&course_type_id=
+  if (method === "GET" && !id) {
+    const url = new URL(request.url);
+    const company_id = url.searchParams.get("company_id");
+    const course_type_id = url.searchParams.get("course_type_id");
+
+    const filters = {
+      company_id: company_id ? intId(company_id) : null,
+      course_type_id: course_type_id ? intId(course_type_id) : null,
+    };
+
+    const rows = await queryCourseLeadsKanban(env, user, filters);
+    return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+  }
+
+  const body = await readJson(request);
+
+  // POST /api/course_leads (create) -> status always 'new'
+  if (method === "POST" && !id) {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["lead_client_id", "course_type_id"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const lead_client_id = intId(body.lead_client_id);
+    const company_id = body.company_id ? intId(body.company_id) : null;
+    const course_type_id = intId(body.course_type_id);
+    if (!lead_client_id || !course_type_id) return badRequest("Invalid ids");
+
+    // Load course type to snapshot price/start_date/currency
+    const ct = await env.DB.prepare(`SELECT id, start_date, price, currency FROM course_types WHERE id=? AND is_active=1`)
+      .bind(course_type_id)
+      .first();
+    if (!ct) return badRequest("course_type_not_found");
+
+    const agreed_amount = body.agreed_amount == null ? null : Number(body.agreed_amount);
+    const paid_amount = body.paid_amount == null ? null : Number(body.paid_amount);
+    const comment = body.comment ? String(body.comment).trim() : null;
+
+    // Create always status = new
+    const res = await env.DB.prepare(
+      `INSERT INTO course_leads(
+        lead_client_id, company_id, course_type_id,
+        course_price, course_start_date, currency,
+        agreed_amount, paid_amount,
+        status, comment, is_active, created_by
+      ) VALUES(?,?,?,?,?,?,?,?, 'new', ?, 1, ?)`
+    )
+      .bind(
+        lead_client_id,
+        company_id,
+        course_type_id,
+        Number(ct.price || 0),
+        ct.start_date == null ? null : Number(ct.start_date),
+        String(ct.currency || "UZS"),
+        agreed_amount,
+        paid_amount,
+        comment,
+        user.id
+      )
+      .run();
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  if (!id) return notFound();
+
+  // GET /api/course_leads/:id
+  if (method === "GET") {
+    const row = await env.DB.prepare(
+      `SELECT
+        cl.*,
+        lead.full_name AS lead_full_name,
+        lead.phone1 AS lead_phone1,
+        comp.company_name AS company_name,
+        ct.name AS course_type_name,
+        cu.full_name AS created_by_name
+       FROM course_leads cl
+       JOIN clients lead ON lead.id=cl.lead_client_id
+       LEFT JOIN clients comp ON comp.id=cl.company_id
+       JOIN course_types ct ON ct.id=cl.course_type_id
+       JOIN users cu ON cu.id=cl.created_by
+       WHERE cl.id=? AND cl.is_active=1`
+    )
+      .bind(id)
+      .first();
+
+    if (!row) return notFound();
+
+    if (!courseAmountVisible(user)) {
+      delete row.course_price;
+      delete row.agreed_amount;
+      delete row.paid_amount;
+      delete row.currency;
+    }
+
+    return jsonResp({ ok: true, data: row }, 200, corsHeaders(env, origin));
+  }
+
+  // PUT /api/course_leads/:id (edit fields)
+  if (method === "PUT") {
+    if (!body) return badRequest("Expected JSON");
+
+    const allowed = pick(body, ["company_id", "course_type_id", "agreed_amount", "paid_amount", "comment"]);
+    if (allowed.company_id !== undefined) allowed.company_id = allowed.company_id ? intId(allowed.company_id) : null;
+    if (allowed.course_type_id !== undefined) allowed.course_type_id = allowed.course_type_id ? intId(allowed.course_type_id) : null;
+    if (allowed.agreed_amount !== undefined) allowed.agreed_amount = allowed.agreed_amount == null ? null : Number(allowed.agreed_amount);
+    if (allowed.paid_amount !== undefined) allowed.paid_amount = allowed.paid_amount == null ? null : Number(allowed.paid_amount);
+    if (allowed.comment !== undefined) allowed.comment = allowed.comment ? String(allowed.comment).trim() : null;
+
+    // If course_type changed -> re-snapshot price/start_date/currency
+    let extraSet = "";
+    const extraBinds = [];
+    if (allowed.course_type_id) {
+      const ct = await env.DB.prepare(`SELECT id, start_date, price, currency FROM course_types WHERE id=? AND is_active=1`)
+        .bind(allowed.course_type_id)
+        .first();
+      if (!ct) return badRequest("course_type_not_found");
+      extraSet = `, course_price=?, course_start_date=?, currency=?`;
+      extraBinds.push(Number(ct.price || 0), ct.start_date == null ? null : Number(ct.start_date), String(ct.currency || "UZS"));
+    }
+
+    const keys = Object.keys(allowed).filter((k) => k !== "course_type_id");
+    // if course_type_id present, we update it too
+    if (allowed.course_type_id !== undefined) keys.push("course_type_id");
+
+    if (!keys.length && !extraSet) return badRequest("No fields");
+
+    const set = keys.map((k) => `${k}=?`).join(",");
+    const binds = keys.map((k) => allowed[k]);
+
+    await env.DB.prepare(`UPDATE course_leads SET ${set}${extraSet} WHERE id=?`)
+      .bind(...binds, ...extraBinds, id)
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/course_leads/:id/move { status, cancel_reason?, paid_amount? }
+  if (method === "POST" && segments[3] === "move") {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["status"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const status = String(body.status);
+    if (!COURSE_STATUSES.includes(status)) return badRequest("Invalid status");
+
+    const cancel_reason = body.cancel_reason ? String(body.cancel_reason).trim() : null;
+    if (status === "canceled" && !cancel_reason) return badRequest("cancel_reason_required");
+
+    const paid_amount = body.paid_amount == null ? null : Number(body.paid_amount);
+
+    const paidReq = await ensurePaidRequiredForCourseStatus(status, paid_amount);
+    if (paidReq === "paid_amount_required") return badRequest("paid_amount_required");
+
+    // update status, cancel_reason, optionally paid_amount
+    if (status === "enrolled" || status === "studying") {
+      await env.DB.prepare(
+        `UPDATE course_leads SET status=?, cancel_reason=NULL, paid_amount=? WHERE id=?`
+      )
+        .bind(status, paid_amount, id)
+        .run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE course_leads SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount) WHERE id=?`
+      )
+        .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
+        .run();
+    }
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/course_leads/:id/delete (soft)
+  if (method === "POST" && segments[3] === "delete") {
+    const ts = nowSec();
+    await env.DB.prepare(`UPDATE course_leads SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`)
+      .bind(ts, user.id, id)
+      .run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+/** clients endpoints */
+async function handleClients(env, user, request, origin, segments) {
+  const method = request.method;
+  const id = segments[2] ? intId(segments[2]) : null;
+
+  // RBAC:
+  // admin/rop/sale: ok
+  // pm: only companies
+  // fin: no
+  if (user.role === "fin") return forbidden("No access");
+
+  // GET /api/clients?type=company|lead&q=
+  if (method === "GET" && !id) {
+    const url = new URL(request.url);
+    const type = url.searchParams.get("type") || "";
+    const q = url.searchParams.get("q") || "";
+
+    if (type && type !== "company" && type !== "lead") return badRequest("Invalid type");
+    if (user.role === "pm" && type && type !== "company") return forbidden("PM sees only companies");
+
+    const rows = await queryClients(env, user, type || null, q);
+    return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+  }
+
+  const body = await readJson(request);
+
+  // POST /api/clients (create)
+  if (method === "POST" && !id) {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["type", "full_name", "phone1"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const type = String(body.type);
+    if (type !== "company" && type !== "lead") return badRequest("Invalid type");
+    if (user.role === "pm" && type !== "company") return forbidden("PM can create only companies");
+
+    const company_name = body.company_name ? String(body.company_name).trim() : null;
+    const full_name = String(body.full_name).trim();
+    const phone1 = String(body.phone1).trim();
+    const phone2 = body.phone2 ? String(body.phone2).trim() : null;
+
+    const city_id = body.city_id ? intId(body.city_id) : null;
+    const source_id = body.source_id ? intId(body.source_id) : null;
+    const sphere_id = body.sphere_id ? intId(body.sphere_id) : null;
+
+    const comment = body.comment ? String(body.comment).trim() : null;
+    const tg_group_link = body.tg_group_link ? String(body.tg_group_link).trim() : null;
+
+    const company_id = body.company_id ? intId(body.company_id) : null;
+
+    try {
+      const res = await env.DB.prepare(
+        `INSERT INTO clients(
+          type, company_name, full_name, phone1, phone2,
+          city_id, source_id, sphere_id, comment, tg_group_link, company_id,
+          is_active, created_by
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?, 1, ?)`
+      )
+        .bind(
+          type,
+          company_name,
+          full_name,
+          phone1,
+          phone2,
+          city_id,
+          source_id,
+          sphere_id,
+          comment,
+          tg_group_link,
+          company_id,
+          user.id
+        )
+        .run();
+
+      return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+    } catch {
+      return badRequest("Phone already exists (duplicate phone1?)");
+    }
+  }
+
+  if (!id) return notFound();
+
+  // GET /api/clients/:id
+  if (method === "GET") {
+    const data = await getClientCard(env, user, id);
+    if (!data) return notFound();
+    return jsonResp({ ok: true, data }, 200, corsHeaders(env, origin));
+  }
+
+  // PUT /api/clients/:id
+  if (method === "PUT") {
+    if (!body) return badRequest("Expected JSON");
+
+    const existing = await env.DB.prepare(`SELECT * FROM clients WHERE id=? AND is_active=1`).bind(id).first();
+    if (!existing) return notFound();
+    if (user.role === "pm" && existing.type !== "company") return forbidden("PM sees only companies");
+
+    const allowed = pick(body, [
+      "company_name",
+      "full_name",
+      "phone1",
+      "phone2",
+      "city_id",
+      "source_id",
+      "sphere_id",
+      "comment",
+      "tg_group_link",
+      "company_id",
+    ]);
+
+    // normalize
+    if (allowed.company_name !== undefined) allowed.company_name = allowed.company_name ? String(allowed.company_name).trim() : null;
+    if (allowed.full_name !== undefined) allowed.full_name = allowed.full_name ? String(allowed.full_name).trim() : null;
+    if (allowed.phone1 !== undefined) allowed.phone1 = allowed.phone1 ? String(allowed.phone1).trim() : null;
+    if (allowed.phone2 !== undefined) allowed.phone2 = allowed.phone2 ? String(allowed.phone2).trim() : null;
+
+    if (allowed.city_id !== undefined) allowed.city_id = allowed.city_id ? intId(allowed.city_id) : null;
+    if (allowed.source_id !== undefined) allowed.source_id = allowed.source_id ? intId(allowed.source_id) : null;
+    if (allowed.sphere_id !== undefined) allowed.sphere_id = allowed.sphere_id ? intId(allowed.sphere_id) : null;
+
+    if (allowed.comment !== undefined) allowed.comment = allowed.comment ? String(allowed.comment).trim() : null;
+    if (allowed.tg_group_link !== undefined) allowed.tg_group_link = allowed.tg_group_link ? String(allowed.tg_group_link).trim() : null;
+    if (allowed.company_id !== undefined) allowed.company_id = allowed.company_id ? intId(allowed.company_id) : null;
+
+    const keys = Object.keys(allowed);
+    if (!keys.length) return badRequest("No fields");
+
+    const set = keys.map((k) => `${k}=?`).join(",");
+    const binds = keys.map((k) => allowed[k]);
+
+    try {
+      await env.DB.prepare(`UPDATE clients SET ${set} WHERE id=?`).bind(...binds, id).run();
+      return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+    } catch {
+      return badRequest("Update failed (duplicate phone1?)");
+    }
+  }
+
+  // POST /api/clients/:id/delete (soft)
+  if (method === "POST" && segments[3] === "delete") {
+    const ts = nowSec();
+    await env.DB.prepare(`UPDATE clients SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`)
+      .bind(ts, user.id, id)
+      .run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+/** main dashboard: overdue/today/in_progress for responsible */
+async function handleMain(env, user, origin) {
+  const ts = nowSec();
+  const { startOfDayUtcSec, endOfDayUtcSec } = tashkentDayBounds(ts);
+
+  // only tasks for responsible user (по ТЗ)
+  const overdue = await env.DB.prepare(
+    `SELECT id, title, description, status, deadline_at, project_id
+     FROM tasks
+     WHERE is_active=1 AND assignee_user_id=? AND deadline_at IS NOT NULL AND deadline_at < ? AND status NOT IN ('done','canceled')
+     ORDER BY deadline_at ASC LIMIT 200`
+  )
+    .bind(user.id, startOfDayUtcSec)
+    .all();
+
+  const today = await env.DB.prepare(
+    `SELECT id, title, description, status, deadline_at, project_id
+     FROM tasks
+     WHERE is_active=1 AND assignee_user_id=? AND deadline_at IS NOT NULL AND deadline_at BETWEEN ? AND ?
+     ORDER BY deadline_at ASC LIMIT 200`
+  )
+    .bind(user.id, startOfDayUtcSec, endOfDayUtcSec)
+    .all();
+
+  const inProgress = await env.DB.prepare(
+    `SELECT id, title, description, status, deadline_at, project_id
+     FROM tasks
+     WHERE is_active=1 AND assignee_user_id=? AND status='in_progress'
+     LIMIT 1`
+  )
+    .bind(user.id)
+    .first();
+
+  return jsonResp(
+    {
+      ok: true,
+      data: {
+        overdue: overdue.results || [],
+        today: today.results || [],
+        in_progress: inProgress || null,
+      },
+    },
+    200,
+    corsHeaders(env, origin)
+  );
+}
+
+async function handleMeta(env, user, origin) {
+  return jsonResp(
+    {
+      ok: true,
+      data: {
+        roles: ROLES,
+        statuses: {
+          tasks: TASK_STATUSES,
+          projects: PROJECT_STATUSES,
+          courses: COURSE_STATUSES,
+        },
+      },
+    },
+    200,
+    corsHeaders(env, origin)
+  );
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get("Origin") || "";
+
+    // Preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(env, origin) });
+    }
+
+    // Auto-pause overnight in_progress tasks (срабатывает при первом запросе после полуночи)
+    // (по ТЗ: Jarayonda до 23:59:59 и потом в Pauza):contentReference[oaicite:3]{index=3}
+    try {
+      await autoPauseOvernight(env);
+    } catch {
+      // don't block request if maintenance fails
+    }
+
+    // Only API routes
+    if (!url.pathname.startsWith("/api/")) {
+      return jsonResp({ ok: false, error: { code: "not_found", message: "API only" } }, 404, corsHeaders(env, origin));
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean); // ["api", "..."]
+    const apiRoot = segments[1] || "";
+
+    // Public
+    if (apiRoot === "health") {
+      return jsonResp({ ok: true, ts: nowSec() }, 200, corsHeaders(env, origin));
+    }
+
+    if (apiRoot === "auth" && segments[2] === "login" && request.method === "POST") {
+      return await handleAuthLogin(env, request, origin);
+    }
+
+    // Auth required below
+    const user = await getSessionUser(env, request);
+    if (!user) {
+      // also allow logout without valid session (will just clear cookie)
+      if (apiRoot === "auth" && segments[2] === "logout" && request.method === "POST") {
+        return await handleAuthLogout(env, request, origin);
+      }
+      return unauthorized("Сессия истекла или не выполнен вход");
+    }
+
+    // "вход держится до 23:59:59":contentReference[oaicite:4]{index=4}
+    if (apiRoot === "auth" && segments[2] === "me" && request.method === "GET") {
+      return jsonResp({ ok: true, data: { user } }, 200, corsHeaders(env, origin));
+    }
+    if (apiRoot === "auth" && segments[2] === "logout" && request.method === "POST") {
+      return await handleAuthLogout(env, request, origin);
+    }
+
+    // meta
+    if (apiRoot === "meta" && request.method === "GET") {
+      return await handleMeta(env, user, origin);
+    }
+
+    // main
+    if (apiRoot === "main" && request.method === "GET") {
+      return await handleMain(env, user, origin);
+    }
+
+    // users (admin only):contentReference[oaicite:5]{index=5}
+    if (apiRoot === "users") {
+      return await handleUsers(env, user, request, origin, segments);
+    }
+
+    // settings (admin only):contentReference[oaicite:6]{index=6}
+    if (apiRoot === "settings") {
+      return await handleSettings(env, user, request, origin, segments);
+    }
+
+    // tasks
+    if (apiRoot === "tasks") {
+      return await handleTasks(env, user, request, origin, segments);
+    }
+
+    // projects
+    if (apiRoot === "projects") {
+      return await handleProjects(env, user, request, origin, segments);
+    }
+
+    // courses
+    if (apiRoot === "course_leads") {
+      return await handleCourseLeads(env, user, request, origin, segments);
+    }
+
+    // clients
+    if (apiRoot === "clients") {
+      return await handleClients(env, user, request, origin, segments);
+    }
+
+    return notFound();
+  },
+};
+
