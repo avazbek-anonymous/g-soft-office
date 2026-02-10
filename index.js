@@ -1227,6 +1227,7 @@ text-decoration:none;
 @media (max-width:900px){
   .kanbanWrap{flex-direction:column;overflow:visible}
   .kcol{min-width:auto;max-width:none}
+  .kcard{touch-action:pan-y; cursor:default}
 }
 /* ===== FIX PACK (desktop) ===== */
 
@@ -2137,10 +2138,13 @@ select option{
 
 
   App.renderTasks = async function (host, routeId) {
-    const rid = routeId || App.state.routeId;
-    const role = App.state.user.role; 
-    const isAdmin = role === "admin";
+  const rid = routeId || App.state.routeId;
+  const role = App.state.user.role;
+  const isAdmin = role === "admin";
+  const isMobile = window.matchMedia("(max-width:900px)").matches;
     const isRop = role === "rop";
+
+    const isMobile = window.matchMedia("(max-width:900px)").matches;
 
     const toolbar = el("div", {
       class: "card cardPad vcol gap12"
@@ -2153,6 +2157,7 @@ select option{
       class: "muted2",
       style: "font-size:12px"
     }, t("touch_drag_hint"));
+    if (isMobile) hint.style.display = "none";
     const searchInp = el("input", {
       placeholder: t("search"),
       style: "min-width:220px; flex:1"
@@ -2395,31 +2400,31 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
 
         const card = el("div", {
           class: "kcard",
-          draggable: "true",
+          draggable: isMobile ? "false" : "true",
           "data-id": String(x.id),
-
-          onDragstart: (e) => {
+          onDragstart: isMobile ? null : (e) => {
             e.dataTransfer.effectAllowed = "move";
             e.dataTransfer.setData("text/plain", String(x.id));
             card.classList.add("dragging");
           },
-          onDragend: () => card.classList.remove("dragging")
+          onDragend: isMobile ? null : () => card.classList.remove("dragging")
         }, head, body, meta, actionsRow);
 
-
-        bindTouchDrag(card, async (id, targetStatus) => {
-          const row = all.find(z => z.id === id);
-          if (!row || row.status === targetStatus) return;
-          if (targetStatus === "canceled") {
-            const reason = await Modal.prompt(t("reason"), t("need_reason"));
-            if (!reason) return;
-            await doMove(id, targetStatus, {
-              cancel_reason: reason
-            });
-            return;
-          }
-          await doMove(id, targetStatus);
-        });
+        if (!isMobile) {
+          bindTouchDrag(card, async (id, targetStatus) => {
+            const row = all.find(z => z.id === id);
+            if (!row || row.status === targetStatus) return;
+            if (targetStatus === "canceled") {
+              const reason = await Modal.prompt(t("reason"), t("need_reason"));
+              if (!reason) return;
+              await doMove(id, targetStatus, {
+                cancel_reason: reason
+              });
+              return;
+            }
+            await doMove(id, targetStatus);
+          });
+        }
 
         const list = colEls[x.status] ?.querySelector(".klist");
         if (list) list.appendChild(card);
@@ -2586,6 +2591,7 @@ if (String(q.open_create || "") === "1") {
         const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
         const canStart = (x.assignee_user_id === App.state.user.id) || isAdmin || isRop;
 
+        const isMobile = window.matchMedia("(max-width:900px)").matches;
         const actions = [];
 
         // ✎ Edit
@@ -2612,37 +2618,39 @@ if (String(q.open_create || "") === "1") {
           }
         };
 
-        if (canStart && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
-          actions.push({
-            label: t("action_start"),
-            kind: "ghost",
-            onClick: () => doMove("in_progress")
-          });
-        }
-        if (x.status === "in_progress") {
-          actions.push({
-            label: t("action_pause"),
-            kind: "ghost",
-            onClick: () => doMove("pause")
-          });
-        }
-        if (x.status !== "done" && x.status !== "canceled") {
-          actions.push({
-            label: t("action_done"),
-            kind: "ghost",
-            onClick: () => doMove("done")
-          });
-          actions.push({
-            label: t("action_cancel"),
-            kind: "danger",
-            onClick: async () => {
-              const reason = await Modal.prompt(t("reason"), t("need_reason"));
-              if (!reason) return;
-              await doMove("canceled", {
-                cancel_reason: reason
-              });
-            }
-          });
+        if (isMobile) {
+          if (canStart && x.status !== "in_progress" && x.status !== "done" && x.status !== "canceled") {
+            actions.push({
+              label: t("action_start"),
+              kind: "ghost",
+              onClick: () => doMove("in_progress")
+            });
+          }
+          if (x.status === "in_progress") {
+            actions.push({
+              label: t("action_pause"),
+              kind: "ghost",
+              onClick: () => doMove("pause")
+            });
+          }
+          if (x.status !== "done" && x.status !== "canceled") {
+            actions.push({
+              label: t("action_done"),
+              kind: "ghost",
+              onClick: () => doMove("done")
+            });
+            actions.push({
+              label: t("action_cancel"),
+              kind: "danger",
+              onClick: async () => {
+                const reason = await Modal.prompt(t("reason"), t("need_reason"));
+                if (!reason) return;
+                await doMove("canceled", {
+                  cancel_reason: reason
+                });
+              }
+            });
+          }
         }
 
         actions.push({
@@ -3794,18 +3802,18 @@ App.renderProjects = async function (host, routeId) {
 
     const card = el("div", {
       class: "kcard",
-      draggable: true,
+      draggable: isMobile ? "false" : "true",
       "data-id": String(p.id),
-      onDragstart: (e) => {
+      onDragstart: isMobile ? null : (e) => {
         e.dataTransfer.setData("text/plain", String(p.id));
         e.dataTransfer.effectAllowed = "move";
         card.classList.add("dragging");
       },
-      onDragend: () => card.classList.remove("dragging"),
+      onDragend: isMobile ? null : () => card.classList.remove("dragging"),
     }, ...bodyParts, actions);
 
     // ✅ touch drag support
-    bindTouchDrag(card, doMove);
+    if (!isMobile) bindTouchDrag(card, doMove);
 
     return { st, card };
   };
@@ -4404,7 +4412,53 @@ pmSel.addEventListener("change", () => {
 
     const body = el("div", { class: "vcol gap12" }, head, owner, lines);
 
+    const doMove = async (status, extra = {}) => {
+      try {
+        await API.projects.move(p.id, status, extra);
+        const row = all.find(x => Number(x.id) === Number(p.id));
+        if (row) row.status = status;
+        p.status = status;
+        if (status === "canceled") {
+          p.cancel_reason = extra.cancel_reason || p.cancel_reason;
+        }
+        render();
+        return true;
+      } catch (e) {
+        Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+        return false;
+      }
+    };
+
+    const statusIdx = statusCols.findIndex(s => String(s.key) === String(p.status));
+    const nextStatuses = statusCols
+      .slice(statusIdx >= 0 ? statusIdx + 1 : 0)
+      .filter(s => s.key !== "canceled")
+      .slice(0, 2);
+
+    const moveActions = isMobile ? [
+      ...nextStatuses.map(s => ({
+        label: tr(s.label) || s.key,
+        kind: "primary",
+        onClick: async () => {
+          const moved = await doMove(s.key);
+          if (moved) Modal.close();
+        }
+      })),
+      {
+        label: t("cancel") || "Cancel",
+        kind: (String(p.status) === "canceled") ? "ghost" : "danger",
+        onClick: async () => {
+          if (String(p.status) === "canceled") return;
+          const reason = await Modal.prompt(t("reason"), t("need_reason"));
+          if (!reason) return;
+          const moved = await doMove("canceled", { cancel_reason: reason });
+          if (moved) Modal.close();
+        }
+      }
+    ] : [];
+
     Modal.open(t("open") || "Open", body, [
+      ...moveActions,
       { label: t("open_tasks") || "Tasks", kind: "ghost", onClick: () => { Modal.close(); openTasks(p.id); } },
       ...(canEdit ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(p.id); } }] : []),
     ]);
