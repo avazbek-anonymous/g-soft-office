@@ -3748,6 +3748,9 @@ App.renderProjects = async function (host, routeId) {
     // ✅ DONE: only 2 lines (company + service)
     if (st === "done") {
       // no extra lines
+      if (p.comment) {
+        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "💬 ", el("b", {}, p.comment)));
+      }
     }
     // ✅ CANCELED: 3 lines (company + service + reason)
     else if (st === "canceled") {
