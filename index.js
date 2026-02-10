@@ -1252,7 +1252,7 @@ text-decoration:none;
 
 /* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
-  --cols:7;
+  --cols:8;
   display:grid;
   grid-template-columns:repeat(var(--cols), minmax(290px, 1fr));
   gap:12px;
@@ -3556,6 +3556,7 @@ App.renderProjects = async function (host, routeId) {
   const isRop = role === "rop";
   const isPm = role === "pm";
   const canCreate = isAdmin || isRop || isPm;
+  const isMobile = window.matchMedia("(max-width:900px)").matches;
 
   const lang = App.state.lang || "ru";
   const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
@@ -3863,10 +3864,17 @@ App.renderProjects = async function (host, routeId) {
     const pm_user_id = pmSel ? (pmSel.value ? Number(pmSel.value) : null) : null;
     const service_type_id = svcSelFilter.value ? Number(svcSelFilter.value) : null;
 
-    const r = await API.projects.list({ q, pm_user_id, service_type_id }).catch(() => ({ data: [] }));
-    if (App.state.routeId !== rid) return;
-    all = (r && r.data) ? r.data : [];
-    render();
+    try {
+      const r = await API.projects.list({ q, pm_user_id, service_type_id });
+      if (App.state.routeId !== rid) return;
+      all = (r && r.data) ? r.data : [];
+      render();
+    } catch (e) {
+      if (App.state.routeId !== rid) return;
+      all = [];
+      render();
+      Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+    }
   };
 
   // debounce search
