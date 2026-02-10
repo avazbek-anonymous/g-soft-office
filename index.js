@@ -2138,12 +2138,10 @@ select option{
 
 
   App.renderTasks = async function (host, routeId) {
-  const rid = routeId || App.state.routeId;
-  const role = App.state.user.role;
-  const isAdmin = role === "admin";
-  const isMobile = window.matchMedia("(max-width:900px)").matches;
+    const rid = routeId || App.state.routeId;
+    const role = App.state.user.role;
+    const isAdmin = role === "admin";
     const isRop = role === "rop";
-
     const isMobile = window.matchMedia("(max-width:900px)").matches;
 
     const toolbar = el("div", {
