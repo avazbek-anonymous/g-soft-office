@@ -3821,18 +3821,25 @@ App.renderProjects = async function (host, routeId) {
   const q = (qInp.value || "").trim().toLowerCase();
 
   const listSrc = !q ? all : all.filter(p => {
+    const stLabel = tr(statusCols.find(x => x.key === p.status)?.label || { ru: p.status, uz: p.status, en: p.status });
+    const svcLabel = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
+    const reviewText = Number(p.review) === 1 ? tr({ ru: "Отзыв взят", uz: "Tasurot olingan", en: "Review taken" }) : "";
     const hay = [
       p.id,
       p.company_name,
       p.owner_full_name, p.owner_phone1, p.owner_phone2,
-      p.service_name_ru, p.service_name_uz, p.service_name_en,
+      svcLabel, p.service_name_ru, p.service_name_uz, p.service_name_en,
       p.pm_name,
-      p.status,
+      p.status, stLabel,
       p.comment,
       p.cancel_reason,
       p.amount, p.currency,
+      p.amount != null ? fmtAmount(p.amount, p.currency) : "",
+      p.review, reviewText,
+      p.tasks_total, p.tasks_done,
       p.meeting_at ? fmtDate(p.meeting_at) : "",
       p.deadline_at ? fmtDate(p.deadline_at) : "",
+      p.created_by_name,
     ].filter(Boolean).join(" ").toLowerCase();
 
     return hay.includes(q);
@@ -4649,7 +4656,30 @@ App.renderCourses = async function (host, routeId) {
     const q = String(qInp.value || "").trim().toLowerCase();
     if (!q) return raw;
     return raw.filter(x => {
-      const s = `${x.lead_full_name || ""} ${x.lead_phone1 || ""} ${x.company_name || ""} ${x.course_type_name || ""}`.toLowerCase();
+      const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
+      const sphere = refNameById(refs.spheres, x.lead_sphere_id, x.lead_sphere_name || x.sphere_name || x.lead_sphere || "");
+      const city = refNameById(refs.cities, x.lead_city_id, x.lead_city_name || x.city_name || x.lead_city || "");
+      const statusLabel = tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status });
+      const s = [
+        x.id,
+        x.status,
+        statusLabel,
+        x.lead_full_name,
+        x.lead_phone1,
+        x.company_name,
+        x.course_type_name,
+        source,
+        sphere,
+        city,
+        x.comment,
+        x.cancel_reason,
+        x.lead_comment,
+        x.course_price,
+        x.agreed_amount,
+        x.paid_amount,
+        x.currency,
+        x.course_start_date ? fmtDateOnly(x.course_start_date) : "",
+      ].filter(Boolean).join(" ").toLowerCase();
       return s.includes(q);
     });
   };
