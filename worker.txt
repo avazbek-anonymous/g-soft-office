@@ -580,6 +580,13 @@ async function queryCourseLeadsKanban(env, user, filters) {
 
       lead.full_name AS lead_full_name,
       lead.phone1 AS lead_phone1,
+      lead.comment AS lead_comment,
+      lead.city_id AS lead_city_id,
+      lead.source_id AS lead_source_id,
+      lead.sphere_id AS lead_sphere_id,
+      COALESCE(dc.name_uz, dc.name_ru, dc.name_en) AS lead_city_name,
+      COALESCE(ds.name_uz, ds.name_ru, ds.name_en) AS lead_source_name,
+      COALESCE(dsp.name_uz, dsp.name_ru, dsp.name_en) AS lead_sphere_name,
       comp.company_name AS company_name,
 
       ct.name AS course_type_name,
@@ -587,6 +594,9 @@ async function queryCourseLeadsKanban(env, user, filters) {
     FROM course_leads cl
     JOIN clients lead ON lead.id = cl.lead_client_id
     LEFT JOIN clients comp ON comp.id = cl.company_id
+    LEFT JOIN dict_cities dc ON dc.id = lead.city_id
+    LEFT JOIN dict_sources ds ON ds.id = lead.source_id
+    LEFT JOIN dict_spheres dsp ON dsp.id = lead.sphere_id
     JOIN course_types ct ON ct.id = cl.course_type_id
     JOIN users cu ON cu.id = cl.created_by
     WHERE cl.is_active = 1
@@ -1644,12 +1654,22 @@ async function handleCourseLeads(env, user, request, origin, segments) {
         cl.*,
         lead.full_name AS lead_full_name,
         lead.phone1 AS lead_phone1,
+        lead.comment AS lead_comment,
+        lead.city_id AS lead_city_id,
+        lead.source_id AS lead_source_id,
+        lead.sphere_id AS lead_sphere_id,
+        COALESCE(dc.name_uz, dc.name_ru, dc.name_en) AS lead_city_name,
+        COALESCE(ds.name_uz, ds.name_ru, ds.name_en) AS lead_source_name,
+        COALESCE(dsp.name_uz, dsp.name_ru, dsp.name_en) AS lead_sphere_name,
         comp.company_name AS company_name,
         ct.name AS course_type_name,
         cu.full_name AS created_by_name
        FROM course_leads cl
        JOIN clients lead ON lead.id=cl.lead_client_id
        LEFT JOIN clients comp ON comp.id=cl.company_id
+       LEFT JOIN dict_cities dc ON dc.id = lead.city_id
+       LEFT JOIN dict_sources ds ON ds.id = lead.source_id
+       LEFT JOIN dict_spheres dsp ON dsp.id = lead.sphere_id
        JOIN course_types ct ON ct.id=cl.course_type_id
        JOIN users cu ON cu.id=cl.created_by
        WHERE cl.id=? AND cl.is_active=1`

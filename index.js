@@ -4725,6 +4725,9 @@ App.renderCourses = async function (host, routeId) {
     const phone = x.lead_phone1 || "";
     const company = x.company_name || "";
     const courseName = x.course_type_name || "";
+    const source = x.lead_source_name || x.source_name || x.lead_source || "";
+    const sphere = x.lead_sphere_name || x.sphere_name || x.lead_sphere || "";
+    const city = x.lead_city_name || x.city_name || x.lead_city || "";
 
     const lines = [];
 
@@ -4757,6 +4760,12 @@ App.renderCourses = async function (host, routeId) {
       }
 
     }
+
+    const leadMeta = [];
+    if (source) leadMeta.push(el("span", {}, `${tr({ ru: "Источник", uz: "Manba", en: "Source" })}: `, el("b", {}, source)));
+    if (sphere) leadMeta.push(el("span", {}, `${tr({ ru: "Сфера", uz: "Soha", en: "Sphere" })}: `, el("b", {}, sphere)));
+    if (city) leadMeta.push(el("span", {}, `${tr({ ru: "Город", uz: "Shahar", en: "City" })}: `, el("b", {}, city)));
+    if (leadMeta.length) lines.push(el("div", { class: "cLine" }, ...leadMeta));
 
     const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(x.id); } }, t("open") || "Open");
     const actions = el("div", { class: "cActions" }, btnOpen);
