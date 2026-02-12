@@ -4560,7 +4560,7 @@ App.renderCourses = async function (host, routeId) {
 
   let refs = await loadDictCacheIfAny();
   if (App.state.routeId !== rid) return;
-  const freshRefs = await refreshDictCacheAdmin();
+  const freshRefs = await refreshDictCache();
   if (App.state.routeId !== rid) return;
   if (freshRefs) refs = freshRefs;
 
@@ -5351,10 +5351,9 @@ async function loadDictCacheIfAny(){
   }
 }
 
-async function refreshDictCacheAdmin(){
-  if((App.state.user?.role||"")!=="admin") return null;
+async function refreshDictCache(){
   try{
-    // admin-only endpoint exists in backend
+    // available for authenticated users
     const r = await apiFetch("/api/settings/all");
     const data = r.data || {};
     LS.set("gsoft_dict_cache", JSON.stringify(data));
@@ -5392,8 +5391,8 @@ App.renderClients = async function(host, routeId){
     refs: await loadDictCacheIfAny(),
   };
 
-  // if admin — refresh dict cache now
-  const fresh = await refreshDictCacheAdmin();
+  // refresh dict cache from backend
+  const fresh = await refreshDictCache();
   if (App.state.routeId !== rid) return;
   if(fresh) state.refs=fresh;
 
