@@ -220,6 +220,21 @@ function str(v) {
   return String(v).trim();
 }
 
+/** normalize phone for stable duplicate checks */
+function normalizePhone(v) {
+  const raw = str(v);
+  if (!raw) return "";
+  const hasPlus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  return `${hasPlus ? "+" : ""}${digits}`;
+}
+
+/** digits-only key for comparing phones regardless of separators/plus */
+function phoneDigits(v) {
+  return normalizePhone(v).replace(/\D/g, "");
+}
+
 /** hash password for users table (pbkdf2_sha256) */
 async function hashPassword(password, iterations = PBKDF2_DEFAULT_ITER) {
   const saltBytes = new Uint8Array(16);
@@ -1778,8 +1793,9 @@ async function handleClients(env, user, request, origin, segments) {
 
     const company_name = body.company_name ? String(body.company_name).trim() : null;
     const full_name = String(body.full_name).trim();
-    const phone1 = String(body.phone1).trim();
-    const phone2 = body.phone2 ? String(body.phone2).trim() : null;
+    const phone1 = normalizePhone(body.phone1);
+    const phone2 = body.phone2 ? normalizePhone(body.phone2) : null;
+    if (!phone1) return badRequest("Missing: phone1");
 
     const city_id = body.city_id ? intId(body.city_id) : null;
     const source_id = body.source_id ? intId(body.source_id) : null;
@@ -1790,7 +1806,49 @@ async function handleClients(env, user, request, origin, segments) {
 
     const company_id = body.company_id ? intId(body.company_id) : null;
 
+    // Reuse soft-deleted row with the same phone (avoid false "duplicate" on unique index)
+    const pkey = phoneDigits(phone1);
+    const samePhone = await env.DB.prepare(
+      `SELECT id, is_active
+       FROM clients
+       WHERE replace(replace(replace(replace(replace(phone1,'+',''),' ',''),'-',''),'(',''),')','') = ?
+       ORDER BY is_active DESC, id DESC
+       LIMIT 1`
+    )
+      .bind(pkey)
+      .first();
+
+    if (samePhone && Number(samePhone.is_active) === 1) {
+      return badRequest("Phone already exists (duplicate phone1?)");
+    }
+
     try {
+      if (samePhone && Number(samePhone.is_active) === 0) {
+        await env.DB.prepare(
+          `UPDATE clients
+           SET type=?, company_name=?, full_name=?, phone1=?, phone2=?,
+               city_id=?, source_id=?, sphere_id=?, comment=?, tg_group_link=?, company_id=?,
+               is_active=1, deleted_at=NULL, deleted_by=NULL
+           WHERE id=?`
+        )
+          .bind(
+            type,
+            company_name,
+            full_name,
+            phone1,
+            phone2,
+            city_id,
+            source_id,
+            sphere_id,
+            comment,
+            tg_group_link,
+            company_id,
+            samePhone.id
+          )
+          .run();
+        return jsonResp({ ok: true, data: { id: samePhone.id, restored: true } }, 200, corsHeaders(env, origin));
+      }
+
       const res = await env.DB.prepare(
         `INSERT INTO clients(
           type, company_name, full_name, phone1, phone2,
@@ -1853,8 +1911,8 @@ async function handleClients(env, user, request, origin, segments) {
     // normalize
     if (allowed.company_name !== undefined) allowed.company_name = allowed.company_name ? String(allowed.company_name).trim() : null;
     if (allowed.full_name !== undefined) allowed.full_name = allowed.full_name ? String(allowed.full_name).trim() : null;
-    if (allowed.phone1 !== undefined) allowed.phone1 = allowed.phone1 ? String(allowed.phone1).trim() : null;
-    if (allowed.phone2 !== undefined) allowed.phone2 = allowed.phone2 ? String(allowed.phone2).trim() : null;
+    if (allowed.phone1 !== undefined) allowed.phone1 = allowed.phone1 ? normalizePhone(allowed.phone1) : null;
+    if (allowed.phone2 !== undefined) allowed.phone2 = allowed.phone2 ? normalizePhone(allowed.phone2) : null;
 
     if (allowed.city_id !== undefined) allowed.city_id = allowed.city_id ? intId(allowed.city_id) : null;
     if (allowed.source_id !== undefined) allowed.source_id = allowed.source_id ? intId(allowed.source_id) : null;
