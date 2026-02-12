@@ -4566,6 +4566,12 @@ App.renderCourses = async function (host, routeId) {
 
   const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
   const companyLabel = (c) => (c && (c.company_name || c.full_name || `#${c.id}`)) || "";
+  const refNameById = (list, id, fallback = "") => {
+    if (!id) return fallback || "";
+    const byId = dictLabel(list || [], id);
+    if (byId && !/^#\d+$/.test(String(byId))) return byId;
+    return fallback || byId || "";
+  };
   const leadLabel = (l) => {
     if (!l) return "";
     const fio = l.full_name || `#${l.id}`;
@@ -4725,9 +4731,9 @@ App.renderCourses = async function (host, routeId) {
     const phone = x.lead_phone1 || "";
     const company = x.company_name || "";
     const courseName = x.course_type_name || "";
-    const source = x.lead_source_name || x.source_name || x.lead_source || "";
-    const sphere = x.lead_sphere_name || x.sphere_name || x.lead_sphere || "";
-    const city = x.lead_city_name || x.city_name || x.lead_city || "";
+    const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
+    const sphere = refNameById(refs.spheres, x.lead_sphere_id, x.lead_sphere_name || x.sphere_name || x.lead_sphere || "");
+    const city = refNameById(refs.cities, x.lead_city_id, x.lead_city_name || x.city_name || x.lead_city || "");
 
     const lines = [];
 
@@ -5118,10 +5124,9 @@ App.renderCourses = async function (host, routeId) {
           el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
 
           (() => {
-            // пробуем разные возможные поля (на случай как у тебя отдает API)
-            const source = x.lead_source_name || x.source_name || x.lead_source || "";
-            const sphere = x.lead_sphere_name || x.sphere_name || x.lead_sphere || "";
-            const city   = x.lead_city_name   || x.city_name   || x.lead_city   || "";
+            const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
+            const sphere = refNameById(refs.spheres, x.lead_sphere_id, x.lead_sphere_name || x.sphere_name || x.lead_sphere || "");
+            const city   = refNameById(refs.cities, x.lead_city_id, x.lead_city_name || x.city_name || x.lead_city || "");
             const lcomm  = x.lead_comment || x.lead_client_comment || x.lead_note || "";
 
             const short = (s, n=80) => (String(s || "").length > n ? String(s).slice(0, n) + "…" : String(s || ""));
