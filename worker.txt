@@ -9,6 +9,8 @@
  *   DB                (D1Database) REQUIRED
  *   CORS_ORIGINS       optional, comma-separated exact origins
  *   COOKIE_DOMAIN      optional, e.g. ".ofis.gekto.uz"
+ *   TG_BOT_TOKEN       optional, Telegram bot token (for webhook replies)
+ *   TG_WEBHOOK_SECRET  optional, secret token from Telegram setWebhook
  */
 
 const TZ_OFFSET_MIN = 5 * 60; // Tashkent +05:00 (фиксировано)
@@ -35,6 +37,7 @@ const ROLES = ["admin", "pm", "fin", "sale", "rop"];
 const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
 const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "review", "canceled"];
 const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
+const TG_DEFAULT_TIME_HHMM = "10:00";
 
 function nowSec() {
   return Math.floor(Date.now() / 1000);
@@ -218,6 +221,312 @@ async function readJson(request) {
 function str(v) {
   if (v === undefined || v === null) return "";
   return String(v).trim();
+}
+
+function tgGetEntities(msg) {
+  return [
+    ...(Array.isArray(msg?.entities) ? msg.entities : []),
+    ...(Array.isArray(msg?.caption_entities) ? msg.caption_entities : []),
+  ];
+}
+
+function tgIsTasksCommand(msg) {
+  const fullText = String(msg?.text || msg?.caption || "");
+  if (!fullText) return false;
+
+  for (const ent of tgGetEntities(msg)) {
+    if (ent?.type !== "bot_command") continue;
+    const offset = Number(ent.offset);
+    const length = Number(ent.length);
+    if (!Number.isInteger(offset) || !Number.isInteger(length) || length <= 0) continue;
+    const cmdText = fullText.substring(offset, offset + length);
+    if (cmdText.split("@")[0].toLowerCase() === "/tasks") return true;
+  }
+
+  return /(^|\s)\/tasks(?:@\w+)?(?=\s|$)/i.test(fullText);
+}
+
+function tgGetTaskSourceText(msg) {
+  if (msg?.reply_to_message) {
+    const rt = msg.reply_to_message.text || msg.reply_to_message.caption;
+    if (rt) return String(rt);
+  }
+  const text = String(msg?.text || msg?.caption || "");
+  return text.replace(/\/tasks@[\w_]+/gi, "").replace(/\/tasks\b/gi, "").trim();
+}
+
+function tgExtractMentionFromEntities(msg) {
+  if (!msg) return null;
+  const text = String(msg.text || msg.caption || "");
+  for (const ent of tgGetEntities(msg)) {
+    if (ent?.type === "text_mention" && ent.user?.id) {
+      return { telegramId: String(ent.user.id) };
+    }
+    if (ent?.type === "mention") {
+      const offset = Number(ent.offset);
+      const length = Number(ent.length);
+      if (!Number.isInteger(offset) || !Number.isInteger(length) || length <= 0) continue;
+      const mention = text.substring(offset, offset + length);
+      if (mention) return { username: mention };
+    }
+  }
+  return null;
+}
+
+function tgExtractFirstMentionFromText(text) {
+  const m = String(text || "").match(/@([a-zA-Z0-9_]+)/);
+  return m ? { username: `@${m[1]}` } : null;
+}
+
+function tgGetAssigneeHint(msg) {
+  return (
+    tgExtractMentionFromEntities(msg) ||
+    tgExtractMentionFromEntities(msg?.reply_to_message) ||
+    tgExtractFirstMentionFromText(msg?.text || msg?.caption || "") ||
+    tgExtractFirstMentionFromText(msg?.reply_to_message?.text || msg?.reply_to_message?.caption || "")
+  );
+}
+
+function cleanTaskTextForDescription(text) {
+  if (!text) return "";
+  let t = String(text);
+  t = t.replace(/\b\d{1,2}\.\d{1,2}(?:\.\d{2,4})?\b/g, "");
+  t = t.replace(/\b\d{1,2}:\d{2}\b/g, "");
+  t = t.replace(/@[a-zA-Z0-9_]+/g, "");
+  return t
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+$/g, ""))
+    .join("\n")
+    .trim();
+}
+
+function tashkentParts(tsSec = nowSec()) {
+  const d = new Date((tsSec + TZ_OFFSET_MIN * 60) * 1000);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth(),
+    day: d.getUTCDate(),
+  };
+}
+
+function toUtcSecFromTashkentLocal(year, monthZeroBased, day, hour, minute) {
+  const utcMs = Date.UTC(year, monthZeroBased, day, hour, minute, 0) - TZ_OFFSET_MIN * 60 * 1000;
+  return Math.floor(utcMs / 1000);
+}
+
+function parseTaskDeadlineTashkent(text) {
+  const src = String(text || "");
+  const dateMatch = src.match(/\b(\d{1,2}\.\d{1,2}(?:\.\d{2,4})?)\b/);
+  const timeMatch = src.match(/\b(\d{1,2}:\d{2})\b/);
+
+  const now = tashkentParts();
+  const [defHour, defMinute] = TG_DEFAULT_TIME_HHMM.split(":").map((x) => Number(x));
+
+  const parseTime = (s, fallbackHour, fallbackMinute) => {
+    if (!s) return { hour: fallbackHour, minute: fallbackMinute };
+    const [hRaw, mRaw] = s.split(":");
+    const hour = Number(hRaw);
+    const minute = Number(mRaw);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return { hour: fallbackHour, minute: fallbackMinute };
+    }
+    return { hour, minute };
+  };
+
+  if (dateMatch?.[1]) {
+    const parts = dateMatch[1].split(".");
+    const day = Number(parts[0]);
+    const monthZero = Number(parts[1]) - 1;
+    let year = now.year;
+    if (parts[2]) {
+      const yRaw = Number(parts[2]);
+      year = String(parts[2]).length === 2 ? 2000 + yRaw : yRaw;
+    }
+    if (!Number.isInteger(day) || !Number.isInteger(monthZero) || day < 1 || day > 31 || monthZero < 0 || monthZero > 11) {
+      const { hour, minute } = parseTime(timeMatch?.[1], defHour, defMinute);
+      return toUtcSecFromTashkentLocal(now.year, now.month, now.day + 1, hour, minute);
+    }
+    const { hour, minute } = parseTime(timeMatch?.[1], defHour, defMinute);
+    return toUtcSecFromTashkentLocal(year, monthZero, day, hour, minute);
+  }
+
+  if (timeMatch?.[1]) {
+    const { hour, minute } = parseTime(timeMatch[1], defHour, defMinute);
+    return toUtcSecFromTashkentLocal(now.year, now.month, now.day, hour, minute);
+  }
+
+  return toUtcSecFromTashkentLocal(now.year, now.month, now.day + 1, defHour, defMinute);
+}
+
+function formatTashkentDateTime(tsSec) {
+  const d = new Date((Number(tsSec) + TZ_OFFSET_MIN * 60) * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+function tgBuildMessageLink(msg) {
+  const chat = msg?.chat || {};
+  const chatId = chat.id;
+  if (!chatId || !msg?.message_id) return "lich";
+
+  if (chat.type === "private") return "lich";
+
+  if (chat.username) {
+    let base = `https://t.me/${chat.username}/${msg.message_id}`;
+    if (msg.is_topic_message && msg.message_thread_id) base += `?thread=${msg.message_thread_id}`;
+    return base;
+  }
+
+  let internalId = String(chatId);
+  if (internalId.startsWith("-100")) internalId = internalId.slice(4);
+  else if (internalId.startsWith("-")) internalId = internalId.slice(1);
+
+  let base = `https://t.me/c/${internalId}/${msg.message_id}`;
+  if (msg.is_topic_message && msg.message_thread_id) base += `?thread=${msg.message_thread_id}`;
+  return base;
+}
+
+async function findUserByTelegramId(env, tgId) {
+  const hasTg = await usersHasTelegramIdColumn(env);
+  if (!hasTg) return null;
+  if (!/^\d+$/.test(String(tgId || ""))) return null;
+  return env.DB.prepare(
+    `SELECT id, full_name, login, role, telegram_id
+     FROM users
+     WHERE is_active=1 AND telegram_id=?
+     LIMIT 1`
+  )
+    .bind(String(tgId))
+    .first();
+}
+
+async function findUserByMention(env, mention) {
+  if (!mention) return null;
+  const uname = String(mention).replace(/^@+/, "").trim().toLowerCase();
+  if (!uname) return null;
+  return env.DB.prepare(
+    `SELECT id, full_name, login, role, telegram_id
+     FROM users
+     WHERE is_active=1
+       AND (LOWER(login)=? OR LOWER(TRIM(login,'@'))=?)
+     LIMIT 1`
+  )
+    .bind(uname, uname)
+    .first();
+}
+
+async function tgApiCall(env, method, payload) {
+  const token = String(env.TG_BOT_TOKEN || "").trim();
+  if (!token) return null;
+  const url = `https://api.telegram.org/bot${token}/${method}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+async function tgSendMessage(env, chatId, text, threadId) {
+  if (!chatId || !text) return;
+  const payload = { chat_id: chatId, text: String(text) };
+  if (threadId) payload.message_thread_id = threadId;
+  await tgApiCall(env, "sendMessage", payload);
+}
+
+async function tgSetReaction(env, chatId, messageId, emoji = "🫡") {
+  if (!chatId || !messageId) return;
+  await tgApiCall(env, "setMessageReaction", {
+    chat_id: chatId,
+    message_id: messageId,
+    reaction: [{ type: "emoji", emoji }],
+    is_big: false,
+  });
+}
+
+const tgRecentMessages = new Map();
+function tgAlreadyProcessed(chatId, messageId) {
+  if (!chatId || !messageId) return false;
+  const now = Date.now();
+  const key = `${chatId}_${messageId}`;
+  const prev = tgRecentMessages.get(key);
+  if (prev && now - prev < 60 * 60 * 1000) return true;
+  tgRecentMessages.set(key, now);
+  if (tgRecentMessages.size > 2000) {
+    for (const [k, ts] of tgRecentMessages) {
+      if (now - ts > 60 * 60 * 1000) tgRecentMessages.delete(k);
+    }
+  }
+  return false;
+}
+
+async function handleTelegramWebhook(env, request) {
+  const secret = String(env.TG_WEBHOOK_SECRET || "").trim();
+  if (secret) {
+    const got = String(request.headers.get("x-telegram-bot-api-secret-token") || "");
+    if (!got || got !== secret) return forbidden("Invalid webhook secret");
+  }
+
+  const update = await readJson(request);
+  if (!update) return jsonResp({ ok: true }, 200);
+  const msg = update.message;
+  if (!msg) return jsonResp({ ok: true }, 200);
+  if (!tgIsTasksCommand(msg)) return jsonResp({ ok: true }, 200);
+
+  const chatId = msg.chat?.id;
+  const messageId = msg.message_id;
+  const threadId = msg.is_topic_message && msg.message_thread_id ? msg.message_thread_id : null;
+
+  if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
+
+  const creatorTgId = msg.from?.id ? String(msg.from.id) : "";
+  const creator = await findUserByTelegramId(env, creatorTgId);
+  if (!creator) {
+    await tgSendMessage(
+      env,
+      chatId,
+      "Не найден пользователь в системе по вашему Telegram ID. Заполните `telegram_id` в Users.",
+      threadId
+    );
+    return jsonResp({ ok: true, skipped: "creator_not_found" }, 200);
+  }
+
+  let assignee = null;
+  const hint = tgGetAssigneeHint(msg);
+  if (hint?.telegramId) assignee = await findUserByTelegramId(env, hint.telegramId);
+  if (!assignee && hint?.username) assignee = await findUserByMention(env, hint.username);
+  if (!assignee) assignee = creator;
+
+  const sourceText = tgGetTaskSourceText(msg);
+  const combinedText = `${msg.text || msg.caption || ""}\n${msg.reply_to_message ? msg.reply_to_message.text || msg.reply_to_message.caption || "" : ""}`;
+  const deadlineAt = parseTaskDeadlineTashkent(combinedText);
+  const cleaned = cleanTaskTextForDescription(sourceText);
+  const descriptionBase = cleaned || sourceText || "Task from Telegram";
+  const title = (descriptionBase.split(/\r?\n/).map((x) => x.trim()).find(Boolean) || "Task from Telegram").slice(0, 120);
+  const messageLink = tgBuildMessageLink(msg);
+  const description = messageLink && messageLink !== "lich" ? `${descriptionBase}\n\nSource: ${messageLink}` : descriptionBase;
+
+  const res = await env.DB.prepare(
+    `INSERT INTO tasks(title, description, assignee_user_id, project_id, status, deadline_at, is_active, created_by)
+     VALUES(?,?,?,?, 'new', ?, 1, ?)`
+  )
+    .bind(title, String(description).trim(), assignee.id, null, deadlineAt, creator.id)
+    .run();
+
+  const taskId = res?.meta?.last_row_id;
+  await tgSendMessage(
+    env,
+    chatId,
+    `✅ Задача создана\n#${taskId}\nDeadline: ${formatTashkentDateTime(deadlineAt)}\nОтветственный: ${assignee.full_name || assignee.login || assignee.id}`,
+    threadId
+  );
+  await tgSetReaction(env, chatId, messageId, "🫡");
+
+  return jsonResp({ ok: true, data: { id: taskId } }, 200);
 }
 
 /** normalize phone for stable duplicate checks */
@@ -2070,6 +2379,11 @@ export default {
 
     if (apiRoot === "auth" && segments[2] === "login" && request.method === "POST") {
       return withCors(await handleAuthLogin(env, request, origin), env, origin);
+    }
+
+    // Telegram webhook (public)
+    if (apiRoot === "telegram" && segments[2] === "webhook" && request.method === "POST") {
+      return withCors(await handleTelegramWebhook(env, request), env, origin);
     }
 
     // Auth required below
