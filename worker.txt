@@ -439,6 +439,21 @@ async function tgApiCall(env, method, payload) {
   }
 }
 
+async function tgGetUserIdByUsername(env, username) {
+  const token = String(env.TG_BOT_TOKEN || "").trim();
+  const uname = String(username || "").replace(/^@+/, "").trim();
+  if (!token || !uname) return null;
+  const url = `https://api.telegram.org/bot${token}/getChat?chat_id=@${encodeURIComponent(uname)}`;
+  try {
+    const res = await fetch(url, { method: "GET" });
+    const data = await res.json();
+    if (!data || !data.ok || !data.result || !data.result.id) return null;
+    return String(data.result.id);
+  } catch {
+    return null;
+  }
+}
+
 async function tgSendMessage(env, chatId, text, threadId) {
   if (!chatId || !text) return;
   const payload = { chat_id: chatId, text: String(text) };
@@ -506,6 +521,10 @@ async function handleTelegramWebhook(env, request) {
   let assignee = null;
   const hint = tgGetAssigneeHint(msg);
   if (hint?.telegramId) assignee = await findUserByTelegramId(env, hint.telegramId);
+  if (!assignee && hint?.username) {
+    const tgId = await tgGetUserIdByUsername(env, hint.username);
+    if (tgId) assignee = await findUserByTelegramId(env, tgId);
+  }
   if (!assignee && hint?.username) assignee = await findUserByMention(env, hint.username);
   if (!assignee) assignee = creator;
 
