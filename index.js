@@ -3488,6 +3488,17 @@ App.renderCalendar = async function(host, routeId){
         ].filter(Boolean);
         const meta = el("div", { class: "calTaskMeta" }, ...metaParts.map(m => el("span", {}, m)));
 
+        const openBtn = el("button", {
+          class: "btn ghost mini calOpenBtn",
+          type: "button",
+          onClick: (e) => {
+            e.stopPropagation();
+            openTaskView(x.id);
+          }
+        }, t("open"));
+
+        const actions = el("div", { class: "calTaskActions" }, openBtn);
+
         const card = el("div", {
           class: "calTask",
           draggable: isMobile ? "false" : "true",
@@ -6210,6 +6221,7 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
+
 
 
 
