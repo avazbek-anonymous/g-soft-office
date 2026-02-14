@@ -1228,6 +1228,7 @@ text-decoration:none;
 .modalFoot{padding:12px 14px 14px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--stroke)}
 .sideOverlay{display:none}
 @media (max-width:900px){
+  .calOpenBtn{display:none}
   .sidebar{position:fixed;left:-290px;top:0;height:100vh;width:280px;transition:left .18s ease}
   .sidebar:hover{width:280px} .sidebar.open{left:0}
   .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
@@ -1244,6 +1245,7 @@ text-decoration:none;
 .badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);background:var(--card)}
 .dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
 @media (max-width:900px){
+  .calOpenBtn{display:none}
   .kanbanWrap{flex-direction:column;overflow:visible}
   .kcol{min-width:auto;max-width:none}
   .kcard{touch-action:pan-y; cursor:default}
@@ -1285,6 +1287,7 @@ text-decoration:none;
 
 /* Keep mobile as is */
 @media (max-width:900px){
+  .calOpenBtn{display:none}
   .kanbanWrap{display:flex; flex-direction:column; overflow:visible}
   .kcol{min-width:auto}
 }
@@ -1412,6 +1415,7 @@ select option{
 
 /* на телефоне: не заставляем канбан быть высоким "как десктоп" */
 @media (max-width:900px){
+  .calOpenBtn{display:none}
   .kanbanWrap .klist{
     min-height:140px;
   }
@@ -1437,10 +1441,14 @@ select option{
 .calTask.selected{outline:2px solid rgba(15,209,167,.5);outline-offset:0}
 .calTaskTitle{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .calTaskMeta{font-size:11px;color:var(--muted2);display:flex;gap:6px;flex-wrap:wrap}
+
+.calTaskActions{display:flex;justify-content:flex-end}
+.calOpenBtn{padding:6px 8px;border-radius:10px;font-size:11px}
 .calBottom{position:sticky;bottom:0;background:rgba(0,0,0,.35);border:1px solid var(--stroke);border-radius:14px;padding:10px;backdrop-filter:blur(var(--blur));display:flex;align-items:center;justify-content:space-between;gap:10px}
 .calBottom.hidden{display:none}
 .calHint{font-size:12px;color:var(--muted2)}
 @media (max-width:900px){
+  .calOpenBtn{display:none}
   .calWeek{display:none}
   .calGrid{grid-template-columns:1fr}
   .calDay{min-height:auto}
@@ -3264,23 +3272,9 @@ App.renderCalendar = async function(host, routeId){
 
   const findTask = (id) => (state.tasks || []).find(x => Number(x.id) === Number(id));
 
-  const setSelected = (task, bottom, bottomTitle, bottomSub, openBtn) => {
-    if (!bottom) return;
-    if (!task) {
-      bottom.classList.add("hidden");
-      bottomTitle.textContent = t("calendar_select_hint");
-      bottomSub.textContent = "";
-      openBtn.disabled = true;
-      state.selectedId = null;
-      return;
-    }
-    state.selectedId = task.id;
-    bottom.classList.remove("hidden");
-    bottomTitle.textContent = task.title || `#${task.id}`;
-    bottomSub.textContent = `${t("deadline")}: ${fmtDate(task.deadline_at || fallbackDeadline())}`;
-    openBtn.disabled = false;
+  const setSelected = (task) => {
+    state.selectedId = task ? task.id : null;
   };
-
   async function openTaskView(id){
     try{
       const r = await API.tasks.get(id);
@@ -3465,30 +3459,7 @@ App.renderCalendar = async function(host, routeId){
       map.get(x._date_key).push(x);
     }
 
-    let bottom = null;
-    let bottomTitle = null;
-    let bottomSub = null;
-    let openBtn = null;
-
-    if (!isMobile) {
-      bottomTitle = el("div", { style: "font-weight:800" }, t("calendar_select_hint"));
-      bottomSub = el("div", { class: "muted2", style: "font-size:12px" }, "");
-      openBtn = el("button", { class: "btn primary", type: "button", disabled: true, onClick: () => {
-        const row = findTask(state.selectedId);
-        if (row) openTaskView(row.id);
-      }}, t("open"));
-      bottom = el("div", { class: "calBottom hidden" },
-        el("div", { class: "vcol gap4" }, bottomTitle, bottomSub),
-        openBtn
-      );
-    }
-
-    const wrap = el("div", { class: "calWrap", onClick: () => {
-      if (!isMobile && bottom) {
-        $$(".calTask.selected", wrap).forEach(n => n.classList.remove("selected"));
-        setSelected(null, bottom, bottomTitle, bottomSub, openBtn);
-      }
-    } });
+    const wrap = el("div", { class: "calWrap" });
 
     for (const d of days) {
       const key = dateKey(d);
@@ -3524,9 +3495,7 @@ App.renderCalendar = async function(host, routeId){
           onClick: (e) => {
             e.stopPropagation();
             if (isMobile) return openTaskView(x.id);
-            $$(".calTask.selected", wrap).forEach(n => n.classList.remove("selected"));
-            card.classList.add("selected");
-            setSelected(x, bottom, bottomTitle, bottomSub, openBtn);
+            setSelected(x);
           },
           onDragstart: isMobile ? null : (e) => {
             e.dataTransfer.effectAllowed = "move";
@@ -3534,15 +3503,13 @@ App.renderCalendar = async function(host, routeId){
             card.classList.add("dragging");
           },
           onDragend: isMobile ? null : () => card.classList.remove("dragging"),
-        }, titleEl, meta);
+        }, titleEl, meta, actions);
 
         if (!isMobile) {
           bindTouchDrag(card, async (id, targetKey) => {
             await updateDeadline(id, targetKey);
           });
         }
-
-        if (!isMobile && state.selectedId === x.id) card.classList.add("selected");
         list.appendChild(card);
       }
 
@@ -3556,7 +3523,7 @@ App.renderCalendar = async function(host, routeId){
       grid.appendChild(day);
     }
 
-    wrap.append(top, hint, week, grid, bottom);
+    wrap.append(top, hint, week, grid);
     host.appendChild(wrap);
   }
 
@@ -6243,6 +6210,11 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
+
+
+
+
+
 
 
 
