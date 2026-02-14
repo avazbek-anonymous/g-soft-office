@@ -223,6 +223,14 @@ function str(v) {
   return String(v).trim();
 }
 
+let _usersHasTelegramCol = null;
+async function usersHasTelegramIdColumn(env) {
+  if (_usersHasTelegramCol !== null) return _usersHasTelegramCol;
+  const info = await env.DB.prepare("PRAGMA table_info(users)").all();
+  _usersHasTelegramCol = (info.results || []).some((r) => r.name === "telegram_id");
+  return _usersHasTelegramCol;
+}
+
 function tgGetEntities(msg) {
   return [
     ...(Array.isArray(msg?.entities) ? msg.entities : []),
@@ -554,16 +562,6 @@ async function hashPassword(password, iterations = PBKDF2_DEFAULT_ITER) {
   const hashHex = await pbkdf2Sha256Hex(String(password), saltHex, iter, 32);
   return { saltHex, hashHex, iter, algo };
 }
-
-let _usersHasTelegramCol = null;
-async function usersHasTelegramIdColumn(env) {
-  if (_usersHasTelegramCol !== null) return _usersHasTelegramCol;
-  const info = await env.DB.prepare("PRAGMA table_info(users)").all();
-  _usersHasTelegramCol = (info.results || []).some((r) => r.name === "telegram_id");
-  return _usersHasTelegramCol;
-}
-
-
 
 /** cleanup: after midnight, any in_progress tasks should drop to pause + close open time logs */
 async function autoPauseOvernight(env) {
