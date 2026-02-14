@@ -119,11 +119,17 @@
       need_reason: "Нужна причина отмены",
       route_main: "Главная",
       route_tasks: "Задачи",
+      route_calendar: "Calendar",
       route_projects: "Проекты",
       route_courses: "Курсы",
       route_clients: "Клиенты",
       route_settings: "Настройки",
       route_users: "Пользователи",
+      calendar_today: "Today",
+      calendar_prev: "Prev",
+      calendar_next: "Next",
+      calendar_drag_hint: "Drag to change deadline",
+      calendar_select_hint: "Select a task, then open",
       coming_soon: "Раздел в разработке. Следующим шагом подключим этот модуль к API.",
       t_new: "Новая",
       t_pause: "Пауза",
@@ -270,11 +276,17 @@ telegram_id: "Telegram ID",
       need_reason: "Bekor qilish sababi kerak",
       route_main: "Asosiy",
       route_tasks: "Vazifalar",
+      route_calendar: "Calendar",
       route_projects: "Loyihalar",
       route_courses: "Kurslar",
       route_clients: "Mijozlar",
       route_settings: "Sozlamalar",
       route_users: "Foydalanuvchilar",
+      calendar_today: "Today",
+      calendar_prev: "Prev",
+      calendar_next: "Next",
+      calendar_drag_hint: "Drag to change deadline",
+      calendar_select_hint: "Select a task, then open",
       coming_soon: "Bo‘lim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
       t_new: "Boshlanmagan",
       t_pause: "Pauza",
@@ -419,11 +431,17 @@ telegram_id: "Telegram ID",
       need_reason: "Cancel reason required",
       route_main: "Home",
       route_tasks: "Tasks",
+      route_calendar: "Calendar",
       route_projects: "Projects",
       route_courses: "Courses",
       route_clients: "Clients",
       route_settings: "Settings",
       route_users: "Users",
+      calendar_today: "Today",
+      calendar_prev: "Prev",
+      calendar_next: "Next",
+      calendar_drag_hint: "Drag to change deadline",
+      calendar_select_hint: "Select a task, then open",
       coming_soon: "This section is under construction. Next step we’ll connect it to the API.",
       t_new: "New",
       t_pause: "Paused",
@@ -562,6 +580,7 @@ telegram_id: "Telegram ID",
   // меню
   home: `<img src="./icons/asosiy.svg" class="ico" alt="">`,
   tasks: `<img src="./icons/tasks.svg" class="ico" alt="">`,
+  calendar: `<svg viewBox="0 0 24 24" class="ico"><path d="M7 2h2v2h6V2h2v2h3v18H4V4h3V2zm12 6H5v12h14V8z"/></svg>`,
   projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
   clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
@@ -1397,6 +1416,37 @@ select option{
     min-height:140px;
   }
 }
+
+/* calendar */
+.calWrap{display:flex;flex-direction:column;gap:12px}
+.calTop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.calTitle{font-weight:900;font-size:18px}
+.calNav{display:flex;gap:8px;flex-wrap:wrap}
+.calWeek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.calWeek .calWeekDay{font-size:12px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px}
+.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.calDay{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:8px;min-height:120px;display:flex;flex-direction:column;gap:6px}
+.calDay.other{opacity:.55}
+.calDay.today{outline:2px solid rgba(255,208,90,.5);outline-offset:0}
+.calDayHead{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted2)}
+.calDayNum{font-weight:800;color:var(--text)}
+.calList{display:flex;flex-direction:column;gap:6px;min-height:40px}
+.calList.dropHover{outline:2px dashed rgba(255,208,90,.55);outline-offset:2px;background:rgba(255,208,90,.06)}
+.calTask{padding:8px;border:1px solid var(--stroke);border-radius:12px;background:rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.calTask.dragging{opacity:.55}
+.calTask.selected{outline:2px solid rgba(15,209,167,.5);outline-offset:0}
+.calTaskTitle{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calTaskMeta{font-size:11px;color:var(--muted2);display:flex;gap:6px;flex-wrap:wrap}
+.calBottom{position:sticky;bottom:0;background:rgba(0,0,0,.35);border:1px solid var(--stroke);border-radius:14px;padding:10px;backdrop-filter:blur(var(--blur));display:flex;align-items:center;justify-content:space-between;gap:10px}
+.calBottom.hidden{display:none}
+.calHint{font-size:12px;color:var(--muted2)}
+@media (max-width:900px){
+  .calWeek{display:none}
+  .calGrid{grid-template-columns:1fr}
+  .calDay{min-height:auto}
+  .calBottom{position:static}
+}
+
 `.trim();
 
   document.head.appendChild(el("style", { id: "gsoftStyles" }, css));
@@ -1461,6 +1511,12 @@ select option{
         roles: ["admin", "rop", "pm", "fin", "sale"]
       },
       {
+        path: "/calendar",
+        key: "route_calendar",
+        icon: "calendar",
+        roles: ["admin", "rop", "pm", "fin", "sale"]
+      },
+      {
         path: "/projects",
         key: "route_projects",
         icon: "projects",
@@ -1497,6 +1553,7 @@ select option{
   function pageTitleByPath(path) {
     if (path.startsWith("/main")) return t("route_main");
     if (path.startsWith("/tasks")) return t("route_tasks");
+    if (path.startsWith("/calendar")) return t("route_calendar");
     if (path.startsWith("/projects")) return t("route_projects");
     if (path.startsWith("/courses")) return t("route_courses");
     if (path.startsWith("/clients")) return t("route_clients");
@@ -1844,6 +1901,7 @@ select option{
 
     if (path === "/main") return App.renderMain(host, routeId);
     if (path === "/tasks") return App.renderTasks(host, routeId);
+    if (path === "/calendar") return App.renderCalendar(host, routeId);
     if (path === "/users") return App.renderUsers(host, routeId);
     if (path === "/settings") return App.renderSettings(host, routeId);
     if (path === "/courses") return App.renderCourses(host, routeId);
@@ -3141,6 +3199,397 @@ createBtn.addEventListener("click", () => {
 
 
   
+
+App.renderCalendar = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
+  const isMobile = window.matchMedia("(max-width:900px)").matches;
+
+  const state = {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+    tasks: [],
+    selectedId: null,
+  };
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const parseKey = (k) => {
+    const parts = String(k || "").split("-");
+    if (parts.length !== 3) return null;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return null;
+    return { y, m, day };
+  };
+
+  const todayKey = dateKey(new Date());
+
+  const fallbackDeadline = () => {
+    const d = new Date();
+    d.setHours(18, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
+  };
+
+  const weekNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const monthLabel = () => {
+    const d = new Date(state.year, state.month, 1);
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  };
+
+  const buildGridDates = () => {
+    const first = new Date(state.year, state.month, 1);
+    const last = new Date(state.year, state.month + 1, 0);
+    const start = new Date(first);
+    const weekStart = 1; // Monday
+    const diff = (first.getDay() - weekStart + 7) % 7;
+    start.setDate(first.getDate() - diff);
+    const end = new Date(last);
+    const diff2 = (weekStart + 6 - last.getDay() + 7) % 7;
+    end.setDate(last.getDate() + diff2);
+    const days = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      days.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+  };
+
+  const fmtTime = (ts) => {
+    if (!ts) return "";
+    return new Date(ts * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const findTask = (id) => (state.tasks || []).find(x => Number(x.id) === Number(id));
+
+  const setSelected = (task, bottom, bottomTitle, bottomSub, openBtn) => {
+    if (!bottom) return;
+    if (!task) {
+      bottom.classList.add("hidden");
+      bottomTitle.textContent = t("calendar_select_hint");
+      bottomSub.textContent = "";
+      openBtn.disabled = true;
+      state.selectedId = null;
+      return;
+    }
+    state.selectedId = task.id;
+    bottom.classList.remove("hidden");
+    bottomTitle.textContent = task.title || `#${task.id}`;
+    bottomSub.textContent = `${t("deadline")}: ${fmtDate(task.deadline_at || fallbackDeadline())}`;
+    openBtn.disabled = false;
+  };
+
+  async function openTaskView(id){
+    try{
+      const r = await API.tasks.get(id);
+      const x = r.data;
+
+      const view = el("div", { class: "vcol gap10" },
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("status")),
+            el("div", { style: "font-weight:900" }, taskStatusLabel(x.status))
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+            el("div", {}, fmtDate(x.deadline_at || fallbackDeadline()))
+          )
+        ),
+        el("div", { class: "grid2" },
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
+            el("div", {}, x.assignee_name || "�")
+          ),
+          el("div", { class: "vcol gap8" },
+            el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
+            el("div", {}, x.project_company_name || "�")
+          )
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+          el("div", { style: "font-weight:900" }, x.title || `#${x.id}`)
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+          el("div", { class: "muted", style: "white-space:pre-wrap" }, x.description || "�")
+        )
+      );
+
+      const role = App.state.user.role;
+      const isAdmin = role === "admin";
+      const isRop = role === "rop";
+      const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+
+      const actions = [];
+      if (canEdit) {
+        actions.push({
+          label: t("edit"),
+          kind: "primary",
+          onClick: () => { Modal.close(); openTaskEdit(x.id); }
+        });
+      }
+      actions.push({ label: t("close"), kind: "ghost", onClick: () => Modal.close() });
+
+      Modal.open(`${t("open")} #${x.id}`, view, actions);
+    }catch(e){
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  async function openTaskEdit(id){
+    try{
+      const r = await API.tasks.get(id);
+      const x = r.data;
+
+      const role = App.state.user.role;
+      const isAdmin = role === "admin";
+      const isRop = role === "rop";
+      const canEdit = (x.created_by === App.state.user.id) || isAdmin || isRop;
+      if (!canEdit) return openTaskView(id);
+
+      const titleInp = el("input", { class: "input", value: x.title || "", placeholder: t("title") });
+      const descInp = el("textarea", { class: "input", rows: 6, placeholder: t("description") }, x.description || "");
+      const deadlineInp = el("input", { class: "input", type: "datetime-local" });
+
+      if (x.deadline_at) {
+        const d = new Date(x.deadline_at * 1000);
+        const pad2 = (n) => String(n).padStart(2, "0");
+        deadlineInp.value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      }
+
+      const form = el("div", { class: "vcol gap10" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
+          deadlineInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
+          titleInp
+        ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
+          descInp
+        )
+      );
+
+      Modal.open(t("edit"), form, [
+        { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
+        { label: t("save"), kind: "primary", onClick: async () => {
+          try{
+            const deadline_at = deadlineInp.value ? Math.floor(new Date(deadlineInp.value).getTime() / 1000) : null;
+            const body = {
+              title: (titleInp.value || "").trim() || null,
+              description: (descInp.value || "").trim(),
+              deadline_at,
+            };
+            await API.tasks.update(x.id, body);
+            Toast.show(t("toast_saved"), "ok");
+            Modal.close();
+            await load();
+          }catch(e){
+            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+          }
+        }}
+      ]);
+    }catch(e){
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  async function updateDeadline(id, targetKey){
+    const row = findTask(id);
+    if (!row) return;
+    const curTs = row.deadline_at || fallbackDeadline();
+    const curKey = dateKey(new Date(curTs * 1000));
+    if (curKey === targetKey) return;
+
+    let hour = 18;
+    let minute = 0;
+    if (row.deadline_at) {
+      const d = new Date(row.deadline_at * 1000);
+      hour = d.getHours();
+      minute = d.getMinutes();
+    }
+    const parsed = parseKey(targetKey);
+    if (!parsed) return;
+    const d2 = new Date(parsed.y, parsed.m - 1, parsed.day, hour, minute, 0, 0);
+    const deadline_at = Math.floor(d2.getTime() / 1000);
+
+    try{
+      await API.tasks.update(id, { deadline_at });
+      Toast.show(t("toast_saved"), "ok");
+      await load();
+    }catch(e){
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  }
+
+  function render(){
+    host.innerHTML = "";
+
+    const title = el("div", { class: "calTitle" }, monthLabel());
+    const prevBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(-1) }, t("calendar_prev"));
+    const nextBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(1) }, t("calendar_next"));
+    const todayBtn = el("button", { class: "btn", type: "button", onClick: () => {
+      const now = new Date();
+      state.year = now.getFullYear();
+      state.month = now.getMonth();
+      render();
+    }}, t("calendar_today"));
+
+    const top = el("div", { class: "calTop" },
+      title,
+      el("div", { class: "calNav" }, prevBtn, todayBtn, nextBtn)
+    );
+
+    const hint = isMobile ? null : el("div", { class: "calHint" }, t("calendar_drag_hint"));
+
+    const week = el("div", { class: "calWeek" },
+      ...weekNames.map(n => el("div", { class: "calWeekDay" }, n))
+    );
+
+    const grid = el("div", { class: "calGrid" });
+    const days = buildGridDates();
+
+    const fallback = fallbackDeadline();
+    const mapped = (state.tasks || []).map(x => {
+      const eff = x.deadline_at || fallback;
+      const key = dateKey(new Date(eff * 1000));
+      return { ...x, _eff_deadline: eff, _date_key: key };
+    });
+    const map = new Map();
+    for (const x of mapped) {
+      if (!map.has(x._date_key)) map.set(x._date_key, []);
+      map.get(x._date_key).push(x);
+    }
+
+    let bottom = null;
+    let bottomTitle = null;
+    let bottomSub = null;
+    let openBtn = null;
+
+    if (!isMobile) {
+      bottomTitle = el("div", { style: "font-weight:800" }, t("calendar_select_hint"));
+      bottomSub = el("div", { class: "muted2", style: "font-size:12px" }, "");
+      openBtn = el("button", { class: "btn primary", type: "button", disabled: true, onClick: () => {
+        const row = findTask(state.selectedId);
+        if (row) openTaskView(row.id);
+      }}, t("open"));
+      bottom = el("div", { class: "calBottom hidden" },
+        el("div", { class: "vcol gap4" }, bottomTitle, bottomSub),
+        openBtn
+      );
+    }
+
+    const wrap = el("div", { class: "calWrap", onClick: () => {
+      if (!isMobile && bottom) {
+        $$(".calTask.selected", wrap).forEach(n => n.classList.remove("selected"));
+        setSelected(null, bottom, bottomTitle, bottomSub, openBtn);
+      }
+    } });
+
+    for (const d of days) {
+      const key = dateKey(d);
+      const inMonth = d.getMonth() === state.month;
+      const isToday = key === todayKey;
+
+      const list = el("div", { class: "calList", "data-drop": key });
+      if (!isMobile) {
+        list.addEventListener("dragover", (e) => e.preventDefault());
+        list.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          const id = Number(e.dataTransfer.getData("text/plain"));
+          if (!id) return;
+          await updateDeadline(id, key);
+        });
+      }
+
+      const dayTasks = (map.get(key) || []).sort((a,b) => a._eff_deadline - b._eff_deadline);
+      for (const x of dayTasks) {
+        const dot = el("span", { class: "dot", style: `background:${statusDotColor(x.status)}` });
+        const titleEl = el("div", { class: "calTaskTitle" }, dot, " ", x.title || `#${x.id}`);
+        const metaParts = [
+          fmtTime(x._eff_deadline),
+          x.project_company_name ? x.project_company_name : "",
+          `#${x.id}`
+        ].filter(Boolean);
+        const meta = el("div", { class: "calTaskMeta" }, ...metaParts.map(m => el("span", {}, m)));
+
+        const card = el("div", {
+          class: "calTask",
+          draggable: isMobile ? "false" : "true",
+          "data-id": String(x.id),
+          onClick: (e) => {
+            e.stopPropagation();
+            if (isMobile) return openTaskView(x.id);
+            $$(".calTask.selected", wrap).forEach(n => n.classList.remove("selected"));
+            card.classList.add("selected");
+            setSelected(x, bottom, bottomTitle, bottomSub, openBtn);
+          },
+          onDragstart: isMobile ? null : (e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", String(x.id));
+            card.classList.add("dragging");
+          },
+          onDragend: isMobile ? null : () => card.classList.remove("dragging"),
+        }, titleEl, meta);
+
+        if (!isMobile) {
+          bindTouchDrag(card, async (id, targetKey) => {
+            await updateDeadline(id, targetKey);
+          });
+        }
+
+        if (!isMobile && state.selectedId === x.id) card.classList.add("selected");
+        list.appendChild(card);
+      }
+
+      const day = el("div", { class: `calDay${inMonth ? "" : " other"}${isToday ? " today" : ""}` },
+        el("div", { class: "calDayHead" },
+          el("div", { class: "calDayNum" }, String(d.getDate())),
+          el("div", {}, inMonth ? "" : `${d.getMonth()+1}`)
+        ),
+        list
+      );
+      grid.appendChild(day);
+    }
+
+    wrap.append(top, hint, week, grid, bottom);
+    host.appendChild(wrap);
+  }
+
+  function shiftMonth(delta){
+    let y = state.year;
+    let m = state.month + delta;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    state.year = y;
+    state.month = m;
+    render();
+  }
+
+  async function load(){
+    host.innerHTML = "";
+    host.appendChild(el("div", { class: "muted" }, t("loading")));
+    try{
+      const r = await API.tasks.list({});
+      if (App.state.routeId !== rid) return;
+      state.tasks = (r.data || []).slice();
+      render();
+    }catch(e){
+      host.innerHTML = "";
+      host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+        el("div", { style: "font-weight:900" }, t("toast_error")),
+        el("div", { class: "muted" }, e.message || "Error")
+      ));
+    }
+  }
+
+  await load();
+};
+
 
     function isLoginPage(){
     const p = ((location.pathname || "/").replace(/\/+$/,"")) || "/";
@@ -5794,3 +6243,12 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
+
+
+
+
+
+
+
+
+

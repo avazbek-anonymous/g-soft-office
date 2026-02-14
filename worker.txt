@@ -548,7 +548,7 @@ async function handleTelegramWebhook(env, request) {
   await tgSendMessage(
     env,
     chatId,
-    `✅ Задача создана\n#${taskId}\nDeadline: ${formatTashkentDateTime(deadlineAt)}\nОтветственный: ${assignee.full_name || assignee.login || assignee.id}`,
+    `✅ Yuklandi\nDeadline: ${formatTashkentDateTime(deadlineAt)}\nОтветственный: ${assignee.full_name || assignee.login || assignee.id}`,
     threadId
   );
   await tgSetReaction(env, chatId, messageId, "🫡");
