@@ -550,6 +550,9 @@ telegram_id: "Telegram ID",
 
     }
   };
+  DICT.ru.route_course_payments = "\u041e\u043f\u043b\u0430\u0442\u044b \u043a\u0443\u0440\u0441\u043e\u0432";
+  DICT.uz.route_course_payments = "Kurs to'lovlari";
+  DICT.en.route_course_payments = "Course payments";
   DICT.ru.calendar_filter_active = "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435";
   DICT.uz.calendar_filter_active = "Aktiv";
   DICT.en.calendar_filter_active = "Active";
@@ -604,6 +607,7 @@ telegram_id: "Telegram ID",
   calendar: `<img src="./icons/calendar.svg" class="ico" alt="">`,
   projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
+  course_payments: `<img src="./icons/payment.svg" class="ico" alt="">`,
   clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
   settings: `<img src="./icons/settings.svg" class="ico" alt="">`,
   users: `<img src="./icons/users.svg" class="ico" alt="">`,
@@ -1563,6 +1567,12 @@ select option{
         roles: ["admin", "rop", "sale"]
       },
       {
+        path: "/course-payments",
+        key: "route_course_payments",
+        icon: "course_payments",
+        roles: ["admin", "rop", "sale"]
+      },
+      {
         path: "/clients",
         key: "route_clients",
         icon: "clients",
@@ -1590,6 +1600,7 @@ select option{
     if (path.startsWith("/calendar")) return t("route_calendar");
     if (path.startsWith("/projects")) return t("route_projects");
     if (path.startsWith("/courses")) return t("route_courses");
+    if (path.startsWith("/course-payments")) return t("route_course_payments");
     if (path.startsWith("/clients")) return t("route_clients");
     if (path.startsWith("/settings")) return t("route_settings");
     if (path.startsWith("/users")) return t("route_users");
@@ -1939,6 +1950,7 @@ select option{
     if (path === "/users") return App.renderUsers(host, routeId);
     if (path === "/settings") return App.renderSettings(host, routeId);
     if (path === "/courses") return App.renderCourses(host, routeId);
+    if (path === "/course-payments") return App.renderCoursePayments(host, routeId);
     if (path === "/clients") return App.renderClients(host, routeId);
     if (path === "/projects") return App.renderProjects(host, routeId);
 
@@ -5999,6 +6011,375 @@ App.renderCourses = async function (host, routeId) {
   const openId = App.state.current?.query?.open ? Number(App.state.current.query.open) : null;
   if (openId) openView(openId);
 }
+
+
+App.renderCoursePayments = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
+  const role = App.state.user?.role || "";
+  const canAccess = role === "admin" || role === "rop" || role === "sale";
+  if (!canAccess) {
+    host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+      el("div", { style: "font-weight:900" }, t("route_course_payments")),
+      el("div", { class: "muted" }, "No access")
+    ));
+    return;
+  }
+
+  if (!document.getElementById("coursePaymentStyles")) {
+    const st = document.createElement("style");
+    st.id = "coursePaymentStyles";
+    st.textContent = `
+      .cpWrap{display:flex;flex-direction:column;gap:10px}
+      .cpFilters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+      .cpFilters .input,.cpFilters .sel{min-width:200px}
+      .cpCount{font-size:12px;color:var(--muted2)}
+      .cpTableWrap{overflow:auto;border:1px solid var(--stroke);border-radius:14px;background:rgba(255,255,255,.03)}
+      .cpTable{width:100%;border-collapse:separate;border-spacing:0}
+      .cpTable th,.cpTable td{padding:10px 12px;border-bottom:1px solid var(--stroke);vertical-align:top;text-align:left}
+      .cpTable th{position:sticky;top:0;background:var(--bg2);z-index:1}
+      .cpSort{all:unset;cursor:pointer;font-weight:800;display:inline-flex;align-items:center;gap:6px}
+      .cpMuted{font-size:12px;color:var(--muted2)}
+      .cpNoData{padding:14px;color:var(--muted)}
+      .cpEditBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.04);cursor:pointer}
+      .cpCellEdit{display:flex;align-items:flex-start;gap:8px}
+      .cpMobile{display:none}
+      .cpCard{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:flex;flex-direction:column;gap:8px}
+      .cpCardRow{display:flex;justify-content:space-between;gap:10px}
+      .cpCardKey{font-size:12px;color:var(--muted2)}
+      .cpCardVal{text-align:right;max-width:65%;word-break:break-word}
+      @media (max-width:900px){
+        .cpFilters .input,.cpFilters .sel{min-width:0;flex:1}
+        .cpDesktop{display:none}
+        .cpMobile{display:flex;flex-direction:column;gap:8px}
+      }
+    `.trim();
+    document.head.appendChild(st);
+  }
+
+  const lang = App.state.lang || "ru";
+  const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
+
+  const statusCols = [
+    { key: "new",       label: { ru: "Новый", uz: "Yangi", en: "New" } },
+    { key: "need_call", label: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" } },
+    { key: "thinking",  label: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" } },
+    { key: "enrolled",  label: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" } },
+    { key: "studying",  label: { ru: "Учится", uz: "O'qishda", en: "Studying" } },
+    { key: "canceled",  label: { ru: "Отмена", uz: "Bekor", en: "Canceled" } },
+  ];
+  const stMap = new Map(statusCols.map(s => [String(s.key), tr(s.label)]));
+
+  const fmtMoney = (amount, currency) => {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    return `${n.toLocaleString(undefined)} ${currency || "UZS"}`;
+  };
+  const fmtDateOnly = (tsSec) => {
+    if (!tsSec) return "—";
+    const d = new Date(Number(tsSec) * 1000);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+  };
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const safe = (v) => String(v == null ? "" : v);
+
+  host.innerHTML = "";
+  host.appendChild(el("div", { class: "muted" }, t("loading")));
+
+  const [ctRes, listRes] = await Promise.all([
+    API.settings.dictList("course_types").catch(() => ({ data: [] })),
+    apiFetch("/api/course_leads").catch(() => ({ data: [] })),
+  ]);
+  if (App.state.routeId !== rid) return;
+
+  const courseTypes = Array.isArray(ctRes?.data) ? ctRes.data : [];
+  const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
+  const getCourseTypeName = (x) => {
+    if (x.course_type_name) return x.course_type_name;
+    const row = ctById.get(Number(x.course_type_id));
+    return row?.name || row?.name_uz || row?.name_ru || row?.name_en || "—";
+  };
+
+  let raw = Array.isArray(listRes?.data) ? listRes.data.slice() : [];
+  const state = {
+    q: "",
+    payType: "debts",
+    courseTypeId: "",
+    stage: "studying",
+    sortKey: "",
+    sortDir: 0, // 0 -> none, 1 -> asc, -1 -> desc
+  };
+
+  const searchText = (x) => [
+    x.id,
+    x.lead_full_name,
+    x.lead_phone1,
+    x.company_name,
+    getCourseTypeName(x),
+    x.status,
+    stMap.get(String(x.status)) || x.status || "",
+    x.comment,
+    x.lead_comment,
+    x.course_price,
+    x.agreed_amount,
+    x.paid_amount,
+    x.currency,
+    x.course_start_date ? fmtDateOnly(x.course_start_date) : "",
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const paymentPass = (x) => {
+    const paid = num(x.paid_amount);
+    const agreed = num(x.agreed_amount);
+    if (state.payType === "paid") return paid > 0;
+    if (state.payType === "unpaid") return paid === 0;
+    if (state.payType === "debts") return agreed > paid;
+    if (state.payType === "closed") return agreed === paid;
+    if (state.payType === "overpaid") return paid > agreed;
+    return true;
+  };
+
+  const stagePass = (x) => {
+    const st = String(x.status || "");
+    if (state.stage === "studying") return st === "studying";
+    if (state.stage === "enrolled") return st === "enrolled";
+    if (state.stage === "other") return st !== "studying" && st !== "enrolled";
+    return true;
+  };
+
+  const typePass = (x) => !state.courseTypeId || String(x.course_type_id || "") === String(state.courseTypeId);
+
+  const compareBy = (key, a, b) => {
+    if (key === "fio_phone") return safe(`${a.lead_full_name || ""} ${a.lead_phone1 || ""}`).localeCompare(safe(`${b.lead_full_name || ""} ${b.lead_phone1 || ""}`), undefined, { sensitivity: "base" });
+    if (key === "course_type") return safe(getCourseTypeName(a)).localeCompare(safe(getCourseTypeName(b)), undefined, { sensitivity: "base" });
+    if (key === "start_date") return num(a.course_start_date) - num(b.course_start_date);
+    if (key === "status") return safe(stMap.get(String(a.status)) || a.status).localeCompare(safe(stMap.get(String(b.status)) || b.status), undefined, { sensitivity: "base" });
+    if (key === "price") return num(a.course_price) - num(b.course_price);
+    if (key === "agreed") return num(a.agreed_amount) - num(b.agreed_amount);
+    if (key === "paid") return num(a.paid_amount) - num(b.paid_amount);
+    if (key === "comment") return safe(a.comment).localeCompare(safe(b.comment), undefined, { sensitivity: "base" });
+    return 0;
+  };
+
+  const rowsView = () => {
+    const q = state.q.trim().toLowerCase();
+    let rows = raw.filter(x => paymentPass(x) && stagePass(x) && typePass(x));
+    if (q) rows = rows.filter(x => searchText(x).includes(q));
+    if (!state.sortKey || !state.sortDir) return rows;
+    return rows
+      .map((x, i) => ({ x, i }))
+      .sort((aa, bb) => {
+        const d = compareBy(state.sortKey, aa.x, bb.x);
+        if (d !== 0) return d * state.sortDir;
+        return aa.i - bb.i;
+      })
+      .map(v => v.x);
+  };
+
+  const sortMark = (key) => (state.sortKey !== key || !state.sortDir) ? "" : (state.sortDir > 0 ? "▲" : "▼");
+  const toggleSort = (key) => {
+    if (state.sortKey !== key) {
+      state.sortKey = key;
+      state.sortDir = 1;
+      return;
+    }
+    if (state.sortDir === 1) {
+      state.sortDir = -1;
+      return;
+    }
+    state.sortKey = "";
+    state.sortDir = 0;
+  };
+
+  const askEdit = (title, initial, kind) => new Promise((resolve) => {
+    const inp = kind === "number"
+      ? el("input", { class: "input", type: "number", step: "0.01", value: (initial == null ? "" : String(initial)) })
+      : el("textarea", { class: "input", rows: 5 }, initial || "");
+    Modal.open(title, inp, [
+      { label: t("cancel"), kind: "ghost", onClick: () => { Modal.close(); resolve({ ok: false }); } },
+      { label: t("save"), kind: "primary", onClick: () => {
+          const v = (inp.value || "").trim();
+          if (kind === "number") {
+            if (v === "") { Modal.close(); resolve({ ok: true, value: null }); return; }
+            const n = Number(v);
+            if (!Number.isFinite(n)) return;
+            Modal.close(); resolve({ ok: true, value: n }); return;
+          }
+          Modal.close(); resolve({ ok: true, value: v || null });
+        }
+      }
+    ]);
+  });
+
+  const saveField = async (id, patch) => {
+    await apiFetch(`/api/course_leads/${id}`, { method: "PUT", body: patch });
+    const row = raw.find(x => Number(x.id) === Number(id));
+    if (row) Object.assign(row, patch);
+  };
+
+  const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
+  const paySel = el("select", { class: "sel" },
+    el("option", { value: "all" }, tr({ ru: "Тип: Все", uz: "Tur: Barchasi", en: "Type: All" })),
+    el("option", { value: "paid" }, tr({ ru: "Тип: Оплачено", uz: "Tur: To'langan", en: "Type: Paid" })),
+    el("option", { value: "unpaid" }, tr({ ru: "Тип: Не оплачено", uz: "Tur: To'lanmagan", en: "Type: Unpaid" })),
+    el("option", { value: "debts" }, tr({ ru: "Тип: Долги", uz: "Tur: Qarzdorlar", en: "Type: Debts" })),
+    el("option", { value: "closed" }, tr({ ru: "Тип: Закрыто", uz: "Tur: Yopilgan", en: "Type: Closed" })),
+    el("option", { value: "overpaid" }, tr({ ru: "Тип: Переплата", uz: "Tur: Ortiqcha to'lov", en: "Type: Overpaid" }))
+  );
+  const typeSel = el("select", { class: "sel" },
+    el("option", { value: "" }, tr({ ru: "Тип курса: Все", uz: "Kurs turi: Barchasi", en: "Course type: All" })),
+    ...courseTypes.map(ct => el("option", { value: String(ct.id) }, ct.name || ct.name_uz || ct.name_ru || ct.name_en || `#${ct.id}`))
+  );
+  const stageSel = el("select", { class: "sel" },
+    el("option", { value: "other" }, tr({ ru: "Статус: Другие", uz: "Status: Boshqalar", en: "Status: Other" })),
+    el("option", { value: "studying" }, tr({ ru: "Статус: Учится", uz: "Status: O'qishda", en: "Status: Studying" })),
+    el("option", { value: "enrolled" }, tr({ ru: "Статус: Записан", uz: "Status: Yozilgan", en: "Status: Enrolled" }))
+  );
+  paySel.value = state.payType;
+  stageSel.value = state.stage;
+
+  const countEl = el("div", { class: "cpCount" }, "");
+  const filters = el("div", { class: "card cardPad cpFilters" }, qInp, paySel, typeSel, stageSel, countEl);
+
+  const columns = [
+    { key: "fio_phone", label: tr({ ru: "ФИО/номер", uz: "FIO/raqam", en: "Full name/phone" }) },
+    { key: "course_type", label: tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" }) },
+    { key: "start_date", label: tr({ ru: "Дата начала", uz: "Boshlanish", en: "Start date" }) },
+    { key: "status", label: tr({ ru: "Статус", uz: "Status", en: "Status" }) },
+    { key: "price", label: tr({ ru: "Цена курса", uz: "Kurs narxi", en: "Course price" }) },
+    { key: "agreed", label: tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" }) },
+    { key: "paid", label: tr({ ru: "Оплатил", uz: "To'lagan", en: "Paid" }) },
+    { key: "comment", label: tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }) },
+  ];
+
+  const mkSortTh = (c) => el("th", {},
+    el("button", { class: "cpSort", type: "button", onClick: () => { toggleSort(c.key); render(); } }, `${c.label} ${sortMark(c.key)}`.trim())
+  );
+
+  const thead = el("thead", {}, el("tr", {}, ...columns.map(mkSortTh)));
+  const tbody = el("tbody", {});
+  const table = el("table", { class: "cpTable" }, thead, tbody);
+  const desktopWrap = el("div", { class: "card cpDesktop cpTableWrap" }, table);
+  const mobileWrap = el("div", { class: "cpMobile" });
+  const root = el("div", { class: "cpWrap" }, filters, desktopWrap, mobileWrap);
+
+  host.innerHTML = "";
+  host.appendChild(root);
+
+  const buildTdText = (x, key) => {
+    if (key === "fio_phone") return el("div", {},
+      el("div", { style: "font-weight:800" }, x.lead_full_name || "—"),
+      el("div", { class: "cpMuted" }, x.lead_phone1 || "—")
+    );
+    if (key === "course_type") return el("div", {}, getCourseTypeName(x));
+    if (key === "start_date") return el("div", {}, fmtDateOnly(x.course_start_date));
+    if (key === "status") return el("div", {}, stMap.get(String(x.status)) || x.status || "—");
+    if (key === "price") return el("div", {}, fmtMoney(x.course_price, x.currency));
+    if (key === "agreed") return el("div", {}, fmtMoney(x.agreed_amount, x.currency));
+    if (key === "paid") return el("div", {}, fmtMoney(x.paid_amount, x.currency));
+    if (key === "comment") return el("div", {}, x.comment || "—");
+    return el("div", {}, "—");
+  };
+
+  const paidEditBtn = (x) => el("button", {
+    class: "cpEditBtn",
+    type: "button",
+    title: tr({ ru: "Изменить оплату", uz: "To'lovni o'zgartirish", en: "Edit paid amount" }),
+    onClick: async () => {
+      const res = await askEdit(tr({ ru: "Оплата", uz: "To'lov", en: "Paid amount" }), x.paid_amount, "number");
+      if (!res.ok) return;
+      try {
+        await saveField(x.id, { paid_amount: res.value });
+        Toast.show(t("toast_saved"), "ok");
+        render();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      }
+    }
+  }, el("span", { class: "icoWrap", html: ICONS.edit }));
+
+  const commentEditBtn = (x) => el("button", {
+    class: "cpEditBtn",
+    type: "button",
+    title: tr({ ru: "Изменить комментарий", uz: "Izohni o'zgartirish", en: "Edit comment" }),
+    onClick: async () => {
+      const res = await askEdit(tr({ ru: "Комментарий", uz: "Izoh", en: "Comment" }), x.comment, "text");
+      if (!res.ok) return;
+      try {
+        await saveField(x.id, { comment: res.value });
+        Toast.show(t("toast_saved"), "ok");
+        render();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      }
+    }
+  }, el("span", { class: "icoWrap", html: ICONS.edit }));
+
+  function render(){
+    const rows = rowsView();
+    countEl.textContent = `${rows.length}`;
+
+    thead.innerHTML = "";
+    thead.appendChild(el("tr", {}, ...columns.map(mkSortTh)));
+    tbody.innerHTML = "";
+    mobileWrap.innerHTML = "";
+
+    if (!rows.length) {
+      tbody.appendChild(el("tr", {}, el("td", { colspan: String(columns.length), class: "cpNoData" }, t("no_data"))));
+      mobileWrap.appendChild(el("div", { class: "card cardPad cpNoData" }, t("no_data")));
+      return;
+    }
+
+    for (const x of rows) {
+      const trEl = el("tr", {},
+        el("td", {}, buildTdText(x, "fio_phone")),
+        el("td", {}, buildTdText(x, "course_type")),
+        el("td", {}, buildTdText(x, "start_date")),
+        el("td", {}, buildTdText(x, "status")),
+        el("td", {}, buildTdText(x, "price")),
+        el("td", {}, buildTdText(x, "agreed")),
+        el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))),
+        el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "comment"), commentEditBtn(x))),
+      );
+      tbody.appendChild(trEl);
+
+      mobileWrap.appendChild(
+        el("div", { class: "cpCard" },
+          el("div", { style: "font-weight:800" }, x.lead_full_name || "—"),
+          el("div", { class: "cpMuted" }, x.lead_phone1 || "—"),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[1].label), el("div", { class: "cpCardVal" }, getCourseTypeName(x))),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[2].label), el("div", { class: "cpCardVal" }, fmtDateOnly(x.course_start_date))),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[3].label), el("div", { class: "cpCardVal" }, stMap.get(String(x.status)) || x.status || "—")),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[4].label), el("div", { class: "cpCardVal" }, fmtMoney(x.course_price, x.currency))),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[5].label), el("div", { class: "cpCardVal" }, fmtMoney(x.agreed_amount, x.currency))),
+          el("div", { class: "cpCardRow" },
+            el("div", { class: "cpCardKey" }, columns[6].label),
+            el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))
+          ),
+          el("div", { class: "cpCardRow" },
+            el("div", { class: "cpCardKey" }, columns[7].label),
+            el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "comment"), commentEditBtn(x))
+          ),
+        )
+      );
+    }
+  }
+
+  let timer = null;
+  qInp.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      state.q = qInp.value || "";
+      render();
+    }, 120);
+  });
+  paySel.addEventListener("change", () => { state.payType = paySel.value || "all"; render(); });
+  typeSel.addEventListener("change", () => { state.courseTypeId = typeSel.value || ""; render(); });
+  stageSel.addEventListener("change", () => { state.stage = stageSel.value || "other"; render(); });
+
+  render();
+};
 
 
 async function loadDictCacheIfAny(){
