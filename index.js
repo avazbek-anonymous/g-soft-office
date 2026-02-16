@@ -5864,36 +5864,56 @@ App.renderCourses = async function (host, routeId) {
       );
 
       const isMobile = window.matchMedia("(max-width:900px)").matches;
-      const statusIdx = statusCols.findIndex(s => String(s.key) === String(x.status));
-      const nextStatuses = statusCols
-        .slice(statusIdx >= 0 ? statusIdx + 1 : 0)
-        .filter(s => s.key !== "canceled")
-        .slice(0, 2);
-
-      const moveActions = isMobile ? [
-        ...nextStatuses.map(s => ({
-          label: tr(s.label) || s.key,
-          kind: "primary",
-          onClick: async () => {
-            const moved = await doMove(id, s.key);
-            if (moved) Modal.close();
-          }
-        })),
-        {
-          label: t("cancel") || "Cancel",
-          kind: (String(x.status) === "canceled") ? "ghost" : "danger",
-          onClick: async () => {
-            if (String(x.status) === "canceled") return;
-            const moved = await doMove(id, "canceled");
-            if (moved) Modal.close();
-          }
-        }
-      ] : [];
+      const mobileStatusActions = isMobile
+        ? statusCols
+            .filter(s => String(s.key) !== String(x.status))
+            .map(s => {
+              const baseLabel = tr(s.label) || s.key;
+              const mark =
+                s.key === "enrolled" ? "🟢 " :
+                s.key === "studying" ? "🔷 " :
+                s.key === "canceled" ? "🔴 " : "";
+              return {
+                label: `${mark}${baseLabel}`,
+                kind: (s.key === "canceled") ? "danger" : "primary",
+                onClick: async () => {
+                  const moved = await doMove(id, s.key);
+                  if (moved) Modal.close();
+                }
+              };
+            })
+        : [];
+      const mobileStatusActionsColored = isMobile
+        ? statusCols
+            .filter(s => String(s.key) !== String(x.status))
+            .map(s => {
+              const baseLabel = tr(s.label) || s.key;
+              const dotColor =
+                s.key === "enrolled" ? "var(--ok)" :
+                s.key === "studying" ? "var(--accent2)" :
+                s.key === "canceled" ? "var(--danger)" : "";
+              const labelNode = dotColor
+                ? el("span", { class: "hrow gap8" },
+                    el("span", { class: "dot", style: `background:${dotColor};margin-right:0` }),
+                    el("span", {}, baseLabel)
+                  )
+                : baseLabel;
+              return {
+                label: labelNode,
+                kind: (s.key === "canceled") ? "danger" : (dotColor ? "primary" : "ghost"),
+                onClick: async () => {
+                  const moved = await doMove(id, s.key);
+                  if (moved) Modal.close();
+                }
+              };
+            })
+        : [];
 
       Modal.open(t("route_courses"), body, [
-        ...moveActions,
+        ...(isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
+        ...mobileStatusActionsColored,
         { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() },
-        { label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } },
+        ...(!isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
       ]);
     } catch (e) {
       Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
