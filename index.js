@@ -6830,6 +6830,24 @@ App.renderCoursePayments = async function(host, routeId){
     }
   }, el("span", { class: "icoWrap", html: ICONS.edit }));
 
+  const agreedEditBtn = (x) => el("button", {
+    class: "cpEditBtn",
+    type: "button",
+    title: tr({ ru: "Изменить договоренность", uz: "Kelishuvni o'zgartirish", en: "Edit agreed amount" }),
+    onClick: async () => {
+      const initial = Number.isFinite(Number(x.agreed_amount)) ? x.agreed_amount : effectiveAgreed(x);
+      const res = await askEdit(tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed amount" }), initial, "number");
+      if (!res.ok) return;
+      try {
+        await saveField(x.id, { agreed_amount: res.value });
+        Toast.show(t("toast_saved"), "ok");
+        render();
+      } catch (e) {
+        Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+      }
+    }
+  }, el("span", { class: "icoWrap", html: ICONS.edit }));
+
   const commentEditBtn = (x) => el("button", {
     class: "cpEditBtn",
     type: "button",
@@ -6869,7 +6887,7 @@ App.renderCoursePayments = async function(host, routeId){
         el("td", {}, buildTdText(x, "start_date")),
         el("td", {}, buildTdText(x, "status")),
         el("td", {}, buildTdText(x, "price")),
-        el("td", {}, buildTdText(x, "agreed")),
+        el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "agreed"), agreedEditBtn(x))),
         el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))),
         el("td", {}, buildTdText(x, "debt")),
         el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "comment"), commentEditBtn(x))),
@@ -6884,7 +6902,10 @@ App.renderCoursePayments = async function(host, routeId){
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[2].label), el("div", { class: "cpCardVal" }, fmtDateOnly(x.course_start_date))),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[3].label), el("div", { class: "cpCardVal" }, stMap.get(String(x.status)) || x.status || "—")),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[4].label), el("div", { class: "cpCardVal" }, fmtMoney(x.course_price, x.currency))),
-          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[5].label), el("div", { class: "cpCardVal" }, fmtMoney(effectiveAgreed(x), x.currency))),
+          el("div", { class: "cpCardRow" },
+            el("div", { class: "cpCardKey" }, columns[5].label),
+            el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "agreed"), agreedEditBtn(x))
+          ),
           el("div", { class: "cpCardRow" },
             el("div", { class: "cpCardKey" }, columns[6].label),
             el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))
