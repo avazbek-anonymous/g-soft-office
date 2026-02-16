@@ -3232,6 +3232,12 @@ createBtn.addEventListener("click", () => {
 App.renderCalendar = async function(host, routeId){
   const rid = routeId || App.state.routeId;
   const isMobile = window.matchMedia("(max-width:900px)").matches;
+  const role = App.state.user.role;
+  const isAdmin = role === "admin";
+  const isPm = role === "pm";
+  const isFin = role === "fin";
+  const canUseUserFilter = isAdmin;
+  const canUseProjectFilter = isAdmin || isPm || isFin;
 
   const state = {
     year: new Date().getFullYear(),
@@ -3304,9 +3310,19 @@ App.renderCalendar = async function(host, routeId){
 
   const findTask = (id) => (state.tasks || []).find(x => Number(x.id) === Number(id));
   const matchesFilters = (x) => {
-    if (state.filters.assignee_user_id && String(x.assignee_user_id || "") !== String(state.filters.assignee_user_id)) return false;
-    if (state.filters.project_id && String(x.project_id || "") !== String(state.filters.project_id)) return false;
+    if (canUseUserFilter && state.filters.assignee_user_id && String(x.assignee_user_id || "") !== String(state.filters.assignee_user_id)) return false;
+    if (canUseProjectFilter && state.filters.project_id && String(x.project_id || "") !== String(state.filters.project_id)) return false;
     return true;
+  };
+  const roleVisibleTasks = () => {
+    const all = state.tasks || [];
+    if (isAdmin) return all;
+    if (isPm) {
+      if (!state.projects.length) return [];
+      const allowed = new Set(state.projects.map(p => String(p.id)));
+      return all.filter(x => x.project_id && allowed.has(String(x.project_id)));
+    }
+    return all.filter(x => Number(x.assignee_user_id) === Number(App.state.user.id));
   };
 
   const setSelected = (task) => {
@@ -3461,33 +3477,39 @@ App.renderCalendar = async function(host, routeId){
     host.innerHTML = "";
 
     const title = el("div", { class: "calTitle" }, monthLabel());
-    const userSel = el("select", { class: "input", style: "min-width:180px" },
-      el("option", { value: "" }, `${t("calendar_filter_user")}: ${t("calendar_filter_all")}`)
-    );
-    for (const u of (state.users || [])) {
-      if (!u || !u.id) continue;
-      const name = (u.full_name || u.login || `#${u.id}`);
-      userSel.appendChild(el("option", { value: String(u.id) }, name));
+    const filters = el("div", { class: "calFilters" });
+    if (canUseUserFilter) {
+      const userSel = el("select", { class: "input", style: "min-width:180px" },
+        el("option", { value: "" }, `${t("calendar_filter_user")}: ${t("calendar_filter_all")}`)
+      );
+      for (const u of (state.users || [])) {
+        if (!u || !u.id) continue;
+        const name = (u.full_name || u.login || `#${u.id}`);
+        userSel.appendChild(el("option", { value: String(u.id) }, name));
+      }
+      userSel.value = String(state.filters.assignee_user_id || "");
+      userSel.addEventListener("change", () => {
+        state.filters.assignee_user_id = userSel.value || "";
+        load();
+      });
+      filters.appendChild(userSel);
     }
-    userSel.value = String(state.filters.assignee_user_id || "");
-    userSel.addEventListener("change", () => {
-      state.filters.assignee_user_id = userSel.value || "";
-      render();
-    });
-
-    const projectSel = el("select", { class: "input", style: "min-width:220px" },
-      el("option", { value: "" }, `${t("calendar_filter_project")}: ${t("calendar_filter_all")}`)
-    );
-    for (const p of (state.projects || [])) {
-      if (!p || !p.id) continue;
-      const title = (p.company_name || p.client_company_name || p.title || `#${p.id}`);
-      projectSel.appendChild(el("option", { value: String(p.id) }, title));
+    if (canUseProjectFilter) {
+      const projectSel = el("select", { class: "input", style: "min-width:220px" },
+        el("option", { value: "" }, `${t("calendar_filter_project")}: ${t("calendar_filter_all")}`)
+      );
+      for (const p of (state.projects || [])) {
+        if (!p || !p.id) continue;
+        const title = (p.company_name || p.client_company_name || p.title || `#${p.id}`);
+        projectSel.appendChild(el("option", { value: String(p.id) }, title));
+      }
+      projectSel.value = String(state.filters.project_id || "");
+      projectSel.addEventListener("change", () => {
+        state.filters.project_id = projectSel.value || "";
+        render();
+      });
+      filters.appendChild(projectSel);
     }
-    projectSel.value = String(state.filters.project_id || "");
-    projectSel.addEventListener("change", () => {
-      state.filters.project_id = projectSel.value || "";
-      render();
-    });
 
     const prevBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(-1) }, t("calendar_prev"));
     const nextBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(1) }, t("calendar_next"));
@@ -3498,11 +3520,10 @@ App.renderCalendar = async function(host, routeId){
       render();
     }}, t("calendar_today"));
 
-    const top = el("div", { class: "calTop" },
-      title,
-      el("div", { class: "calFilters" }, userSel, projectSel),
-      el("div", { class: "calNav" }, prevBtn, todayBtn, nextBtn)
-    );
+    const topParts = [title];
+    if (filters.childElementCount) topParts.push(filters);
+    topParts.push(el("div", { class: "calNav" }, prevBtn, todayBtn, nextBtn));
+    const top = el("div", { class: "calTop" }, ...topParts);
 
     const hint = isMobile ? null : el("div", { class: "calHint" }, t("calendar_drag_hint"));
 
@@ -3514,7 +3535,7 @@ App.renderCalendar = async function(host, routeId){
     const days = buildGridDates();
 
     const fallback = fallbackDeadline();
-    const mapped = (state.tasks || []).filter(matchesFilters).map(x => {
+    const mapped = roleVisibleTasks().filter(matchesFilters).map(x => {
       const eff = x.deadline_at || fallback;
       const key = dateKey(new Date(eff * 1000));
       return { ...x, _eff_deadline: eff, _date_key: key };
@@ -3617,22 +3638,46 @@ App.renderCalendar = async function(host, routeId){
     host.innerHTML = "";
     host.appendChild(el("div", { class: "muted" }, t("loading")));
     try{
-      if (!Array.isArray(App.state.cache.users) || !App.state.cache.users.length) {
+      if (!canUseUserFilter) state.filters.assignee_user_id = "";
+      if (!canUseProjectFilter) state.filters.project_id = "";
+
+      if (canUseUserFilter && (!Array.isArray(App.state.cache.users) || !App.state.cache.users.length)) {
         const users = await API.usersTryList();
         if (Array.isArray(users)) App.state.cache.users = users;
       }
-      if (!Array.isArray(App.state.cache.projects) || !App.state.cache.projects.length) {
+      if ((isAdmin || isPm) && (!Array.isArray(App.state.cache.projects) || !App.state.cache.projects.length)) {
         const projects = await API.projectsTryList();
         if (Array.isArray(projects)) App.state.cache.projects = projects;
       }
 
-      const r = await API.tasks.list({});
+      const q = {};
+      if (canUseUserFilter && state.filters.assignee_user_id) q.assignee_user_id = Number(state.filters.assignee_user_id);
+      else if (!isAdmin && !isPm) q.assignee_user_id = Number(App.state.user.id);
+
+      const r = await API.tasks.list(q);
       if (App.state.routeId !== rid) return;
       state.tasks = (r.data || []).slice();
-      state.users = Array.isArray(App.state.cache.users) ? App.state.cache.users.slice() : [];
-      state.projects = Array.isArray(App.state.cache.projects) ? App.state.cache.projects.slice() : [];
+      state.users = canUseUserFilter && Array.isArray(App.state.cache.users) ? App.state.cache.users.slice() : [];
+      state.projects = [];
 
-      if (!state.users.length) {
+      if (isAdmin && Array.isArray(App.state.cache.projects)) {
+        state.projects = App.state.cache.projects.slice();
+      } else if (isPm && Array.isArray(App.state.cache.projects)) {
+        state.projects = App.state.cache.projects.filter(p => Number(p.pm_user_id) === Number(App.state.user.id));
+      } else if (isFin) {
+        const byProject = new Map();
+        for (const x of state.tasks) {
+          if (!x.project_id) continue;
+          if (byProject.has(String(x.project_id))) continue;
+          byProject.set(String(x.project_id), {
+            id: x.project_id,
+            company_name: x.project_company_name || `#${x.project_id}`,
+          });
+        }
+        state.projects = Array.from(byProject.values());
+      }
+
+      if (canUseUserFilter && !state.users.length) {
         const byUser = new Map();
         for (const x of state.tasks) {
           if (!x.assignee_user_id) continue;
@@ -3644,7 +3689,7 @@ App.renderCalendar = async function(host, routeId){
         }
         state.users = Array.from(byUser.values());
       }
-      if (!state.projects.length) {
+      if ((isAdmin || isFin) && !state.projects.length) {
         const byProject = new Map();
         for (const x of state.tasks) {
           if (!x.project_id) continue;
