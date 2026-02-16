@@ -3274,14 +3274,23 @@ App.renderCalendar = async function(host, routeId){
 
   const langToLocale = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
   const calendarLocale = langToLocale[App.state.lang] || "ru-RU";
-  const weekNames = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.UTC(2024, 0, 1 + i)); // 2024-01-01 is Monday
-    return new Intl.DateTimeFormat(calendarLocale, { weekday: "short" }).format(d);
-  });
+  const calMonthNames = {
+    ru: ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"],
+    uz: ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentyabr","oktyabr","noyabr","dekabr"],
+    en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+  };
+  const calWeekNames = {
+    ru: ["ПН","ВТ","СР","ЧТ","ПТ","СБ","ВС"],
+    uz: ["DU","SE","CH","PA","JU","SH","YA"],
+    en: ["MON","TUE","WED","THU","FRI","SAT","SUN"],
+  };
+  const weekNames = calWeekNames[App.state.lang] || calWeekNames.ru;
 
   const monthLabel = () => {
-    const d = new Date(state.year, state.month, 1);
-    return d.toLocaleDateString(calendarLocale, { month: "long", year: "numeric" });
+    const names = calMonthNames[App.state.lang] || calMonthNames.ru;
+    if (App.state.lang === "ru") return `${names[state.month]} ${state.year} г.`;
+    if (App.state.lang === "en") return `${names[state.month]} ${state.year}`;
+    return `${names[state.month]} ${state.year}`;
   };
 
   const buildGridDates = () => {
