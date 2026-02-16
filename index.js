@@ -5537,7 +5537,7 @@ App.renderCourses = async function (host, routeId) {
 
     const msgInp = el("textarea", {
       class: "input",
-      rows: 3,
+      rows: 1,
       placeholder: tr({ ru: "Сообщение...", uz: "Xabar...", en: "Message..." })
     });
     const msgSendBtn = el("button", {
