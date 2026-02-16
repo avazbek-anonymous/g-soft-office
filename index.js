@@ -47,6 +47,11 @@
     return h <= 0 ? `${m}m` : `${h}h ${m}m`;
   }
 
+  function intId(v) {
+    const n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
+
   const LS = {
     get(k, def = null) {
       try {
@@ -123,6 +128,7 @@
       route_projects: "Проекты",
       route_courses: "Курсы",
       route_clients: "Клиенты",
+      route_calls: "Звонки",
       route_settings: "Настройки",
       route_users: "Пользователи",
       calendar_today: "Сегодня",
@@ -287,6 +293,7 @@ moizvonki_email: "MZ Email",
       route_projects: "Loyihalar",
       route_courses: "Kurslar",
       route_clients: "Mijozlar",
+      route_calls: "Qo'ng'iroqlar",
       route_settings: "Sozlamalar",
       route_users: "Foydalanuvchilar",
       calendar_today: "Bugun",
@@ -449,6 +456,7 @@ moizvonki_email: "MZ Email",
       route_projects: "Projects",
       route_courses: "Courses",
       route_clients: "Clients",
+      route_calls: "Calls",
       route_settings: "Settings",
       route_users: "Users",
       calendar_today: "Today",
@@ -613,6 +621,7 @@ moizvonki_email: "MZ Email",
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
   course_payments: `<img src="./icons/payment.svg" class="ico" alt="">`,
   clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
+  phone: `<img src="./icons/call.svg" class="ico" alt="">`,
   settings: `<img src="./icons/settings.svg" class="ico" alt="">`,
   users: `<img src="./icons/users.svg" class="ico" alt="">`,
 
@@ -888,6 +897,7 @@ moizvonki_email: "MZ Email",
       const sp = new URLSearchParams();
       if (q.page) sp.set("page", String(q.page));
       if (q.page_size) sp.set("page_size", String(q.page_size));
+      if (q.calls_days) sp.set("calls_days", String(q.calls_days));
       const s = sp.toString();
       return apiFetch(`/api/course_leads/${leadId}/chat${s ? "?" + s : ""}`);
     },
@@ -902,6 +912,18 @@ moizvonki_email: "MZ Email",
         method: "POST",
         body,
       }),
+  },
+
+  calls: {
+    list: (q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.days) sp.set("days", String(q.days));
+      if (q.phone) sp.set("phone", String(q.phone));
+      if (q.app_user_id) sp.set("app_user_id", String(q.app_user_id));
+      if (q.linked) sp.set("linked", String(q.linked));
+      const s = sp.toString();
+      return apiFetch(`/api/calls${s ? "?" + s : ""}`);
+    },
   },
 
     // ===== PROJECTS =====
@@ -1608,6 +1630,12 @@ select option{
         roles: ["admin", "rop", "sale", "pm"]
       },
       {
+        path: "/calls",
+        key: "route_calls",
+        icon: "phone",
+        roles: ["admin", "rop"]
+      },
+      {
         path: "/settings",
         key: "route_settings",
         icon: "settings",
@@ -1631,6 +1659,7 @@ select option{
     if (path.startsWith("/courses")) return t("route_courses");
     if (path.startsWith("/course-payments")) return t("route_course_payments");
     if (path.startsWith("/clients")) return t("route_clients");
+    if (path.startsWith("/calls")) return t("route_calls");
     if (path.startsWith("/settings")) return t("route_settings");
     if (path.startsWith("/users")) return t("route_users");
     return t("app_name");
@@ -1981,6 +2010,7 @@ select option{
     if (path === "/courses") return App.renderCourses(host, routeId);
     if (path === "/course-payments") return App.renderCoursePayments(host, routeId);
     if (path === "/clients") return App.renderClients(host, routeId);
+    if (path === "/calls") return App.renderCalls(host, routeId);
     if (path === "/projects") return App.renderProjects(host, routeId);
 
     return App.renderStub(host);
@@ -5543,10 +5573,14 @@ App.renderCourses = async function (host, routeId) {
     let page = 1;
     let pageSize = 50;
     let totalPages = 1;
+    let callsDays = 7;
+    const callPeriods = [7, 14, 30, 60, 90, 180, 365];
 
     const feedEl = el("div", { class: "chatFeed" });
     const pinnedEl = el("div", { class: "vcol" });
+    const callsEl = el("div", { class: "vcol" });
     const pagerEl = el("div", { class: "chatPager" });
+    const callsPeriodEl = el("div", { class: "hrow gap8", style: "flex-wrap:wrap" });
 
     const taskAssigneeSel = el("select", { class: "sel" }, el("option", { value: "" }, tr({ ru: "Исполнитель", uz: "Mas'ul", en: "Assignee" })));
     const taskDeadlineInp = el("input", { class: "input", type: "datetime-local" });
@@ -5630,6 +5664,30 @@ App.renderCourses = async function (host, routeId) {
       }
     };
 
+    const renderCalls = (rows) => {
+      callsEl.innerHTML = "";
+      if (!rows || !rows.length) {
+        callsEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Звонков нет", uz: "Qo'ng'iroqlar yo'q", en: "No calls" })));
+        return;
+      }
+      for (const row of rows) {
+        const statusText = row.status === "answered"
+          ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
+          : (row.status === "missed"
+            ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
+            : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
+        callsEl.appendChild(
+          el("div", { class: "chatPinnedItem" },
+            el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "—"}`),
+            el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} • ${Number(row.duration || 0)}s • ${row.end_time ? fmtDate(row.end_time) : "—"}`),
+            row.recording_url
+              ? el("a", { href: row.recording_url, target: "_blank", rel: "noopener", style: "font-size:12px;color:var(--acc)" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+              : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
+          )
+        );
+      }
+    };
+
     const renderFeed = (rows) => {
       feedEl.innerHTML = "";
       if (!rows || !rows.length) {
@@ -5662,6 +5720,27 @@ App.renderCourses = async function (host, routeId) {
           continue;
         }
 
+        if (row.item_type === "call") {
+          const statusText = row.status === "answered"
+            ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
+            : (row.status === "missed"
+              ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
+              : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
+          feedEl.appendChild(
+            el("div", { class: "chatTaskRow" },
+              el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
+                el("div", { style: "font-weight:800" }, `${tr({ ru: "Звонок", uz: "Qo'ng'iroq", en: "Call" })} #${row.db_call_id || "—"}`),
+                el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
+              ),
+              el("div", {}, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "—"} • ${statusText} • ${Number(row.duration || 0)}s`),
+              row.recording_url
+                ? el("a", { href: row.recording_url, target: "_blank", rel: "noopener", style: "font-size:12px;color:var(--acc)" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+                : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
+            )
+          );
+          continue;
+        }
+
         const mine = Number(row.user_id) === Number(App.state.user?.id);
         feedEl.appendChild(
           el("div", { class: `chatMsg ${mine ? "me" : ""}` },
@@ -5688,16 +5767,34 @@ App.renderCourses = async function (host, routeId) {
     };
 
     const loadFeed = async () => {
-      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize });
+      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize, calls_days: callsDays });
       const data = r?.data || {};
       const pager = data.pagination || {};
       page = Number(pager.page || page || 1);
       pageSize = Number(pager.page_size || pageSize || 50);
       totalPages = Number(pager.pages || 1);
+      callsDays = [7, 14, 30, 60, 90, 180, 365].includes(Number(data.calls_days)) ? Number(data.calls_days) : callsDays;
       renderPinned(Array.isArray(data.pinned_tasks) ? data.pinned_tasks : []);
-      const feedItems = Array.isArray(data.items) ? data.items.slice().reverse() : [];
+      const callItems = Array.isArray(data.calls) ? data.calls.slice() : [];
+      renderCalls(callItems);
+      const chatItems = Array.isArray(data.items) ? data.items.slice() : [];
+      const merged = chatItems.concat(callItems);
+      merged.sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
+      const feedItems = merged;
       renderFeed(feedItems);
       renderPager();
+      callsPeriodEl.innerHTML = "";
+      for (const d of callPeriods) {
+        callsPeriodEl.appendChild(el("button", {
+          class: `btn mini ${callsDays === d ? "primary" : "ghost"}`,
+          type: "button",
+          onClick: async () => {
+            callsDays = d;
+            page = 1;
+            await loadFeed();
+          }
+        }, `${d}`));
+      }
     };
 
     taskCreateBtn.onclick = async () => {
@@ -5753,6 +5850,10 @@ App.renderCourses = async function (host, routeId) {
       el("div", { class: "chatPinnedBox" },
         el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
         pinnedEl
+      ),
+      el("div", { class: "chatPinnedBox" },
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Звонки", uz: "Qo'ng'iroqlar", en: "Calls" })),
+        callsEl
       )
     );
     const sideBackdrop = el("button", { class: "chatSideBackdrop", type: "button" });
@@ -5768,7 +5869,7 @@ App.renderCourses = async function (host, routeId) {
     setSide(false);
 
     const body = el("div", { class: "chatShell" },
-      el("div", { class: "chatTools" }, taskToggleBtn, pagerEl),
+      el("div", { class: "chatTools" }, taskToggleBtn, callsPeriodEl, pagerEl),
       el("div", { class: "chatLayout" },
         sideBackdrop,
         sideEl,
@@ -6830,6 +6931,186 @@ App.renderCoursePayments = async function(host, routeId){
   stageSel.addEventListener("change", () => { state.stage = stageSel.value || "other"; render(); });
 
   render();
+};
+
+function injectCallsStyles() {
+  if (document.getElementById("calls-styles")) return;
+  const st = document.createElement("style");
+  st.id = "calls-styles";
+  st.textContent = `
+    .callsTop{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .callsPeriods{display:flex;gap:6px;flex-wrap:wrap}
+    .callsFilters{display:grid;grid-template-columns:1fr 220px 220px 220px;gap:8px}
+    .callsList{display:flex;flex-direction:column;gap:8px}
+    .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:140px 90px 90px 1fr 1fr 1fr 180px;gap:10px;align-items:center}
+    .callMuted{font-size:12px;color:var(--muted2)}
+    .callLink{color:var(--acc);text-decoration:none}
+    .callBadge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--stroke);font-size:12px;font-weight:700}
+    .callBadge.ok{color:#66e3a6;border-color:#2f7}
+    .callBadge.bad{color:#ff8f8f;border-color:#d66}
+    .callBadge.neutral{color:var(--muted2)}
+    @media (max-width: 1200px){
+      .callsFilters{grid-template-columns:1fr 1fr}
+      .callRow{grid-template-columns:1fr;gap:6px}
+    }
+    @media (max-width: 760px){
+      .callsFilters{grid-template-columns:1fr}
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+App.renderCalls = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
+  injectCallsStyles();
+  const role = App.state.user?.role || "";
+  if (!(role === "admin" || role === "rop")) {
+    host.innerHTML = "";
+    host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+      el("div", { style: "font-weight:900" }, "Forbidden"),
+      el("div", { class: "muted" }, "Only admin/rop")
+    ));
+    return;
+  }
+  const periods = [7,14,30,60,90,180,365];
+  const query = App.state.current?.query || {};
+  const state = {
+    days: periods.includes(Number(query.days)) ? Number(query.days) : 7,
+    phone: String(query.phone || ""),
+    linked: ["all","linked","unlinked"].includes(String(query.linked || "")) ? String(query.linked) : "all",
+    app_user_id: intId(query.app_user_id) || null,
+    users: [],
+    rows: [],
+  };
+
+  host.innerHTML = "";
+  const top = el("div", { class: "card cardPad vcol gap10" },
+    el("div", { class: "callsTop" },
+      el("div", { style: "font-weight:900;font-size:18px" }, t("route_calls")),
+      el("div", { class: "callsPeriods" },
+        ...periods.map((d) => el("button", {
+          class: `btn ${state.days === d ? "primary" : "ghost"}`,
+          type: "button",
+          onClick: async () => {
+            state.days = d;
+            await load();
+          }
+        }, `${d}`))
+      )
+    )
+  );
+
+  const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "Номер телефона", uz: "Telefon raqami", en: "Phone number" }) });
+  const linkedSel = el("select", { class: "input" },
+    el("option", { value: "all" }, tr({ ru: "Все", uz: "Barchasi", en: "All" })),
+    el("option", { value: "linked" }, tr({ ru: "Есть в базе", uz: "Bazaga bog'langan", en: "Linked" })),
+    el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
+  );
+  linkedSel.value = state.linked;
+
+  const userSel = el("select", { class: "input" }, el("option", { value: "" }, tr({ ru: "Все сотрудники", uz: "Barcha xodimlar", en: "All users" })));
+  const applyBtn = el("button", { class: "btn", type: "button" }, t("search") || "Search");
+
+  const filters = el("div", { class: "callsFilters" }, phoneInp, linkedSel, userSel, applyBtn);
+  top.appendChild(filters);
+
+  const listWrap = el("div", { class: "card cardPad vcol gap8" },
+    el("div", { id: "callsMeta", class: "callMuted" }, ""),
+    el("div", { id: "callsList", class: "callsList" }, el("div", { class: "muted" }, t("loading")))
+  );
+
+  host.append(top, listWrap);
+  const metaEl = $("#callsMeta", host);
+  const listEl = $("#callsList", host);
+
+  const loadUsers = async () => {
+    const users = await API.usersTryList();
+    if (App.state.routeId !== rid) return;
+    state.users = Array.isArray(users) ? users : [];
+    for (const u of state.users) {
+      userSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name || u.login || `#${u.id}`} (${u.role || "user"})`));
+    }
+    if (state.app_user_id) userSel.value = String(state.app_user_id);
+  };
+
+  const badgeByStatus = (x) => {
+    if (x.status === "answered") return el("span", { class: "callBadge ok" }, tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" }));
+    if (x.status === "missed") return el("span", { class: "callBadge bad" }, tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" }));
+    return el("span", { class: "callBadge neutral" }, tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
+  };
+
+  const dirLabel = (x) => x.direction_label === "outgoing"
+    ? tr({ ru: "Исходящий", uz: "Chiquvchi", en: "Outgoing" })
+    : tr({ ru: "Входящий", uz: "Kiruvchi", en: "Incoming" });
+
+  const render = () => {
+    listEl.innerHTML = "";
+    metaEl.textContent = `${tr({ ru: "Найдено", uz: "Topildi", en: "Found" })}: ${state.rows.length}`;
+    if (!state.rows.length) {
+      listEl.appendChild(el("div", { class: "muted" }, t("no_data")));
+      return;
+    }
+    for (const x of state.rows) {
+      const dt = x.end_time || x.start_time || 0;
+      listEl.appendChild(el("div", { class: "callRow" },
+        el("div", {},
+          el("div", { style: "font-weight:800" }, dt ? fmtDate(dt) : "—"),
+          el("div", { class: "callMuted" }, `#${x.db_call_id || "—"}`)
+        ),
+        el("div", {}, dirLabel(x)),
+        el("div", {}, badgeByStatus(x)),
+        el("div", {},
+          el("div", { style: "font-weight:700" }, x.client_number || "—"),
+          el("div", { class: "callMuted" }, x.client_name || "—")
+        ),
+        el("div", {},
+          el("div", { style: "font-weight:700" }, x.app_user_name || "—"),
+          el("div", { class: "callMuted" }, x.mz_user_email || "—")
+        ),
+        el("div", {},
+          el("div", { style: "font-weight:700" }, x.linked_client_name || tr({ ru: "Без связки", uz: "Bog'lanmagan", en: "Unlinked" })),
+          el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "—")
+        ),
+        el("div", {},
+          el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
+          x.recording_url
+            ? el("a", { class: "callLink", href: x.recording_url, target: "_blank", rel: "noopener" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+            : el("div", { class: "callMuted" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
+        )
+      ));
+    }
+  };
+
+  const load = async () => {
+    listEl.innerHTML = "";
+    listEl.appendChild(el("div", { class: "muted" }, t("loading")));
+    state.phone = String(phoneInp.value || "").trim();
+    state.linked = String(linkedSel.value || "all");
+    state.app_user_id = intId(userSel.value);
+    try {
+      const r = await API.calls.list({
+        days: state.days,
+        phone: state.phone || null,
+        linked: state.linked,
+        app_user_id: state.app_user_id || null,
+      });
+      if (App.state.routeId !== rid) return;
+      state.rows = Array.isArray(r?.data?.items) ? r.data.items : [];
+      render();
+    } catch (e) {
+      if (App.state.routeId !== rid) return;
+      listEl.innerHTML = "";
+      listEl.appendChild(el("div", { class: "muted" }, `${t("toast_error")}: ${e.message || "error"}`));
+    }
+  };
+
+  applyBtn.onclick = load;
+  phoneInp.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+  linkedSel.addEventListener("change", load);
+  userSel.addEventListener("change", load);
+
+  await loadUsers();
+  await load();
 };
 
 

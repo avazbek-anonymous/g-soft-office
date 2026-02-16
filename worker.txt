@@ -11,6 +11,7 @@
  *   COOKIE_DOMAIN      optional, e.g. ".ofis.gekto.uz"
  *   TG_BOT_TOKEN       optional, Telegram bot token (for webhook replies)
  *   TG_WEBHOOK_SECRET  optional, secret token from Telegram setWebhook
+ *   CALL_API           required for calls.list integration (Moi Zvonki API key)
  */
 
 const TZ_OFFSET_MIN = 5 * 60; // Tashkent +05:00 (фиксировано)
@@ -38,6 +39,9 @@ const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
 const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "review", "canceled"];
 const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
 const TG_DEFAULT_TIME_HHMM = "10:00";
+const CALL_PERIOD_DAYS = [7, 14, 30, 60, 90, 180, 365];
+const MZ_API_DOMAIN = "gekto.moizvonki.ru";
+const MZ_USER_NAME = "avazbekulugbekovi4@gmail.com";
 
 function nowSec() {
   return Math.floor(Date.now() / 1000);
@@ -199,6 +203,31 @@ function intId(x) {
   const n = Number(x);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;
+}
+
+function digitsOnly(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+function phonesLikelyMatch(a, b) {
+  const da = digitsOnly(a);
+  const db = digitsOnly(b);
+  if (!da || !db) return false;
+  if (da === db) return true;
+  const minLen = 9;
+  if (da.length >= minLen && db.endsWith(da)) return true;
+  if (db.length >= minLen && da.endsWith(db)) return true;
+  if (da.length >= minLen && db.length >= minLen) {
+    return da.slice(-minLen) === db.slice(-minLen);
+  }
+  return false;
+}
+
+function normalizeCallDays(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 7;
+  const int = Math.floor(n);
+  return CALL_PERIOD_DAYS.includes(int) ? int : 7;
 }
 
 function pick(obj, keys) {
@@ -731,6 +760,175 @@ function requireFields(obj, fields) {
     if (obj[f] === undefined || obj[f] === null || obj[f] === "") return f;
   }
   return null;
+}
+
+async function mzApiCall(env, payload) {
+  const apiKey = String(env.CALL_API || "").trim();
+  if (!apiKey) throw new Error("CALL_API secret is not configured");
+
+  const requestData = JSON.stringify({
+    user_name: MZ_USER_NAME,
+    api_key: apiKey,
+    ...(payload || {}),
+  });
+
+  const body = new URLSearchParams({ request_data: requestData }).toString();
+  const url = `https://${MZ_API_DOMAIN}/api/v1`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
+    body,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`MZ API HTTP ${res.status}: ${text.slice(0, 300)}`);
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("MZ API returned non-JSON response");
+  }
+  if (data && data.error) throw new Error(String(data.error));
+  return data || {};
+}
+
+async function mzFetchCallsRange(env, fromDateUtcSec, toDateUtcSec, maxTotal = 1200) {
+  let fromOffset = 0;
+  const out = [];
+  while (out.length < maxTotal) {
+    const chunk = await mzApiCall(env, {
+      action: "calls.list",
+      from_date: Number(fromDateUtcSec),
+      to_date: Number(toDateUtcSec),
+      supervised: 1,
+      max_results: 100,
+      from_offset: fromOffset,
+    });
+    const rows = Array.isArray(chunk.results) ? chunk.results : [];
+    if (!rows.length) break;
+    for (const r of rows) {
+      out.push(r);
+      if (out.length >= maxTotal) break;
+    }
+    const nextOffset = Number(chunk.results_next_offset || 0);
+    if (!nextOffset) break;
+    fromOffset = nextOffset;
+  }
+  return out;
+}
+
+async function getUsersByMoizvonkiEmailMap(env) {
+  const hasMzEmail = await usersHasMoizvonkiEmailColumn(env);
+  if (!hasMzEmail) return new Map();
+  const rows = await env.DB
+    .prepare(
+      `SELECT id, full_name, login, role, moizvonki_email
+       FROM users
+       WHERE is_active=1 AND moizvonki_email IS NOT NULL AND moizvonki_email<>''`
+    )
+    .all();
+  const map = new Map();
+  for (const u of rows.results || []) {
+    map.set(String(u.moizvonki_email || "").trim().toLowerCase(), u);
+  }
+  return map;
+}
+
+async function getActiveClientsPhoneIndex(env) {
+  const rows = await env.DB
+    .prepare(
+      `SELECT id, type, full_name, company_name, phone1, phone2
+       FROM clients
+       WHERE is_active=1`
+    )
+    .all();
+  const list = [];
+  for (const c of rows.results || []) {
+    const p1 = digitsOnly(c.phone1);
+    const p2 = digitsOnly(c.phone2);
+    if (!p1 && !p2) continue;
+    list.push({
+      id: c.id,
+      type: c.type,
+      full_name: c.full_name || null,
+      company_name: c.company_name || null,
+      phone1: c.phone1 || null,
+      phone2: c.phone2 || null,
+      _p1: p1,
+      _p2: p2,
+    });
+  }
+  return list;
+}
+
+function pickLinkedClientByPhone(clients, callPhoneDigits) {
+  if (!callPhoneDigits) return null;
+  let best = null;
+  for (const c of clients) {
+    if (c._p1 && phonesLikelyMatch(callPhoneDigits, c._p1)) {
+      best = c;
+      break;
+    }
+    if (!best && c._p2 && phonesLikelyMatch(callPhoneDigits, c._p2)) best = c;
+  }
+  return best;
+}
+
+function mapCallDirection(direction) {
+  return Number(direction) === 1 ? "outgoing" : "incoming";
+}
+
+function mapCallStatus(answered, duration) {
+  if (Number(answered) === 1) return "answered";
+  return Number(duration || 0) > 0 ? "ended" : "missed";
+}
+
+async function listMappedCalls(env, fromDateUtcSec, toDateUtcSec, maxTotal = 1200) {
+  const [rawCalls, usersByEmail, clientsIdx] = await Promise.all([
+    mzFetchCallsRange(env, fromDateUtcSec, toDateUtcSec, maxTotal),
+    getUsersByMoizvonkiEmailMap(env),
+    getActiveClientsPhoneIndex(env),
+  ]);
+
+  const out = [];
+  for (const row of rawCalls) {
+    const userEmail = String(row.user_account || "").trim().toLowerCase();
+    const appUser = userEmail ? usersByEmail.get(userEmail) || null : null;
+    const clientDigits = digitsOnly(row.client_number || "");
+    const linkedClient = pickLinkedClientByPhone(clientsIdx, clientDigits);
+    const recording = String(row.recording || "").trim();
+    out.push({
+      db_call_id: Number(row.db_call_id || 0),
+      event_pbx_call_id: row.event_pbx_call_id || "",
+      direction: Number(row.direction || 0),
+      direction_label: mapCallDirection(row.direction),
+      status: mapCallStatus(row.answered, row.duration),
+      answered: Number(row.answered || 0),
+      duration: Number(row.duration || 0),
+      start_time: Number(row.start_time || 0),
+      answer_time: Number(row.answer_time || 0),
+      end_time: Number(row.end_time || 0),
+      upload_time: Number(row.upload_time || 0),
+      client_number: row.client_number || "",
+      client_number_digits: clientDigits,
+      client_name: row.client_name || "",
+      recording_url: recording || null,
+      recording_label: recording ? "Слушать запись" : "Нет записи",
+      src_number: row.src_number || null,
+      src_id: row.src_id == null ? null : Number(row.src_id),
+      src_slot: row.src_slot == null ? null : Number(row.src_slot),
+      mz_user_email: userEmail || null,
+      app_user_id: appUser ? Number(appUser.id) : null,
+      app_user_name: appUser ? appUser.full_name || appUser.login || `#${appUser.id}` : null,
+      app_user_role: appUser ? appUser.role || null : null,
+      linked_client_id: linkedClient ? Number(linkedClient.id) : null,
+      linked_client_type: linkedClient ? linkedClient.type : null,
+      linked_client_name: linkedClient ? linkedClient.company_name || linkedClient.full_name || `#${linkedClient.id}` : null,
+    });
+  }
+  out.sort((a, b) => Number(b.end_time || 0) - Number(a.end_time || 0));
+  return out;
 }
 
 function isCourseChatRole(user) {
@@ -1748,6 +1946,7 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
     const url = new URL(request.url);
     const rawPage = Number(url.searchParams.get("page") || 1);
     const rawSize = Number(url.searchParams.get("page_size") || 50);
+    const callsDays = normalizeCallDays(url.searchParams.get("calls_days") || 7);
     const pageSize = Math.max(10, Math.min(50, Number.isFinite(rawSize) ? Math.floor(rawSize) : 50));
     const page = Math.max(1, Number.isFinite(rawPage) ? Math.floor(rawPage) : 1);
 
@@ -1844,12 +2043,48 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
       .bind(leadId)
       .all();
 
+    let calls = [];
+    if (safePage === 1) {
+      const leadPhones = await env.DB.prepare(
+        `SELECT lead.phone1, lead.phone2
+         FROM course_leads cl
+         JOIN clients lead ON lead.id = cl.lead_client_id
+         WHERE cl.id=? AND cl.is_active=1`
+      )
+        .bind(leadId)
+        .first();
+
+      const p1 = digitsOnly(leadPhones?.phone1);
+      const p2 = digitsOnly(leadPhones?.phone2);
+      const hasLeadPhone = !!(p1 || p2);
+      if (hasLeadPhone) {
+        const toTs = nowSec();
+        const fromTs = toTs - callsDays * 24 * 60 * 60;
+        try {
+          const mapped = await listMappedCalls(env, fromTs, toTs, 1200);
+          calls = mapped
+            .filter((x) => (p1 && phonesLikelyMatch(x.client_number_digits, p1)) || (p2 && phonesLikelyMatch(x.client_number_digits, p2)))
+            .slice(0, 120)
+            .map((x) => ({
+              ...x,
+              item_type: "call",
+              created_at: Number(x.end_time || x.start_time || 0),
+            }));
+        } catch {
+          calls = [];
+        }
+      }
+    }
+
     return jsonResp(
       {
         ok: true,
         data: {
           items: feedRes.results || [],
           pinned_tasks: pinnedRes.results || [],
+          calls,
+          calls_days: callsDays,
+          calls_period_options: CALL_PERIOD_DAYS,
           pagination: {
             page: safePage,
             page_size: pageSize,
@@ -1926,6 +2161,51 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
   }
 
   return notFound();
+}
+
+async function handleCalls(env, user, request, origin) {
+  if (!requireRole(user, ["admin", "rop"])) return forbidden("Only admin/rop");
+
+  const url = new URL(request.url);
+  const days = normalizeCallDays(url.searchParams.get("days") || 7);
+  const linked = String(url.searchParams.get("linked") || "all").toLowerCase(); // all|linked|unlinked
+  const appUserId = intId(url.searchParams.get("app_user_id"));
+  const phoneQ = digitsOnly(url.searchParams.get("phone") || "");
+
+  const toTs = nowSec();
+  const fromTs = toTs - days * 24 * 60 * 60;
+
+  let items = [];
+  try {
+    items = await listMappedCalls(env, fromTs, toTs, 2000);
+  } catch (e) {
+    return badRequest(`Calls API error: ${e?.message || "request_failed"}`, "calls_api_error");
+  }
+
+  if (phoneQ) {
+    items = items.filter((x) => phonesLikelyMatch(x.client_number_digits, phoneQ));
+  }
+  if (appUserId) {
+    items = items.filter((x) => Number(x.app_user_id) === Number(appUserId));
+  }
+  if (linked === "linked") {
+    items = items.filter((x) => Number(x.linked_client_id) > 0);
+  } else if (linked === "unlinked") {
+    items = items.filter((x) => !(Number(x.linked_client_id) > 0));
+  }
+
+  return jsonResp(
+    {
+      ok: true,
+      data: {
+        days,
+        period_options: CALL_PERIOD_DAYS,
+        items,
+      },
+    },
+    200,
+    corsHeaders(env, origin)
+  );
 }
 
 /** projects endpoints */
@@ -2710,6 +2990,11 @@ export default {
     // clients
     if (apiRoot === "clients") {
       return withCors(await handleClients(env, user, request, origin, segments), env, origin);
+    }
+
+    // calls
+    if (apiRoot === "calls" && request.method === "GET") {
+      return withCors(await handleCalls(env, user, request, origin), env, origin);
     }
 
     return withCors(notFound(), env, origin);
