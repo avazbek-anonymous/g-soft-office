@@ -564,6 +564,12 @@ moizvonki_email: "MZ Email",
   DICT.ru.route_course_payments = "\u041e\u043f\u043b\u0430\u0442\u044b \u043a\u0443\u0440\u0441\u043e\u0432";
   DICT.uz.route_course_payments = "Kurs to'lovlari";
   DICT.en.route_course_payments = "Course payments";
+  DICT.ru.main_today = DICT.ru.main_today || DICT.ru.calendar_today || "Segodnya";
+  DICT.uz.main_today = DICT.uz.main_today || DICT.uz.calendar_today || "Bugun";
+  DICT.en.main_today = DICT.en.main_today || DICT.en.calendar_today || "Today";
+  DICT.ru.main_overdue = DICT.ru.main_overdue || "Prosrochennye";
+  DICT.uz.main_overdue = DICT.uz.main_overdue || "Muddati o'tgan";
+  DICT.en.main_overdue = DICT.en.main_overdue || "Overdue";
   DICT.ru.calendar_filter_active = "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435";
   DICT.uz.calendar_filter_active = "Aktiv";
   DICT.en.calendar_filter_active = "Active";
@@ -706,6 +712,7 @@ moizvonki_email: "MZ Email",
         class: "modalCard"
       }, head, body, (actions.length ? foot : el("div")));
       if (opts && opts.cardClass) card.classList.add(String(opts.cardClass));
+      if (opts && opts.fullscreenMobile) card.classList.add("fullscreenMobile");
       if (opts && opts.overlayClass) this.overlay.classList.add(String(opts.overlayClass));
       this.overlay.appendChild(card);
       this.overlay.addEventListener("mousedown", (e) => {
@@ -1295,8 +1302,8 @@ text-decoration:none;
 .toastHost{position:fixed;right:14px;bottom:14px;display:flex;flex-direction:column;gap:10px;z-index:9999}
 .toast{opacity:0;transform:translateY(10px);transition:.22s ease;padding:10px 12px;border-radius:14px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#fff}
 .toast.ok{border-color:rgba(37,211,102,.35)} .toast.bad{border-color:rgba(255,77,77,.35)} .toast.show{opacity:1;transform:translateY(0)}
-.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9998}
-.modalCard{width:min(860px,96vw);max-height:92vh;overflow:auto;background:var(--bg2);border:1px solid var(--stroke);border-radius:22px;box-shadow:var(--shadow)}
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9998;overflow:auto}
+.modalCard{width:min(860px,96vw);max-height:92vh;overflow:auto;background:var(--bg2);border:1px solid var(--stroke);border-radius:22px;box-shadow:var(--shadow);max-width:100%}
 .modalHead{padding:14px 14px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--stroke)}
 .modalTitle{font-weight:900;letter-spacing:.3px}
 .modalBody{padding:14px}
@@ -1304,11 +1311,13 @@ text-decoration:none;
 .sideOverlay{display:none}
 @media (max-width:900px){
   .calOpenBtn{display:none}
-  .sidebar{position:fixed;left:-290px;top:0;height:100vh;width:280px;transition:left .18s ease}
+  .sidebar{position:fixed;left:-290px;top:0;height:100vh;width:280px;transition:left .18s ease;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
   .sidebar:hover{width:280px} .sidebar.open{left:0}
   .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
   .sideOverlay.hidden{display:none}
   .modalFoot{flex-direction:column;align-items:stretch}
+  .modalOverlay{align-items:flex-start;padding:max(10px,env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom))}
+  .modalCard{width:100%;max-width:100%;max-height:none}
   .modalCard.fullscreenMobile{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}
 }
 .kanbanWrap{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
@@ -1345,7 +1354,7 @@ text-decoration:none;
 /* Content should fill full height */
 .wrap{min-height:100vh}
 .main{min-height:100vh}
-.content{flex:1; overflow:auto}
+.content{flex:1;overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
 /* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
@@ -1414,7 +1423,7 @@ select option{
 
 /* === FIX: move header actions into sidebar on mobile === */
 .sidebar{ display:flex; flex-direction:column; }
-.nav{ flex:1 1 auto; padding-bottom:10px; }
+.nav{ flex:1 1 auto; padding-bottom:10px; min-height:0; }
 .sideActionsSlot{
   margin-top:auto;
   padding:12px 10px 12px;
@@ -1439,6 +1448,9 @@ select option{
 }
 .hdrActions.inSidebar .hdrRow .iconBtn{
   width:100%;
+}
+@media (max-width:900px){
+  .sideActionsSlot{margin-top:12px}
 }
 
 /* ==========================================================
@@ -1522,6 +1534,23 @@ select option{
 .calTaskTitle{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .calTaskDesc{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .calTaskMeta{font-size:11px;color:var(--muted2);display:flex;flex-direction:column;gap:2px}
+
+.mainDashWrap{--dash-tilt:0deg}
+.mainDashGrid{display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:12px}
+.mainDashCard{position:relative;overflow:hidden}
+.mainDashCard::before{content:"";position:absolute;inset:-40% -30% auto auto;width:220px;height:220px;background:radial-gradient(circle at center, rgba(15,209,167,.16), transparent 65%);transform:rotate(var(--dash-tilt));pointer-events:none}
+.mainDashTitle{font-weight:900;letter-spacing:.3px}
+.mainDashSub{font-size:12px;color:var(--muted2)}
+.liquidTrack{position:relative;height:12px;border-radius:999px;border:1px solid var(--stroke);background:rgba(255,255,255,.05);overflow:hidden}
+.liquidFill{position:absolute;left:0;top:0;bottom:0;width:var(--fill,0%);background:linear-gradient(90deg, rgba(15,209,167,.8), rgba(255,208,90,.8));transition:width .45s ease}
+.liquidFill::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg, rgba(255,255,255,.25), transparent 35%, rgba(255,255,255,.2) 70%, transparent);animation:dashFlow 2.2s linear infinite}
+.mainDashPie{width:170px;height:170px;border-radius:50%;margin:auto;border:1px solid var(--stroke);position:relative}
+.mainDashPie::after{content:"";position:absolute;inset:24%;border-radius:50%;background:var(--bg2);border:1px solid var(--stroke)}
+.mainDashLegend{display:flex;flex-direction:column;gap:6px}
+.mainDashLegendItem{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.mainDashDot{width:10px;height:10px;border-radius:50%;display:inline-block}
+@keyframes dashFlow{from{transform:translateX(-35%)}to{transform:translateX(35%)}}
+@media (max-width:1200px){.mainDashGrid{grid-template-columns:1fr}}
 
 .calTaskActions{display:flex;justify-content:flex-end}
 .calOpenBtn{padding:6px 8px;border-radius:10px;font-size:11px}
@@ -1989,8 +2018,12 @@ select option{
 };
 
 
-    App.routeNow = function () {
+  App.routeNow = function () {
     const { path, query } = parseHash();
+    if (path !== "/main" && typeof App.state.mainDashCleanup === "function") {
+      App.state.mainDashCleanup();
+      App.state.mainDashCleanup = null;
+    }
     App.state.current = { path, query };
     App.state.routeId = (App.state.routeId || 0) + 1;
     const routeId = App.state.routeId;
@@ -2032,9 +2065,11 @@ select option{
 
   App.renderMain = async function (host, routeId) {
     const rid = routeId || App.state.routeId;
-    host.appendChild(el("div", {
-      class: "muted"
-    }, t("loading")));
+    if (typeof App.state.mainDashCleanup === "function") {
+      App.state.mainDashCleanup();
+      App.state.mainDashCleanup = null;
+    }
+    host.appendChild(el("div", { class: "muted" }, t("loading")));
     try {
       const r = await API.main();
       if (App.state.routeId !== rid) return;
@@ -2045,111 +2080,225 @@ select option{
       };
       const visibleRows = (rows) => (rows || []).filter(isMainVisibleTask);
       host.innerHTML = "";
+
       const box = (title, rows) => {
         const list = visibleRows(rows);
-        return el("div", {
-            class: "card"
-          },
-          el("div", {
-              class: "khead"
-            },
-            el("div", {
-              class: "ttl"
-            }, title),
-            el("div", {
-              class: "muted2",
-              style: "font-size:12px"
-            }, String(list.length))
+        return el("div", { class: "card" },
+          el("div", { class: "khead" },
+            el("div", { class: "ttl" }, title),
+            el("div", { class: "muted2", style: "font-size:12px" }, String(list.length))
           ),
-          el("div", {
-              class: "cardPad vcol gap10"
-            },
+          el("div", { class: "cardPad vcol gap10" },
             list.length ? list.map(x => el("div", {
                 class: "kcard",
-                onClick: () => setHash("/tasks", {
-                  open: x.id
-                })
+                onClick: () => setHash("/tasks", { open: x.id })
               },
-              el("div", {
-                style: "font-weight:800"
-              }, x.title || `#${x.id}`),
-              el("div", {
-                class: "muted",
-                style: "margin-top:6px; white-space:pre-wrap"
-              }, (x.description || "").slice(0, 180)),
-              el("div", {
-                  class: "kmeta"
-                },
-                el("span", {
-                  class: "badge"
-                }, `${t("status")}: ${taskStatusLabel(x.status)}`),
-                el("span", {
-                  class: "badge"
-                }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
+              el("div", { style: "font-weight:800" }, x.title || `#${x.id}`),
+              el("div", { class: "muted", style: "margin-top:6px; white-space:pre-wrap" }, (x.description || "").slice(0, 180)),
+              el("div", { class: "kmeta" },
+                el("span", { class: "badge" }, `${t("status")}: ${taskStatusLabel(x.status)}`),
+                el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
               )
-            )) : el("div", {
-              class: "muted"
-            }, t("no_data"))
+            )) : el("div", { class: "muted" }, t("no_data"))
           )
         );
       };
-      const grid = el("div", {
-          class: "grid2"
-        },
+
+      if ((App.state.user?.role || "") === "admin") {
+        const statusLabels = {
+          new: { ru: "Новый", uz: "Yangi", en: "New" },
+          need_call: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" },
+          thinking: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" },
+          enrolled: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" },
+          studying: { ru: "Учится", uz: "O'qishda", en: "Studying" },
+          canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
+        };
+        const projectStageLabels = {
+          new: { ru: "Новый", uz: "Yangi", en: "New" },
+          tz_given: { ru: "ТЗ дано", uz: "TZ berilgan", en: "TZ given" },
+          offer_given: { ru: "Оффер дан", uz: "Taklif berilgan", en: "Offer given" },
+          in_progress: { ru: "В работе", uz: "Jarayonda", en: "In progress" },
+          later: { ru: "Позже", uz: "Keyinroq", en: "Later" },
+          review: { ru: "Отзыв", uz: "Ko'rib chiqish", en: "Review" },
+          done: { ru: "Готово", uz: "Tayyor", en: "Done" },
+          canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
+        };
+        const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
+        const courseTypeLabel = (row) =>
+          row?.[`name_${App.state.lang}`] || row?.name_uz || row?.name_ru || row?.name_en || row?.name || `#${row?.id || ""}`;
+        const makeBar = (label, value, max, colorA = "rgba(15,209,167,.8)", colorB = "rgba(255,208,90,.8)") => {
+          const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((value / max) * 100))) : 0;
+          return el("div", { class: "vcol gap8" },
+            el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px" },
+              el("div", { class: "mainDashSub" }, label),
+              el("div", { style: "font-weight:800" }, String(value))
+            ),
+            el("div", { class: "liquidTrack" },
+              el("div", { class: "liquidFill", style: `--fill:${pct}%;background:linear-gradient(90deg, ${colorA}, ${colorB})` })
+            )
+          );
+        };
+
+        const [leadsRes, projectsRes, typeRes] = await Promise.all([
+          apiFetch("/api/course_leads").catch(() => ({ data: [] })),
+          API.projects.list({}).catch(() => ({ data: [] })),
+          API.settings.dictList("course_types").catch(() => ({ data: [] })),
+        ]);
+        if (App.state.routeId !== rid) return;
+        const leads = Array.isArray(leadsRes?.data) ? leadsRes.data : [];
+        const projects = Array.isArray(projectsRes?.data) ? projectsRes.data : [];
+        const courseTypes = Array.isArray(typeRes?.data) ? typeRes.data : [];
+        const selectedType = String(App.state.mainDashCourseTypeId || "");
+        const filteredLeads = selectedType
+          ? leads.filter(x => String(x.course_type_id || "") === selectedType)
+          : leads;
+        const leadCounts = {};
+        for (const x of filteredLeads) {
+          const k = String(x.status || "new");
+          leadCounts[k] = (leadCounts[k] || 0) + 1;
+        }
+        const projectCounts = {};
+        for (const x of projects) {
+          const k = String(x.status || "new");
+          projectCounts[k] = (projectCounts[k] || 0) + 1;
+        }
+        const totalLeads = leads.length;
+        const totalCourses = leads.filter(x => {
+          const st = String(x.status || "");
+          return st === "enrolled" || st === "studying";
+        }).length;
+        const barMax = Math.max(totalLeads, totalCourses, 1);
+        const projMax = Math.max(1, ...Object.values(projectCounts).map(v => Number(v) || 0));
+
+        const pieStatuses = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
+        const pieColors = {
+          new: "#60a5fa",
+          need_call: "#22d3ee",
+          thinking: "#f59e0b",
+          enrolled: "#34d399",
+          studying: "#a3e635",
+          canceled: "#f87171",
+        };
+        const piePairs = pieStatuses
+          .map(k => ({ key: k, val: Number(leadCounts[k] || 0), color: pieColors[k] }))
+          .filter(x => x.val > 0);
+        const pieTotal = piePairs.reduce((s, x) => s + x.val, 0);
+        const pieBg = pieTotal
+          ? `conic-gradient(${(() => {
+              let from = 0;
+              return piePairs.map(x => {
+                const to = from + (x.val / pieTotal) * 360;
+                const seg = `${x.color} ${from.toFixed(2)}deg ${to.toFixed(2)}deg`;
+                from = to;
+                return seg;
+              }).join(", ");
+            })()})`
+          : "conic-gradient(rgba(255,255,255,.15) 0deg 360deg)";
+        const pieLegend = el("div", { class: "mainDashLegend" },
+          ...(piePairs.length ? piePairs : pieStatuses.map(k => ({ key: k, val: 0, color: pieColors[k] }))).map(x =>
+            el("div", { class: "mainDashLegendItem" },
+              el("div", { class: "hrow", style: "align-items:center;gap:8px" },
+                el("span", { class: "mainDashDot", style: `background:${x.color}` }),
+                el("span", {}, tr(statusLabels[x.key] || { ru: x.key, uz: x.key, en: x.key }))
+              ),
+              el("span", { class: "muted2" }, String(x.val))
+            )
+          )
+        );
+        const typeSel = el("select", { class: "sel", style: "max-width:260px" },
+          el("option", { value: "" }, tr({ ru: "Тип курса: Все", uz: "Kurs turi: Barchasi", en: "Course type: All" })),
+          ...courseTypes.map(ct => el("option", {
+            value: String(ct.id),
+            selected: selectedType && String(ct.id) === selectedType ? "selected" : null
+          }, courseTypeLabel(ct)))
+        );
+        typeSel.addEventListener("change", () => {
+          App.state.mainDashCourseTypeId = typeSel.value || "";
+          App.renderMain(host, App.state.routeId);
+        });
+
+        const dash = el("div", { class: "mainDashWrap vcol gap12", id: "mainDashWrap" },
+          el("div", { class: "mainDashGrid" },
+            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+              el("div", { class: "mainDashTitle" }, tr({ ru: "Курсы", uz: "Kurslar", en: "Courses" })),
+              el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
+              makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, barMax),
+              makeBar(tr({ ru: "Записан/Учится", uz: "Yozilgan/O'qishda", en: "Enrolled/Studying" }), totalCourses, barMax, "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
+            ),
+            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+              el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
+                el("div", { class: "mainDashTitle" }, tr({ ru: "Этапы лидов", uz: "Lid bosqichlari", en: "Lead stages" })),
+                typeSel
+              ),
+              el("div", { class: "mainDashPie", style: `background:${pieBg}` }),
+              pieLegend
+            ),
+            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+              el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты по этапам", uz: "Loyihalar bosqichi", en: "Projects by stage" })),
+              ...Object.entries(projectCounts)
+                .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+                .map(([k, v], i) => makeBar(
+                  tr(projectStageLabels[k] || { ru: k, uz: k, en: k }),
+                  Number(v || 0),
+                  projMax,
+                  i % 2 ? "rgba(52,211,153,.85)" : "rgba(15,209,167,.85)",
+                  i % 2 ? "rgba(163,230,53,.75)" : "rgba(255,208,90,.75)"
+                ))
+            )
+          )
+        );
+        host.appendChild(dash);
+
+        const tiltHost = $("#mainDashWrap", host);
+        const scrollSource = host;
+        let raf = 0;
+        const updateTilt = () => {
+          raf = 0;
+          const y = Number(scrollSource.scrollTop || window.scrollY || 0);
+          const tilt = Math.sin(y / 140) * 5;
+          if (tiltHost) tiltHost.style.setProperty("--dash-tilt", `${tilt.toFixed(2)}deg`);
+        };
+        const onScroll = () => {
+          if (raf) return;
+          raf = requestAnimationFrame(updateTilt);
+        };
+        scrollSource.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("scroll", onScroll, { passive: true });
+        updateTilt();
+        App.state.mainDashCleanup = () => {
+          scrollSource.removeEventListener("scroll", onScroll);
+          window.removeEventListener("scroll", onScroll);
+          if (raf) cancelAnimationFrame(raf);
+        };
+      }
+
+      const grid = el("div", { class: "grid2", style: "margin-top:12px" },
         box(t("t_in_progress"), data.in_progress ? [data.in_progress] : []),
-        box("Today", data.today || [])
+        box(t("main_today"), data.today || [])
       );
       const overdueRows = visibleRows(data.overdue || []);
-      const below = el("div", {
-          class: "card cardPad vcol gap10",
-          style: "margin-top:12px"
-        },
-        el("div", {
-          style: "font-weight:900"
-        }, "Overdue"),
-        overdueRows.length ? el("div", {
-            class: "vcol gap10"
-          },
+      const below = el("div", { class: "card cardPad vcol gap10", style: "margin-top:12px" },
+        el("div", { style: "font-weight:900" }, t("main_overdue")),
+        overdueRows.length ? el("div", { class: "vcol gap10" },
           overdueRows.map(x => el("div", {
               class: "kcard",
-              onClick: () => setHash("/tasks", {
-                open: x.id
-              })
+              onClick: () => setHash("/tasks", { open: x.id })
             },
-            el("div", {
-              style: "font-weight:800"
-            }, x.title || `#${x.id}`),
-            el("div", {
-              class: "muted",
-              style: "margin-top:6px; white-space:pre-wrap"
-            }, (x.description || "").slice(0, 180)),
-            el("div", {
-                class: "kmeta"
-              },
-              el("span", {
-                class: "badge"
-              }, `${t("status")}: ${taskStatusLabel(x.status)}`),
-              el("span", {
-                class: "badge"
-              }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
+            el("div", { style: "font-weight:800" }, x.title || `#${x.id}`),
+            el("div", { class: "muted", style: "margin-top:6px; white-space:pre-wrap" }, (x.description || "").slice(0, 180)),
+            el("div", { class: "kmeta" },
+              el("span", { class: "badge" }, `${t("status")}: ${taskStatusLabel(x.status)}`),
+              el("span", { class: "badge" }, `${t("deadline")}: ${fmtDate(x.deadline_at)}`)
             )
           ))
-        ) : el("div", {
-          class: "muted"
-        }, t("no_data"))
+        ) : el("div", { class: "muted" }, t("no_data"))
       );
       host.append(grid, below);
     } catch (e) {
       host.innerHTML = "";
-      host.appendChild(el("div", {
-          class: "card cardPad vcol gap10"
-        },
-        el("div", {
-          style: "font-weight:900"
-        }, t("toast_error")),
-        el("div", {
-          class: "muted"
-        }, e.message || "Error")
+      host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+        el("div", { style: "font-weight:900" }, t("toast_error")),
+        el("div", { class: "muted" }, e.message || "Error")
       ));
     }
   };
@@ -3903,6 +4052,12 @@ App.renderCalendar = async function(host, routeId){
 .miniIcon{padding:8px 10px;border-radius:12px}
 .scrollBox{max-height:420px;overflow:auto;padding-right:6px}
 @media (max-width:900px){.scrollBox{max-height:none}}
+@media (max-width:900px){
+  .setGrid{gap:10px}
+  .rowLine{flex-wrap:wrap;padding:10px}
+  .rowTitle{white-space:normal}
+  .rowActions{width:100%;justify-content:flex-end}
+}
   `.trim();
   document.head.appendChild(el("style",{id:"gsoftSettingsStyles"},css));
 }
@@ -5360,6 +5515,12 @@ App.renderCourses = async function (host, routeId) {
   if (freshRefs) refs = freshRefs;
 
   const ctById = new Map(courseTypes.map(x => [Number(x.id), x]));
+  const courseTypeLabel = (ct) => ct?.[`name_${lang}`] || ct?.name_uz || ct?.name_ru || ct?.name_en || ct?.name || `#${ct?.id || ""}`;
+  const courseTypeNameById = (id, fallback = "") => {
+    const row = ctById.get(Number(id));
+    if (row) return courseTypeLabel(row);
+    return fallback || "";
+  };
   const companyLabel = (c) => (c && (c.company_name || c.full_name || `#${c.id}`)) || "";
   const refNameById = (list, id, fallback = "") => {
     if (!id) return fallback || "";
@@ -5387,7 +5548,7 @@ App.renderCourses = async function (host, routeId) {
   const typeSel = el("select", { class: "sel" },
     el("option", { value: "" }, "Kurs turi"),
     ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
-      el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
+      el("option", { value: String(ct.id) }, courseTypeLabel(ct))
     )
   );
 
@@ -5455,7 +5616,7 @@ App.renderCourses = async function (host, routeId) {
         x.lead_full_name,
         x.lead_phone1,
         x.company_name,
-        x.course_type_name,
+        courseTypeNameById(x.course_type_id, x.course_type_name || ""),
         source,
         sphere,
         city,
@@ -5875,7 +6036,7 @@ App.renderCourses = async function (host, routeId) {
     const leadName = x.lead_full_name || `#${x.lead_client_id || x.id}`;
     const phone = x.lead_phone1 || "";
     const company = x.company_name || "";
-    const courseName = x.course_type_name || "";
+    const courseName = courseTypeNameById(x.course_type_id, x.course_type_name || "");
     const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
     const sphere = refNameById(refs.spheres, x.lead_sphere_id, x.lead_sphere_name || x.sphere_name || x.lead_sphere || "");
     const city = refNameById(refs.cities, x.lead_city_id, x.lead_city_name || x.city_name || x.lead_city || "");
@@ -6014,7 +6175,7 @@ App.renderCourses = async function (host, routeId) {
     const type2 = el("select", { class: "sel" },
       el("option", { value: "" }, "—"),
       ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
-        el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
+        el("option", { value: String(ct.id) }, courseTypeLabel(ct))
       )
     );
 
@@ -6321,7 +6482,7 @@ App.renderCourses = async function (host, routeId) {
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap6" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
-            el("div", {}, x.course_type_name || "—")
+            el("div", {}, courseTypeNameById(x.course_type_id, x.course_type_name || "—"))
           ),
           el("div", { class: "vcol gap6" },
             el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
@@ -6431,7 +6592,7 @@ App.renderCourses = async function (host, routeId) {
       const type2 = el("select", { class: "sel" },
         el("option", { value: "" }, "—"),
         ...courseTypes.filter(ct => Number(ct.is_active) === 1).map(ct =>
-          el("option", { value: String(ct.id), selected: (Number(x.course_type_id) === Number(ct.id)) ? "selected" : null }, ct.name || `#${ct.id}`)
+          el("option", { value: String(ct.id), selected: (Number(x.course_type_id) === Number(ct.id)) ? "selected" : null }, courseTypeLabel(ct))
         )
       );
 
