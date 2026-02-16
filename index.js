@@ -119,17 +119,17 @@
       need_reason: "Нужна причина отмены",
       route_main: "Главная",
       route_tasks: "Задачи",
-      route_calendar: "Calendar",
+      route_calendar: "Календарь",
       route_projects: "Проекты",
       route_courses: "Курсы",
       route_clients: "Клиенты",
       route_settings: "Настройки",
       route_users: "Пользователи",
-      calendar_today: "Today",
-      calendar_prev: "Prev",
-      calendar_next: "Next",
-      calendar_drag_hint: "Drag to change deadline",
-      calendar_select_hint: "Select a task, then open",
+      calendar_today: "Сегодня",
+      calendar_prev: "Назад",
+      calendar_next: "Вперёд",
+      calendar_drag_hint: "Перетащите, чтобы изменить дедлайн",
+      calendar_select_hint: "Выберите задачу и откройте",
       coming_soon: "Раздел в разработке. Следующим шагом подключим этот модуль к API.",
       t_new: "Новая",
       t_pause: "Пауза",
@@ -276,17 +276,17 @@ telegram_id: "Telegram ID",
       need_reason: "Bekor qilish sababi kerak",
       route_main: "Asosiy",
       route_tasks: "Vazifalar",
-      route_calendar: "Calendar",
+      route_calendar: "Kalendar",
       route_projects: "Loyihalar",
       route_courses: "Kurslar",
       route_clients: "Mijozlar",
       route_settings: "Sozlamalar",
       route_users: "Foydalanuvchilar",
-      calendar_today: "Today",
-      calendar_prev: "Prev",
-      calendar_next: "Next",
-      calendar_drag_hint: "Drag to change deadline",
-      calendar_select_hint: "Select a task, then open",
+      calendar_today: "Bugun",
+      calendar_prev: "Oldingi",
+      calendar_next: "Keyingi",
+      calendar_drag_hint: "Muddatni o'zgartirish uchun sudrang",
+      calendar_select_hint: "Vazifani tanlang va oching",
       coming_soon: "Bo‘lim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
       t_new: "Boshlanmagan",
       t_pause: "Pauza",
@@ -3239,11 +3239,16 @@ App.renderCalendar = async function(host, routeId){
     return Math.floor(d.getTime() / 1000);
   };
 
-  const weekNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const langToLocale = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
+  const calendarLocale = langToLocale[App.state.lang] || "ru-RU";
+  const weekNames = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.UTC(2024, 0, 1 + i)); // 2024-01-01 is Monday
+    return new Intl.DateTimeFormat(calendarLocale, { weekday: "short" }).format(d);
+  });
 
   const monthLabel = () => {
     const d = new Date(state.year, state.month, 1);
-    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    return d.toLocaleDateString(calendarLocale, { month: "long", year: "numeric" });
   };
 
   const buildGridDates = () => {
@@ -3267,7 +3272,7 @@ App.renderCalendar = async function(host, routeId){
 
   const fmtTime = (ts) => {
     if (!ts) return "";
-    return new Date(ts * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return new Date(ts * 1000).toLocaleTimeString(calendarLocale, { hour: "2-digit", minute: "2-digit" });
   };
 
   const findTask = (id) => (state.tasks || []).find(x => Number(x.id) === Number(id));
