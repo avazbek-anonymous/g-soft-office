@@ -5745,10 +5745,15 @@ App.renderCourses = async function (host, routeId) {
             const course_type_id = type2.value ? Number(type2.value) : null;
             if (!course_type_id) { Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad"); return; }
 
-            const agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
+            let agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
             const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
             if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto‘g‘ri", en: "Invalid agreed amount" }), "bad"); return; }
             if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To‘lov noto‘g‘ri", en: "Invalid paid amount" }), "bad"); return; }
+            const ctRow = ctById.get(Number(course_type_id));
+            const ctPrice = Number(ctRow?.price);
+            if ((agreed_amount == null || agreed_amount === 0) && Number.isFinite(ctPrice) && ctPrice > 0) {
+              agreed_amount = ctPrice;
+            }
 
             const body = {
               lead_client_id: Number(leadClientId),
@@ -6083,6 +6088,13 @@ App.renderCoursePayments = async function(host, routeId){
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
   };
+  const effectiveAgreed = (x) => {
+    const a = Number(x?.agreed_amount);
+    if (Number.isFinite(a) && a > 0) return a;
+    const p = Number(x?.course_price);
+    if (Number.isFinite(p) && p > 0) return p;
+    return 0;
+  };
   const safe = (v) => String(v == null ? "" : v);
 
   host.innerHTML = "";
@@ -6131,7 +6143,7 @@ App.renderCoursePayments = async function(host, routeId){
 
   const paymentPass = (x) => {
     const paid = num(x.paid_amount);
-    const agreed = num(x.agreed_amount);
+    const agreed = effectiveAgreed(x);
     if (state.payType === "paid") return paid > 0;
     if (state.payType === "unpaid") return paid === 0;
     if (state.payType === "debts") return agreed > paid;
@@ -6156,7 +6168,7 @@ App.renderCoursePayments = async function(host, routeId){
     if (key === "start_date") return num(a.course_start_date) - num(b.course_start_date);
     if (key === "status") return safe(stMap.get(String(a.status)) || a.status).localeCompare(safe(stMap.get(String(b.status)) || b.status), undefined, { sensitivity: "base" });
     if (key === "price") return num(a.course_price) - num(b.course_price);
-    if (key === "agreed") return num(a.agreed_amount) - num(b.agreed_amount);
+    if (key === "agreed") return effectiveAgreed(a) - effectiveAgreed(b);
     if (key === "paid") return num(a.paid_amount) - num(b.paid_amount);
     if (key === "comment") return safe(a.comment).localeCompare(safe(b.comment), undefined, { sensitivity: "base" });
     return 0;
@@ -6276,7 +6288,7 @@ App.renderCoursePayments = async function(host, routeId){
     if (key === "start_date") return el("div", {}, fmtDateOnly(x.course_start_date));
     if (key === "status") return el("div", {}, stMap.get(String(x.status)) || x.status || "—");
     if (key === "price") return el("div", {}, fmtMoney(x.course_price, x.currency));
-    if (key === "agreed") return el("div", {}, fmtMoney(x.agreed_amount, x.currency));
+    if (key === "agreed") return el("div", {}, fmtMoney(effectiveAgreed(x), x.currency));
     if (key === "paid") return el("div", {}, fmtMoney(x.paid_amount, x.currency));
     if (key === "comment") return el("div", {}, x.comment || "—");
     return el("div", {}, "—");
