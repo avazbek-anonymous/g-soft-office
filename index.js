@@ -5828,8 +5828,9 @@ App.renderCourses = async function (host, routeId) {
       el("div", { class: "chatTaskBox vcol gap8" },
         el("div", { class: "chatPinnedTitle" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" })),
         taskAssigneeSel,
-        el("div", { class: "chatTaskGrid" }, taskDeadlineInp, taskCreateBtn),
-        taskTextInp
+        el("div", { class: "chatTaskGrid" }, taskDeadlineInp),
+        taskTextInp,
+        taskCreateBtn
       ),
       el("div", { class: "chatPinnedBox" },
         el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
