@@ -580,7 +580,7 @@ telegram_id: "Telegram ID",
   // меню
   home: `<img src="./icons/asosiy.svg" class="ico" alt="">`,
   tasks: `<img src="./icons/tasks.svg" class="ico" alt="">`,
-  calendar: `<svg viewBox="0 0 24 24" class="ico"><path d="M7 2h2v2h6V2h2v2h3v18H4V4h3V2zm12 6H5v12h14V8z"/></svg>`,
+  calendar: `<img src="./icons/calendar.svg" class="ico" alt="">`,
   projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
   clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
