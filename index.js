@@ -604,6 +604,7 @@ telegram_id: "Telegram ID",
   // меню
   home: `<img src="./icons/asosiy.svg" class="ico" alt="">`,
   tasks: `<img src="./icons/tasks.svg" class="ico" alt="">`,
+  chat: `<img src="./icons/chat.svg" class="ico" alt="">`,
   calendar: `<img src="./icons/calendar.svg" class="ico" alt="">`,
   projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
@@ -5193,12 +5194,12 @@ App.renderCourses = async function (host, routeId) {
       .modalCard.chatModalCard .modalHead{padding:12px 14px}
       .chatShell{display:flex;flex-direction:column;height:100%;min-height:0;gap:10px}
       .chatTools{display:flex;align-items:center;justify-content:space-between;gap:8px}
-      .chatLayout{position:relative;display:flex;gap:10px;flex:1;min-height:0}
+      .chatLayout{position:relative;display:flex;gap:10px;flex:1;min-height:0;overflow:hidden}
       .chatSideBackdrop{display:none}
       .chatSide{width:320px;min-width:320px;display:none;flex-direction:column;gap:10px;min-height:0;overflow:auto}
       .chatSide.open{display:flex}
       .chatRight{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;min-height:0}
-      .chatTaskBox,.chatPinnedBox{border:1px solid var(--stroke);border-radius:14px;padding:10px;background:rgba(255,255,255,.03)}
+      .chatTaskBox,.chatPinnedBox{border:1px solid var(--stroke);border-radius:14px;padding:10px;background:rgba(255,255,255,.03);box-sizing:border-box;max-width:100%;min-width:0}
       .chatPinnedTitle{font-size:12px;color:var(--muted2);font-weight:700;margin-bottom:6px}
       .chatPinnedItem{border:1px solid var(--stroke);border-radius:12px;padding:8px;background:rgba(255,255,255,.04);display:flex;flex-direction:column;gap:4px}
       .chatPinnedItem + .chatPinnedItem{margin-top:8px}
@@ -5223,15 +5224,17 @@ App.renderCourses = async function (host, routeId) {
       .chatPager{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}
       .chatPager .btn{min-width:34px;padding:6px 8px;border-radius:10px}
       .chatPager .btn.active{background:var(--accent);color:#111;border-color:transparent}
-      .chatTaskGrid{display:grid;grid-template-columns:1fr 140px;gap:8px}
+      .chatTaskGrid{display:grid;grid-template-columns:1fr 140px;gap:8px;max-width:100%;min-width:0}
       .chatTaskGrid .input,.chatTaskGrid .sel{width:100%}
+      .chatShell *{box-sizing:border-box}
+      .chatShell .input,.chatShell .sel,.chatShell .btn,.chatShell textarea,.chatShell select,.chatShell input{max-width:100%;min-width:0}
       @media (max-width:900px){
         .modalCard.chatModalCard{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}
         .modalCard.chatModalCard .modalBody{padding:8px}
         .chatLayout{gap:0}
         .chatSideBackdrop{display:block;position:absolute;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:4}
         .chatSideBackdrop.open{opacity:1;pointer-events:auto}
-        .chatSide{display:flex;position:absolute;left:0;top:0;bottom:0;z-index:5;width:min(92vw,360px);min-width:0;transform:translateX(-105%);transition:transform .2s ease;background:var(--bg2);padding:8px;border-right:1px solid var(--stroke)}
+        .chatSide{display:flex;position:absolute;left:0;top:0;bottom:0;z-index:5;width:100%;max-width:100%;min-width:0;transform:translateX(-105%);transition:transform .2s ease;background:var(--bg2);padding:8px 10px;border-right:0}
         .chatSide.open{transform:translateX(0)}
         .chatTaskGrid{grid-template-columns:1fr}
         .chatComposer{position:sticky;bottom:0;background:var(--bg2);padding-top:8px}
@@ -5822,7 +5825,7 @@ App.renderCourses = async function (host, routeId) {
       }
     }, el("span", {
       class: "icoWrap",
-      html: `<svg viewBox="0 0 24 24" class="ico"><path d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>`
+      html: ICONS.chat
     }));
     const actions = el("div", { class: "cActions" }, btnChat, btnOpen);
 
