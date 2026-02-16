@@ -5187,13 +5187,23 @@ App.renderCourses = async function (host, routeId) {
       .cSug .it:last-child{border-bottom:0}
       .cSug .it:hover{background:rgba(255,208,90,.07)}
       .cChip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--stroke);border-radius:999px;background:rgba(255,255,255,.04);font-size:12px}
-      .chatShell{display:flex;flex-direction:column;gap:10px}
-      .chatTop{display:grid;grid-template-columns:minmax(260px,320px) 1fr;gap:10px}
+      .modalCard.chatModalCard{width:min(1200px,98vw);height:min(92vh,920px);max-height:92vh;overflow:hidden;display:flex;flex-direction:column}
+      .modalCard.chatModalCard .modalBody{padding:10px;flex:1;min-height:0;overflow:hidden}
+      .modalCard.chatModalCard .modalHead{padding:12px 14px}
+      .chatShell{display:flex;flex-direction:column;height:100%;min-height:0;gap:10px}
+      .chatTools{display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .chatLayout{position:relative;display:flex;gap:10px;flex:1;min-height:0}
+      .chatSideBackdrop{display:none}
+      .chatSide{width:320px;min-width:320px;display:none;flex-direction:column;gap:10px;min-height:0;overflow:auto}
+      .chatSide.open{display:flex}
+      .chatRight{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;min-height:0}
       .chatTaskBox,.chatPinnedBox{border:1px solid var(--stroke);border-radius:14px;padding:10px;background:rgba(255,255,255,.03)}
       .chatPinnedTitle{font-size:12px;color:var(--muted2);font-weight:700;margin-bottom:6px}
       .chatPinnedItem{border:1px solid var(--stroke);border-radius:12px;padding:8px;background:rgba(255,255,255,.04);display:flex;flex-direction:column;gap:4px}
       .chatPinnedItem + .chatPinnedItem{margin-top:8px}
-      .chatFeed{border:1px solid var(--stroke);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:340px;max-height:62vh;overflow:auto;background:linear-gradient(180deg, rgba(8,24,34,.75), rgba(5,16,25,.85))}
+      .chatFeed{border:1px solid var(--stroke);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;overflow-y:scroll;overflow-x:hidden;background:linear-gradient(180deg, rgba(8,24,34,.75), rgba(5,16,25,.85));scrollbar-width:thin}
+      .chatFeed::-webkit-scrollbar{width:8px}
+      .chatFeed::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:999px}
       .chatDaySep{display:flex;justify-content:center;margin:4px 0}
       .chatDaySep span{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;color:#d5e5ff}
       .chatMsg{display:flex;flex-direction:column;gap:4px;max-width:88%}
@@ -5207,14 +5217,23 @@ App.renderCourses = async function (host, routeId) {
       .chatTaskStatus{font-size:12px;font-weight:700}
       .chatComposer{display:flex;gap:8px}
       .chatComposer .input{flex:1}
+      .chatSendBtn{width:48px;min-width:48px;height:48px;border-radius:14px}
+      .chatSendBtn .ico{width:20px;height:20px}
       .chatPager{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}
       .chatPager .btn{min-width:34px;padding:6px 8px;border-radius:10px}
       .chatPager .btn.active{background:var(--accent);color:#111;border-color:transparent}
       .chatTaskGrid{display:grid;grid-template-columns:1fr 140px;gap:8px}
       .chatTaskGrid .input,.chatTaskGrid .sel{width:100%}
       @media (max-width:900px){
-        .chatTop{grid-template-columns:1fr}
-        .chatFeed{max-height:56vh}
+        .modalCard.chatModalCard{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}
+        .modalCard.chatModalCard .modalBody{padding:8px}
+        .chatLayout{gap:0}
+        .chatSideBackdrop{display:block;position:absolute;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:4}
+        .chatSideBackdrop.open{opacity:1;pointer-events:auto}
+        .chatSide{display:flex;position:absolute;left:0;top:0;bottom:0;z-index:5;width:min(92vw,360px);min-width:0;transform:translateX(-105%);transition:transform .2s ease;background:var(--bg2);padding:8px;border-right:1px solid var(--stroke)}
+        .chatSide.open{transform:translateX(0)}
+        .chatTaskGrid{grid-template-columns:1fr}
+        .chatComposer{position:sticky;bottom:0;background:var(--bg2);padding-top:8px}
       }
     `;
     document.head.appendChild(st);
@@ -5498,7 +5517,6 @@ App.renderCourses = async function (host, routeId) {
   async function openCourseChat(id) {
     const leadId = Number(id);
     if (!leadId) return;
-    const isMobile = window.matchMedia("(max-width:900px)").matches;
     let assignees = [];
     let page = 1;
     let pageSize = 50;
@@ -5522,7 +5540,14 @@ App.renderCourses = async function (host, routeId) {
       rows: 3,
       placeholder: tr({ ru: "Сообщение...", uz: "Xabar...", en: "Message..." })
     });
-    const msgSendBtn = el("button", { class: "btn primary", type: "button" }, tr({ ru: "Отправить", uz: "Yuborish", en: "Send" }));
+    const msgSendBtn = el("button", {
+      class: "iconBtn chatSendBtn",
+      type: "button",
+      title: tr({ ru: "Отправить", uz: "Yuborish", en: "Send" })
+    }, el("span", {
+      class: "icoWrap",
+      html: `<svg viewBox="0 0 24 24" class="ico"><path d="M3 11.9 21 3l-4.8 18-4.1-6.3-9.1-2.8Zm8.6 1.9 2.6 4 2.8-10.6-12.2 6.1 6.8 0.5Z"/></svg>`
+    }));
 
     const renderPager = () => {
       pagerEl.innerHTML = "";
@@ -5699,30 +5724,44 @@ App.renderCourses = async function (host, routeId) {
       }
     };
 
+    const sideEl = el("div", { class: "chatSide" },
+      el("div", { class: "chatTaskBox vcol gap8" },
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" })),
+        taskAssigneeSel,
+        el("div", { class: "chatTaskGrid" }, taskDeadlineInp, taskCreateBtn),
+        taskTextInp
+      ),
+      el("div", { class: "chatPinnedBox" },
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
+        pinnedEl
+      )
+    );
+    const sideBackdrop = el("button", { class: "chatSideBackdrop", type: "button" });
+    const taskToggleBtn = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" }));
+
+    function setSide(open) {
+      sideEl.classList.toggle("open", !!open);
+      sideBackdrop.classList.toggle("open", !!open);
+      taskToggleBtn.classList.toggle("active", !!open);
+    }
+    sideBackdrop.onclick = () => setSide(false);
+    taskToggleBtn.onclick = () => setSide(!sideEl.classList.contains("open"));
+    setSide(false);
+
     const body = el("div", { class: "chatShell" },
-      el("div", { class: "chatTop" },
-        el("div", { class: "vcol gap10" },
-          el("div", { class: "chatTaskBox vcol gap8" },
-            el("div", { class: "chatPinnedTitle" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" })),
-            taskAssigneeSel,
-            el("div", { class: "chatTaskGrid" }, taskDeadlineInp, taskCreateBtn),
-            taskTextInp
-          ),
-          el("div", { class: "chatPinnedBox" },
-            el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
-            pinnedEl
-          )
-        ),
-        el("div", { class: "vcol gap8" },
+      el("div", { class: "chatTools" }, taskToggleBtn, pagerEl),
+      el("div", { class: "chatLayout" },
+        sideBackdrop,
+        sideEl,
+        el("div", { class: "chatRight" },
           feedEl,
-          el("div", { class: "chatComposer" }, msgInp, msgSendBtn),
-          pagerEl
+          el("div", { class: "chatComposer" }, msgInp, msgSendBtn)
         )
       )
     );
 
     await Promise.all([loadAssignees(), loadFeed()]);
-    Modal.open(tr({ ru: "Чат курса", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: isMobile ? "fullscreenMobile" : "" });
+    Modal.open(tr({ ru: "Чат курса", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: "chatModalCard" });
   }
 
   const cardFor = (x) => {
