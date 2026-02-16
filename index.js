@@ -1423,11 +1423,14 @@ select option{
 
 /* === FIX: move header actions into sidebar on mobile === */
 .sidebar{ display:flex; flex-direction:column; }
-.nav{ flex:1 1 auto; padding-bottom:10px; min-height:0; }
+.nav{ flex:1 1 auto; padding-bottom:10px; min-height:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
 .sideActionsSlot{
   margin-top:auto;
   padding:12px 10px 12px;
   border-top:1px solid var(--stroke);
+  flex:0 0 auto;
+  position:relative;
+  z-index:1;
 }
 @media (min-width:901px){
   .sideActionsSlot{ display:none; }
@@ -1442,12 +1445,14 @@ select option{
 .hdrActions.inSidebar .pill{ width:100%; justify-content:center; }
 .hdrActions.inSidebar .iconBtn{ width:100%; justify-content:center; }
 .hdrActions.inSidebar .hdrRow{
-  display:flex;
+  display:grid;
+  grid-template-columns:1fr 1fr;
   gap:10px;
   width:100%;
 }
 .hdrActions.inSidebar .hdrRow .iconBtn{
   width:100%;
+  min-width:0;
 }
 @media (max-width:900px){
   .sideActionsSlot{margin-top:12px}
@@ -2148,15 +2153,7 @@ select option{
         const leads = Array.isArray(leadsRes?.data) ? leadsRes.data : [];
         const projects = Array.isArray(projectsRes?.data) ? projectsRes.data : [];
         const courseTypes = Array.isArray(typeRes?.data) ? typeRes.data : [];
-        const selectedType = String(App.state.mainDashCourseTypeId || "");
-        const filteredLeads = selectedType
-          ? leads.filter(x => String(x.course_type_id || "") === selectedType)
-          : leads;
-        const leadCounts = {};
-        for (const x of filteredLeads) {
-          const k = String(x.status || "new");
-          leadCounts[k] = (leadCounts[k] || 0) + 1;
-        }
+        let selectedType = String(App.state.mainDashCourseTypeId || "");
         const projectCounts = {};
         for (const x of projects) {
           const k = String(x.status || "new");
@@ -2179,32 +2176,45 @@ select option{
           studying: "#a3e635",
           canceled: "#f87171",
         };
-        const piePairs = pieStatuses
-          .map(k => ({ key: k, val: Number(leadCounts[k] || 0), color: pieColors[k] }))
-          .filter(x => x.val > 0);
-        const pieTotal = piePairs.reduce((s, x) => s + x.val, 0);
-        const pieBg = pieTotal
-          ? `conic-gradient(${(() => {
-              let from = 0;
-              return piePairs.map(x => {
-                const to = from + (x.val / pieTotal) * 360;
-                const seg = `${x.color} ${from.toFixed(2)}deg ${to.toFixed(2)}deg`;
-                from = to;
-                return seg;
-              }).join(", ");
-            })()})`
-          : "conic-gradient(rgba(255,255,255,.15) 0deg 360deg)";
-        const pieLegend = el("div", { class: "mainDashLegend" },
-          ...(piePairs.length ? piePairs : pieStatuses.map(k => ({ key: k, val: 0, color: pieColors[k] }))).map(x =>
-            el("div", { class: "mainDashLegendItem" },
-              el("div", { class: "hrow", style: "align-items:center;gap:8px" },
-                el("span", { class: "mainDashDot", style: `background:${x.color}` }),
-                el("span", {}, tr(statusLabels[x.key] || { ru: x.key, uz: x.key, en: x.key }))
-              ),
-              el("span", { class: "muted2" }, String(x.val))
-            )
-          )
-        );
+        const pieEl = el("div", { class: "mainDashPie" });
+        const pieLegend = el("div", { class: "mainDashLegend" });
+        const renderLeadPie = () => {
+          const filteredLeads = selectedType
+            ? leads.filter(x => String(x.course_type_id || "") === selectedType)
+            : leads;
+          const leadCounts = {};
+          for (const x of filteredLeads) {
+            const k = String(x.status || "new");
+            leadCounts[k] = (leadCounts[k] || 0) + 1;
+          }
+          const piePairs = pieStatuses
+            .map(k => ({ key: k, val: Number(leadCounts[k] || 0), color: pieColors[k] }))
+            .filter(x => x.val > 0);
+          const pieTotal = piePairs.reduce((s, x) => s + x.val, 0);
+          pieEl.style.background = pieTotal
+            ? `conic-gradient(${(() => {
+                let from = 0;
+                return piePairs.map(x => {
+                  const to = from + (x.val / pieTotal) * 360;
+                  const seg = `${x.color} ${from.toFixed(2)}deg ${to.toFixed(2)}deg`;
+                  from = to;
+                  return seg;
+                }).join(", ");
+              })()})`
+            : "conic-gradient(rgba(255,255,255,.15) 0deg 360deg)";
+          pieLegend.innerHTML = "";
+          for (const x of (piePairs.length ? piePairs : pieStatuses.map(k => ({ key: k, val: 0, color: pieColors[k] })))) {
+            pieLegend.appendChild(
+              el("div", { class: "mainDashLegendItem" },
+                el("div", { class: "hrow", style: "align-items:center;gap:8px" },
+                  el("span", { class: "mainDashDot", style: `background:${x.color}` }),
+                  el("span", {}, tr(statusLabels[x.key] || { ru: x.key, uz: x.key, en: x.key }))
+                ),
+                el("span", { class: "muted2" }, String(x.val))
+              )
+            );
+          }
+        };
         const typeSel = el("select", { class: "sel", style: "max-width:260px" },
           el("option", { value: "" }, tr({ ru: "Тип курса: Все", uz: "Kurs turi: Barchasi", en: "Course type: All" })),
           ...courseTypes.map(ct => el("option", {
@@ -2213,9 +2223,11 @@ select option{
           }, courseTypeLabel(ct)))
         );
         typeSel.addEventListener("change", () => {
-          App.state.mainDashCourseTypeId = typeSel.value || "";
-          App.renderMain(host, App.state.routeId);
+          selectedType = typeSel.value || "";
+          App.state.mainDashCourseTypeId = selectedType;
+          renderLeadPie();
         });
+        renderLeadPie();
 
         const dash = el("div", { class: "mainDashWrap vcol gap12", id: "mainDashWrap" },
           el("div", { class: "mainDashGrid" },
@@ -2230,7 +2242,7 @@ select option{
                 el("div", { class: "mainDashTitle" }, tr({ ru: "Этапы лидов", uz: "Lid bosqichlari", en: "Lead stages" })),
                 typeSel
               ),
-              el("div", { class: "mainDashPie", style: `background:${pieBg}` }),
+              pieEl,
               pieLegend
             ),
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
