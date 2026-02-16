@@ -3294,11 +3294,11 @@ App.renderCalendar = async function(host, routeId){
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-            el("div", {}, x.assignee_name || "—")
+            el("div", {}, x.assignee_name || "ï¿½")
           ),
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
-            el("div", {}, x.project_company_name || "—")
+            el("div", {}, x.project_company_name || "ï¿½")
           )
         ),
         el("div", { class: "vcol gap8" },
@@ -3307,7 +3307,7 @@ App.renderCalendar = async function(host, routeId){
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
-          el("div", { class: "muted", style: "white-space:pre-wrap" }, x.description || "—")
+          el("div", { class: "muted", style: "white-space:pre-wrap" }, x.description || "ï¿½")
         )
       );
 
@@ -5314,7 +5314,7 @@ App.renderCourses = async function (host, routeId) {
     const type2 = el("select", { class: "sel" },
       el("option", { value: "" }, "â€”"),
       ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
-        el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
+        el("option", { value: String(ct.id) }, ct.name, course_start_date || `#${ct.id}`)
       )
     );
 
