@@ -725,6 +725,19 @@ function requireFields(obj, fields) {
   return null;
 }
 
+function isCourseChatRole(user) {
+  return !!user && (user.role === "admin" || user.role === "rop" || user.role === "sale");
+}
+
+function buildTaskTitleFromDescription(text) {
+  const words = String(text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return "Task";
+  return words.slice(0, 3).join(" ");
+}
+
 async function listUsers(env) {
   const hasTg = await usersHasTelegramIdColumn(env);
   const res = await env.DB
@@ -747,13 +760,15 @@ async function queryTasksKanban(env, user, filters) {
   // Also compute spent_seconds with a subquery
   let sql = `
     SELECT
-      t.id, t.title, t.description, t.assignee_user_id, t.project_id, t.status, t.deadline_at,
+      t.id, t.title, t.description, t.assignee_user_id, t.project_id, t.lead_id, t.status, t.deadline_at,
       t.cancel_reason, t.is_active, t.created_by, t.created_at, t.updated_at,
       u.full_name AS assignee_name,
       cu.full_name AS created_by_name,
       p.status AS project_status,
       p.pm_user_id AS project_pm_user_id,
       c.company_name AS project_company_name,
+      lead.full_name AS lead_name,
+      lead.phone1 AS lead_phone1,
       st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en,
       COALESCE((
         SELECT SUM(COALESCE(l.end_at, ?) - l.start_at)
@@ -765,6 +780,7 @@ async function queryTasksKanban(env, user, filters) {
     JOIN users cu ON cu.id = t.created_by
     LEFT JOIN projects p ON p.id = t.project_id
     LEFT JOIN clients c ON c.id = p.client_id
+    LEFT JOIN clients lead ON lead.id = t.lead_id
     LEFT JOIN service_types st ON st.id = p.service_type_id
     WHERE t.is_active = 1
   `;
@@ -1487,14 +1503,15 @@ async function handleTasks(env, user, request, origin, segments) {
     //}
 
     const projectId = body.project_id ? intId(body.project_id) : null;
+    const leadId = body.lead_id ? intId(body.lead_id) : null;
     const deadline_at = body.deadline_at == null ? null : Number(body.deadline_at);
     const title = body.title ? String(body.title).trim() : null;
 
     const res = await env.DB.prepare(
-      `INSERT INTO tasks(title, description, assignee_user_id, project_id, status, deadline_at, is_active, created_by)
-       VALUES(?,?,?,?, 'new', ?, 1, ?)`
+      `INSERT INTO tasks(title, description, assignee_user_id, project_id, lead_id, status, deadline_at, is_active, created_by)
+       VALUES(?,?,?,?,?, 'new', ?, 1, ?)`
     )
-      .bind(title, String(body.description).trim(), assignee, projectId, deadline_at, user.id)
+      .bind(title, String(body.description).trim(), assignee, projectId, leadId, deadline_at, user.id)
       .run();
 
     return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
@@ -1512,6 +1529,8 @@ async function handleTasks(env, user, request, origin, segments) {
         cu.full_name AS created_by_name,
         p.pm_user_id AS project_pm_user_id,
         c.company_name AS project_company_name,
+        lead.full_name AS lead_name,
+        lead.phone1 AS lead_phone1,
         COALESCE((
           SELECT SUM(COALESCE(l.end_at, ?) - l.start_at) FROM task_time_logs l WHERE l.task_id=t.id
         ),0) AS spent_seconds
@@ -1520,6 +1539,7 @@ async function handleTasks(env, user, request, origin, segments) {
        JOIN users cu ON cu.id=t.created_by
        LEFT JOIN projects p ON p.id=t.project_id
        LEFT JOIN clients c ON c.id=p.client_id
+       LEFT JOIN clients lead ON lead.id=t.lead_id
        WHERE t.id=? AND t.is_active=1`
     )
       .bind(ts, id)
@@ -1676,6 +1696,209 @@ async function handleTasks(env, user, request, origin, segments) {
       .run();
 
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
+async function handleCourseLeadChat(env, user, request, origin, leadId, segments) {
+  if (!isCourseChatRole(user)) return forbidden("No access");
+
+  const leadRow = await env.DB.prepare(`SELECT id FROM course_leads WHERE id=? AND is_active=1`).bind(leadId).first();
+  if (!leadRow) return notFound("course_lead_not_found");
+
+  const method = request.method;
+  const sub = segments[4] || "";
+
+  if (method === "GET" && sub === "assignees") {
+    const rows = await env.DB.prepare(
+      `SELECT id, full_name, role
+       FROM users
+       WHERE is_active=1 AND role IN ('sale','rop')
+       ORDER BY full_name COLLATE NOCASE ASC, id ASC`
+    ).all();
+    return jsonResp({ ok: true, data: rows.results || [] }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "GET" && !sub) {
+    const url = new URL(request.url);
+    const rawPage = Number(url.searchParams.get("page") || 1);
+    const rawSize = Number(url.searchParams.get("page_size") || 50);
+    const pageSize = Math.max(10, Math.min(50, Number.isFinite(rawSize) ? Math.floor(rawSize) : 50));
+    const page = Math.max(1, Number.isFinite(rawPage) ? Math.floor(rawPage) : 1);
+
+    const totalRow = await env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM lead_chat_messages m WHERE m.lead_id=? AND m.is_active=1) +
+         (SELECT COUNT(*) FROM lead_chat_task_links l WHERE l.lead_id=? AND l.is_active=1) AS total`
+    )
+      .bind(leadId, leadId)
+      .first();
+
+    const total = Number(totalRow?.total || 0);
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, pages);
+    const offset = (safePage - 1) * pageSize;
+
+    const feedRes = await env.DB.prepare(
+      `SELECT *
+       FROM (
+         SELECT
+           'message' AS item_type,
+           m.id AS item_id,
+           m.created_at AS sort_at,
+           m.created_at,
+           m.user_id,
+           u.full_name AS user_name,
+           u.role AS user_role,
+           m.text,
+           NULL AS task_id,
+           NULL AS task_status,
+           NULL AS task_assignee_user_id,
+           NULL AS task_assignee_name,
+           NULL AS task_deadline_at,
+           NULL AS task_cancel_reason,
+           NULL AS task_title,
+           NULL AS task_description
+         FROM lead_chat_messages m
+         JOIN users u ON u.id=m.user_id
+         WHERE m.lead_id=? AND m.is_active=1
+
+         UNION ALL
+
+         SELECT
+           'task' AS item_type,
+           l.id AS item_id,
+           l.created_at AS sort_at,
+           l.created_at,
+           l.created_by AS user_id,
+           cu.full_name AS user_name,
+           cu.role AS user_role,
+           l.text,
+           l.task_id,
+           t.status AS task_status,
+           t.assignee_user_id AS task_assignee_user_id,
+           au.full_name AS task_assignee_name,
+           t.deadline_at AS task_deadline_at,
+           t.cancel_reason AS task_cancel_reason,
+           t.title AS task_title,
+           t.description AS task_description
+         FROM lead_chat_task_links l
+         JOIN tasks t ON t.id=l.task_id AND t.is_active=1
+         JOIN users cu ON cu.id=l.created_by
+         JOIN users au ON au.id=t.assignee_user_id
+         WHERE l.lead_id=? AND l.is_active=1
+       ) q
+       ORDER BY q.sort_at DESC, q.item_id DESC
+       LIMIT ? OFFSET ?`
+    )
+      .bind(leadId, leadId, pageSize, offset)
+      .all();
+
+    const pinnedRes = await env.DB.prepare(
+      `SELECT
+         l.id AS link_id,
+         l.task_id,
+         l.text,
+         l.created_at,
+         t.status AS task_status,
+         t.deadline_at AS task_deadline_at,
+         t.cancel_reason AS task_cancel_reason,
+         t.assignee_user_id AS task_assignee_user_id,
+         au.full_name AS task_assignee_name,
+         t.title AS task_title,
+         t.description AS task_description
+       FROM lead_chat_task_links l
+       JOIN tasks t ON t.id=l.task_id AND t.is_active=1
+       JOIN users au ON au.id=t.assignee_user_id
+       WHERE l.lead_id=? AND l.is_active=1 AND t.status NOT IN ('done','canceled')
+       ORDER BY
+         CASE WHEN t.deadline_at IS NULL THEN 1 ELSE 0 END,
+         t.deadline_at ASC,
+         l.created_at DESC`
+    )
+      .bind(leadId)
+      .all();
+
+    return jsonResp(
+      {
+        ok: true,
+        data: {
+          items: feedRes.results || [],
+          pinned_tasks: pinnedRes.results || [],
+          pagination: {
+            page: safePage,
+            page_size: pageSize,
+            total,
+            pages,
+          },
+        },
+      },
+      200,
+      corsHeaders(env, origin)
+    );
+  }
+
+  const body = await readJson(request);
+
+  if (method === "POST" && sub === "messages") {
+    if (!body) return badRequest("Expected JSON");
+    const text = String(body.text || "").trim();
+    if (!text) return badRequest("text_required");
+
+    const ts = nowSec();
+    const res = await env.DB.prepare(
+      `INSERT INTO lead_chat_messages(lead_id, user_id, text, is_active, created_at, updated_at)
+       VALUES(?,?,?,?,?,?)`
+    )
+      .bind(leadId, user.id, text, 1, ts, ts)
+      .run();
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "POST" && sub === "tasks") {
+    if (!body) return badRequest("Expected JSON");
+    const miss = requireFields(body, ["assignee_user_id", "description", "deadline_at"]);
+    if (miss) return badRequest(`Missing: ${miss}`);
+
+    const assigneeId = intId(body.assignee_user_id);
+    const description = String(body.description || "").trim();
+    const deadlineAt = Number(body.deadline_at);
+    if (!assigneeId) return badRequest("Invalid assignee_user_id");
+    if (!description) return badRequest("description_required");
+    if (!Number.isFinite(deadlineAt) || deadlineAt <= 0) return badRequest("deadline_at_required");
+
+    const assignee = await env.DB.prepare(
+      `SELECT id, role, is_active FROM users WHERE id=?`
+    )
+      .bind(assigneeId)
+      .first();
+    if (!assignee || Number(assignee.is_active) !== 1) return badRequest("assignee_not_found");
+    if (!(assignee.role === "sale" || assignee.role === "rop")) return badRequest("assignee_must_be_sale_or_rop");
+
+    const title = buildTaskTitleFromDescription(description);
+    const ts = nowSec();
+    const taskRes = await env.DB.prepare(
+      `INSERT INTO tasks(title, description, assignee_user_id, project_id, lead_id, status, deadline_at, is_active, created_by)
+       VALUES(?,?,?,?,?, 'new', ?, 1, ?)`
+    )
+      .bind(title, description, assigneeId, null, leadId, deadlineAt, user.id)
+      .run();
+
+    const taskId = Number(taskRes.meta.last_row_id);
+    const linkRes = await env.DB.prepare(
+      `INSERT INTO lead_chat_task_links(lead_id, task_id, created_by, text, is_active, created_at, updated_at)
+       VALUES(?,?,?,?,?,?,?)`
+    )
+      .bind(leadId, taskId, user.id, description, 1, ts, ts)
+      .run();
+
+    return jsonResp(
+      { ok: true, data: { task_id: taskId, chat_task_id: Number(linkRes.meta.last_row_id) } },
+      200,
+      corsHeaders(env, origin)
+    );
   }
 
   return notFound();
@@ -1905,6 +2128,10 @@ async function handleCourseLeads(env, user, request, origin, segments) {
   // only admin/rop/sale
   if (!(user.role === "admin" || user.role === "rop" || user.role === "sale")) {
     return forbidden("No access");
+  }
+
+  if (id && segments[3] === "chat") {
+    return handleCourseLeadChat(env, user, request, origin, id, segments);
   }
 
   // GET /api/course_leads?company_id=&course_type_id=

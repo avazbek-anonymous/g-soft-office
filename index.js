@@ -655,7 +655,7 @@ telegram_id: "Telegram ID",
   const Modal = {
     overlay: null,
     esc: null,
-    open(title, bodyEl, actions = []) {
+    open(title, bodyEl, actions = [], opts = {}) {
       this.close();
       this.overlay = el("div", {
         class: "modalOverlay",
@@ -691,6 +691,8 @@ telegram_id: "Telegram ID",
       const card = el("div", {
         class: "modalCard"
       }, head, body, (actions.length ? foot : el("div")));
+      if (opts && opts.cardClass) card.classList.add(String(opts.cardClass));
+      if (opts && opts.overlayClass) this.overlay.classList.add(String(opts.overlayClass));
       this.overlay.appendChild(card);
       this.overlay.addEventListener("mousedown", (e) => {
         if (e.target === this.overlay) this.close();
@@ -873,6 +875,27 @@ telegram_id: "Telegram ID",
     del: (id) =>
       apiFetch(`/api/tasks/${id}/delete`, {
         method: "POST",
+      }),
+  },
+
+  courseChat: {
+    feed: (leadId, q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.page) sp.set("page", String(q.page));
+      if (q.page_size) sp.set("page_size", String(q.page_size));
+      const s = sp.toString();
+      return apiFetch(`/api/course_leads/${leadId}/chat${s ? "?" + s : ""}`);
+    },
+    assignees: (leadId) => apiFetch(`/api/course_leads/${leadId}/chat/assignees`),
+    sendMessage: (leadId, text) =>
+      apiFetch(`/api/course_leads/${leadId}/chat/messages`, {
+        method: "POST",
+        body: { text },
+      }),
+    createTask: (leadId, body) =>
+      apiFetch(`/api/course_leads/${leadId}/chat/tasks`, {
+        method: "POST",
+        body,
       }),
   },
 
@@ -1259,6 +1282,7 @@ text-decoration:none;
   .sideOverlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
   .sideOverlay.hidden{display:none}
   .modalFoot{flex-direction:column;align-items:stretch}
+  .modalCard.fullscreenMobile{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}
 }
 .kanbanWrap{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
 .kcol{min-width:320px;max-width:340px}
@@ -2656,6 +2680,15 @@ if (String(q.open_create || "") === "1") {
               el("div", {}, fmtDate(x.deadline_at))
             )
           ),
+          x.lead_id ? el("div", {
+              class: "vcol gap8"
+            },
+            el("div", {
+              class: "muted2",
+              style: "font-size:12px"
+            }, "Course/lead"),
+            el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` • ${x.lead_phone1}` : ""}`)
+          ) : null,
           el("div", {
               class: "vcol gap8"
             },
@@ -2711,6 +2744,16 @@ if (String(q.open_create || "") === "1") {
             onClick: () => {
               Modal.close();
               openTaskEdit(x.id);
+            }
+          });
+        }
+        if (x.lead_id) {
+          actions.push({
+            label: t("route_courses") || "Course",
+            kind: "ghost",
+            onClick: () => {
+              Modal.close();
+              setHash("/courses", { open: String(x.lead_id), chat: "1" });
             }
           });
         }
@@ -3402,6 +3445,10 @@ App.renderCalendar = async function(host, routeId){
             el("div", {}, x.project_company_name || "�")
           )
         ),
+        x.lead_id ? el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, "Course/lead"),
+          el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` • ${x.lead_phone1}` : ""}`)
+        ) : null,
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
           el("div", { style: "font-weight:900" }, x.title || `#${x.id}`)
@@ -3423,6 +3470,13 @@ App.renderCalendar = async function(host, routeId){
           label: t("edit"),
           kind: "primary",
           onClick: () => { Modal.close(); openTaskEdit(x.id); }
+        });
+      }
+      if (x.lead_id) {
+        actions.push({
+          label: t("route_courses") || "Course",
+          kind: "ghost",
+          onClick: () => { Modal.close(); setHash("/courses", { open: String(x.lead_id), chat: "1" }); }
         });
       }
       actions.push({ label: t("close"), kind: "ghost", onClick: () => Modal.close() });
@@ -5133,6 +5187,35 @@ App.renderCourses = async function (host, routeId) {
       .cSug .it:last-child{border-bottom:0}
       .cSug .it:hover{background:rgba(255,208,90,.07)}
       .cChip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--stroke);border-radius:999px;background:rgba(255,255,255,.04);font-size:12px}
+      .chatShell{display:flex;flex-direction:column;gap:10px}
+      .chatTop{display:grid;grid-template-columns:minmax(260px,320px) 1fr;gap:10px}
+      .chatTaskBox,.chatPinnedBox{border:1px solid var(--stroke);border-radius:14px;padding:10px;background:rgba(255,255,255,.03)}
+      .chatPinnedTitle{font-size:12px;color:var(--muted2);font-weight:700;margin-bottom:6px}
+      .chatPinnedItem{border:1px solid var(--stroke);border-radius:12px;padding:8px;background:rgba(255,255,255,.04);display:flex;flex-direction:column;gap:4px}
+      .chatPinnedItem + .chatPinnedItem{margin-top:8px}
+      .chatFeed{border:1px solid var(--stroke);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:340px;max-height:62vh;overflow:auto;background:linear-gradient(180deg, rgba(8,24,34,.75), rgba(5,16,25,.85))}
+      .chatDaySep{display:flex;justify-content:center;margin:4px 0}
+      .chatDaySep span{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;color:#d5e5ff}
+      .chatMsg{display:flex;flex-direction:column;gap:4px;max-width:88%}
+      .chatMsg.me{margin-left:auto}
+      .chatMsgName{font-size:12px;font-weight:700;color:#ff7272}
+      .chatMsg.me .chatMsgName{color:#71da8a}
+      .chatBubble{border-radius:14px;padding:8px 10px;background:#1d2b44;border:1px solid rgba(255,255,255,.14);color:#edf4ff;white-space:pre-wrap;word-break:break-word}
+      .chatMsg.me .chatBubble{background:#1b3b34}
+      .chatMsgTime{font-size:11px;color:#b7c2d4;text-align:right}
+      .chatTaskRow{border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.06)}
+      .chatTaskStatus{font-size:12px;font-weight:700}
+      .chatComposer{display:flex;gap:8px}
+      .chatComposer .input{flex:1}
+      .chatPager{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}
+      .chatPager .btn{min-width:34px;padding:6px 8px;border-radius:10px}
+      .chatPager .btn.active{background:var(--accent);color:#111;border-color:transparent}
+      .chatTaskGrid{display:grid;grid-template-columns:1fr 140px;gap:8px}
+      .chatTaskGrid .input,.chatTaskGrid .sel{width:100%}
+      @media (max-width:900px){
+        .chatTop{grid-template-columns:1fr}
+        .chatFeed{max-height:56vh}
+      }
     `;
     document.head.appendChild(st);
   }
@@ -5388,6 +5471,260 @@ App.renderCourses = async function (host, routeId) {
     }
   };
 
+  const chatRoleLabel = (roleName) => {
+    if (roleName === "admin") return "admin";
+    if (roleName === "rop") return "rop";
+    if (roleName === "sale") return "sale";
+    return roleName || "";
+  };
+  const chatDateLabel = (tsSec) => {
+    if (!tsSec) return "";
+    const d = new Date(Number(tsSec) * 1000);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+  };
+  const chatTimeLabel = (tsSec) => {
+    if (!tsSec) return "";
+    const d = new Date(Number(tsSec) * 1000);
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  };
+  const taskStatusVisual = (status) => {
+    if (status === "done") return { icon: "✓", text: "done", className: "ok" };
+    if (status === "canceled") return { icon: "x", text: "canceled", className: "bad" };
+    if (status === "in_progress") return { icon: ">", text: "in_progress", className: "run" };
+    if (status === "pause") return { icon: "||", text: "pause", className: "pause" };
+    return { icon: ".", text: "new", className: "new" };
+  };
+
+  async function openCourseChat(id) {
+    const leadId = Number(id);
+    if (!leadId) return;
+    const isMobile = window.matchMedia("(max-width:900px)").matches;
+    let assignees = [];
+    let page = 1;
+    let pageSize = 50;
+    let totalPages = 1;
+
+    const feedEl = el("div", { class: "chatFeed" });
+    const pinnedEl = el("div", { class: "vcol" });
+    const pagerEl = el("div", { class: "chatPager" });
+
+    const taskAssigneeSel = el("select", { class: "sel" }, el("option", { value: "" }, tr({ ru: "Исполнитель", uz: "Mas'ul", en: "Assignee" })));
+    const taskDeadlineInp = el("input", { class: "input", type: "datetime-local" });
+    const taskTextInp = el("textarea", {
+      class: "input",
+      rows: 4,
+      placeholder: tr({ ru: "Текст задачи", uz: "Vazifa matni", en: "Task text" })
+    });
+    const taskCreateBtn = el("button", { class: "btn", type: "button" }, tr({ ru: "Создать задачу", uz: "Vazifa yaratish", en: "Create task" }));
+
+    const msgInp = el("textarea", {
+      class: "input",
+      rows: 3,
+      placeholder: tr({ ru: "Сообщение...", uz: "Xabar...", en: "Message..." })
+    });
+    const msgSendBtn = el("button", { class: "btn primary", type: "button" }, tr({ ru: "Отправить", uz: "Yuborish", en: "Send" }));
+
+    const renderPager = () => {
+      pagerEl.innerHTML = "";
+      if (totalPages <= 1) return;
+      const prevBtn = el("button", {
+        class: "btn ghost",
+        type: "button",
+        disabled: page <= 1 ? "disabled" : null,
+        onClick: async () => {
+          if (page <= 1) return;
+          page -= 1;
+          await loadFeed();
+        }
+      }, "<");
+      pagerEl.appendChild(prevBtn);
+
+      const from = Math.max(1, page - 2);
+      const to = Math.min(totalPages, page + 2);
+      for (let p = from; p <= to; p++) {
+        pagerEl.appendChild(el("button", {
+          class: `btn ghost ${p === page ? "active" : ""}`,
+          type: "button",
+          onClick: async () => {
+            page = p;
+            await loadFeed();
+          }
+        }, String(p)));
+      }
+
+      const nextBtn = el("button", {
+        class: "btn ghost",
+        type: "button",
+        disabled: page >= totalPages ? "disabled" : null,
+        onClick: async () => {
+          if (page >= totalPages) return;
+          page += 1;
+          await loadFeed();
+        }
+      }, ">");
+      pagerEl.appendChild(nextBtn);
+    };
+
+    const renderPinned = (rows) => {
+      pinnedEl.innerHTML = "";
+      if (!rows || !rows.length) {
+        pinnedEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет закрепленных задач", uz: "Biriktirilgan vazifa yo'q", en: "No pinned tasks" })));
+        return;
+      }
+      for (const row of rows) {
+        const st = taskStatusVisual(row.task_status);
+        pinnedEl.appendChild(
+          el("div", { class: "chatPinnedItem" },
+            el("div", { style: "font-weight:800" }, `#${row.task_id} ${row.task_title || ""}`),
+            el("div", { class: "muted2", style: "font-size:12px" }, row.text || row.task_description || ""),
+            el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center;font-size:12px" },
+              el("span", { class: `chatTaskStatus ${st.className}` }, `${st.icon} ${st.text}`),
+              el("span", { class: "muted2" }, row.task_deadline_at ? fmtDate(row.task_deadline_at) : "—")
+            )
+          )
+        );
+      }
+    };
+
+    const renderFeed = (rows) => {
+      feedEl.innerHTML = "";
+      if (!rows || !rows.length) {
+        feedEl.appendChild(el("div", { class: "muted2" }, tr({ ru: "Пока нет сообщений", uz: "Hozircha xabarlar yo'q", en: "No messages yet" })));
+        return;
+      }
+      let lastDay = "";
+      for (const row of rows) {
+        const dayLabel = chatDateLabel(row.created_at);
+        if (dayLabel && dayLabel !== lastDay) {
+          lastDay = dayLabel;
+          feedEl.appendChild(el("div", { class: "chatDaySep" }, el("span", {}, dayLabel)));
+        }
+
+        if (row.item_type === "task") {
+          const st = taskStatusVisual(row.task_status);
+          feedEl.appendChild(
+            el("div", { class: "chatTaskRow" },
+              el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
+                el("div", { style: "font-weight:800" }, `${tr({ ru: "Задача", uz: "Vazifa", en: "Task" })} #${row.task_id}`),
+                el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
+              ),
+              el("div", {}, row.text || row.task_description || ""),
+              el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center;margin-top:4px;font-size:12px" },
+                el("span", { class: `chatTaskStatus ${st.className}` }, `${st.icon} ${st.text}`),
+                el("span", { class: "muted2" }, `${row.task_assignee_name || ""}${row.task_deadline_at ? ` • ${fmtDate(row.task_deadline_at)}` : ""}`)
+              )
+            )
+          );
+          continue;
+        }
+
+        const mine = Number(row.user_id) === Number(App.state.user?.id);
+        feedEl.appendChild(
+          el("div", { class: `chatMsg ${mine ? "me" : ""}` },
+            el("div", { class: "chatMsgName" }, `${row.user_name || "—"} ${chatRoleLabel(row.user_role) ? `(${chatRoleLabel(row.user_role)})` : ""}`),
+            el("div", { class: "chatBubble" }, row.text || ""),
+            el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
+          )
+        );
+      }
+    };
+
+    const loadAssignees = async () => {
+      try {
+        const r = await API.courseChat.assignees(leadId);
+        assignees = Array.isArray(r?.data) ? r.data : [];
+      } catch {
+        assignees = [];
+      }
+      taskAssigneeSel.innerHTML = "";
+      taskAssigneeSel.appendChild(el("option", { value: "" }, tr({ ru: "Исполнитель", uz: "Mas'ul", en: "Assignee" })));
+      for (const u of assignees) {
+        taskAssigneeSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name || `#${u.id}`} (${u.role})`));
+      }
+    };
+
+    const loadFeed = async () => {
+      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize });
+      const data = r?.data || {};
+      const pager = data.pagination || {};
+      page = Number(pager.page || page || 1);
+      pageSize = Number(pager.page_size || pageSize || 50);
+      totalPages = Number(pager.pages || 1);
+      renderPinned(Array.isArray(data.pinned_tasks) ? data.pinned_tasks : []);
+      const feedItems = Array.isArray(data.items) ? data.items.slice().reverse() : [];
+      renderFeed(feedItems);
+      renderPager();
+    };
+
+    taskCreateBtn.onclick = async () => {
+      try {
+        const assignee_user_id = taskAssigneeSel.value ? Number(taskAssigneeSel.value) : null;
+        if (!assignee_user_id) {
+          Toast.show(tr({ ru: "Выбери исполнителя", uz: "Ijrochini tanlang", en: "Select assignee" }), "bad");
+          return;
+        }
+        const txt = (taskTextInp.value || "").trim();
+        if (!txt) {
+          Toast.show(tr({ ru: "Напиши текст задачи", uz: "Vazifa matnini yozing", en: "Write task text" }), "bad");
+          return;
+        }
+        if (!taskDeadlineInp.value) {
+          Toast.show(tr({ ru: "Укажи дедлайн", uz: "Muddatni kiriting", en: "Set deadline" }), "bad");
+          return;
+        }
+        const deadline_at = Math.floor(new Date(taskDeadlineInp.value).getTime() / 1000);
+        if (!Number.isFinite(deadline_at) || deadline_at <= 0) {
+          Toast.show(tr({ ru: "Неверный дедлайн", uz: "Muddat noto'g'ri", en: "Invalid deadline" }), "bad");
+          return;
+        }
+        await API.courseChat.createTask(leadId, { assignee_user_id, description: txt, deadline_at });
+        taskTextInp.value = "";
+        await loadFeed();
+        Toast.show(t("toast_saved") || "Saved", "ok");
+      } catch (e) {
+        Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      }
+    };
+
+    msgSendBtn.onclick = async () => {
+      try {
+        const txt = (msgInp.value || "").trim();
+        if (!txt) return;
+        await API.courseChat.sendMessage(leadId, txt);
+        msgInp.value = "";
+        page = 1;
+        await loadFeed();
+      } catch (e) {
+        Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      }
+    };
+
+    const body = el("div", { class: "chatShell" },
+      el("div", { class: "chatTop" },
+        el("div", { class: "vcol gap10" },
+          el("div", { class: "chatTaskBox vcol gap8" },
+            el("div", { class: "chatPinnedTitle" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" })),
+            taskAssigneeSel,
+            el("div", { class: "chatTaskGrid" }, taskDeadlineInp, taskCreateBtn),
+            taskTextInp
+          ),
+          el("div", { class: "chatPinnedBox" },
+            el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
+            pinnedEl
+          )
+        ),
+        el("div", { class: "vcol gap8" },
+          feedEl,
+          el("div", { class: "chatComposer" }, msgInp, msgSendBtn),
+          pagerEl
+        )
+      )
+    );
+
+    await Promise.all([loadAssignees(), loadFeed()]);
+    Modal.open(tr({ ru: "Чат курса", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: isMobile ? "fullscreenMobile" : "" });
+  }
+
   const cardFor = (x) => {
     const st = x.status || "new";
 
@@ -5438,7 +5775,19 @@ App.renderCourses = async function (host, routeId) {
     if (leadMeta.length) lines.push(el("div", { class: "cLine" }, ...leadMeta));
 
     const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(x.id); } }, t("open") || "Open");
-    const actions = el("div", { class: "cActions" }, btnOpen);
+    const btnChat = el("button", {
+      class: "iconBtn miniIcon",
+      type: "button",
+      title: "Chat",
+      onClick: (e) => {
+        e.stopPropagation();
+        openCourseChat(x.id);
+      }
+    }, el("span", {
+      class: "icoWrap",
+      html: `<svg viewBox="0 0 24 24" class="ico"><path d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>`
+    }));
+    const actions = el("div", { class: "cActions" }, btnChat, btnOpen);
 
     const card = el("div", {
       class: "kcard",
@@ -5910,9 +6259,11 @@ App.renderCourses = async function (host, routeId) {
         : [];
 
       Modal.open(t("route_courses"), body, [
+        ...(isMobile ? [{ label: "Chat", kind: "ghost", onClick: () => { Modal.close(); openCourseChat(id); } }] : []),
         ...(isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
         ...mobileStatusActionsColored,
         { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() },
+        ...(!isMobile ? [{ label: "Chat", kind: "ghost", onClick: () => { Modal.close(); openCourseChat(id); } }] : []),
         ...(!isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
       ]);
     } catch (e) {
@@ -6034,7 +6385,9 @@ App.renderCourses = async function (host, routeId) {
   await load();
 
   const openId = App.state.current?.query?.open ? Number(App.state.current.query.open) : null;
-  if (openId) openView(openId);
+  const openChat = String(App.state.current?.query?.chat || "") === "1";
+  if (openId && openChat) openCourseChat(openId);
+  else if (openId) openView(openId);
 }
 
 
