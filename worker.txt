@@ -231,6 +231,14 @@ async function usersHasTelegramIdColumn(env) {
   return _usersHasTelegramCol;
 }
 
+let _usersHasMoizvonkiEmailCol = null;
+async function usersHasMoizvonkiEmailColumn(env) {
+  if (_usersHasMoizvonkiEmailCol !== null) return _usersHasMoizvonkiEmailCol;
+  const info = await env.DB.prepare("PRAGMA table_info(users)").all();
+  _usersHasMoizvonkiEmailCol = (info.results || []).some((r) => r.name === "moizvonki_email");
+  return _usersHasMoizvonkiEmailCol;
+}
+
 function tgGetEntities(msg) {
   return [
     ...(Array.isArray(msg?.entities) ? msg.entities : []),
@@ -740,9 +748,10 @@ function buildTaskTitleFromDescription(text) {
 
 async function listUsers(env) {
   const hasTg = await usersHasTelegramIdColumn(env);
+  const hasMzEmail = await usersHasMoizvonkiEmailColumn(env);
   const res = await env.DB
     .prepare(
-      `SELECT id, full_name, phone${hasTg ? ", telegram_id" : ""}, login, role, is_active, created_at, updated_at, last_login_at
+      `SELECT id, full_name, phone${hasTg ? ", telegram_id" : ""}${hasMzEmail ? ", moizvonki_email" : ""}, login, role, is_active, created_at, updated_at, last_login_at
        FROM users
        ORDER BY id DESC`
     )
@@ -1226,6 +1235,7 @@ async function handleUsers(env, user, request, origin, segments) {
   if (!requireRole(user, ["admin"])) return forbidden("Only admin");
 
   const hasTgCol = await usersHasTelegramIdColumn(env);
+  const hasMzEmailCol = await usersHasMoizvonkiEmailColumn(env);
 
   // ✅ POST /api/users — admin only
   if (method === "POST" && !id) {
@@ -1237,9 +1247,11 @@ async function handleUsers(env, user, request, origin, segments) {
     const login = str(body.login);
     const role = str(body.role);
     const new_password = str(body.new_password);
+    const moizvonki_email = str(body.moizvonki_email).toLowerCase() || null;
 
     if (!full_name || !login || !role || !new_password) return badRequest("Missing fields");
     if (!["admin", "pm", "fin", "sale", "rop"].includes(role)) return badRequest("Invalid role");
+    if (moizvonki_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(moizvonki_email)) return badRequest("Invalid moizvonki_email");
 
     let telegram_id = null;
     if (hasTgCol) {
@@ -1255,23 +1267,29 @@ async function handleUsers(env, user, request, origin, segments) {
       }
     }
 
+    if (!hasMzEmailCol && body.moizvonki_email !== undefined && String(body.moizvonki_email).trim() !== "") {
+      return badRequest("DB schema has no moizvonki_email column. Run D1 migration to add it.");
+    }
+
     const { saltHex, hashHex, iter, algo } = await hashPassword(new_password);
 
     try {
-      const stmt = hasTgCol
-        ? `INSERT INTO users(full_name, phone, telegram_id, login, role, pass_algo, pass_salt_hex, pass_hash_hex, pass_iter, is_active)
-           VALUES(?,?,?,?,?,?,?,?,?,1)`
-        : `INSERT INTO users(full_name, phone, login, role, pass_algo, pass_salt_hex, pass_hash_hex, pass_iter, is_active)
-           VALUES(?,?,?,?,?,?,?,?,1)`;
+      const fields = ["full_name", "phone", "login", "role", "pass_algo", "pass_salt_hex", "pass_hash_hex", "pass_iter", "is_active"];
+      const values = [full_name, phone || null, login, role, algo, saltHex, hashHex, iter, 1];
+      if (hasTgCol) {
+        fields.splice(2, 0, "telegram_id");
+        values.splice(2, 0, telegram_id);
+      }
+      if (hasMzEmailCol) {
+        fields.splice(hasTgCol ? 3 : 2, 0, "moizvonki_email");
+        values.splice(hasTgCol ? 3 : 2, 0, moizvonki_email);
+      }
+      const stmt = `INSERT INTO users(${fields.join(", ")}) VALUES(${fields.map(() => "?").join(",")})`;
 
-      const binds = hasTgCol
-        ? [full_name, phone || null, telegram_id, login, role, algo, saltHex, hashHex, iter]
-        : [full_name, phone || null, login, role, algo, saltHex, hashHex, iter];
-
-      const r = await env.DB.prepare(stmt).bind(...binds).run();
+      const r = await env.DB.prepare(stmt).bind(...values).run();
       return jsonResp({ ok: true, id: r.meta.last_row_id }, 200, corsHeaders(env, origin));
     } catch {
-      return badRequest("Create failed (duplicate login/telegram_id?)");
+      return badRequest("Create failed (duplicate login/telegram_id/moizvonki_email?)");
     }
   }
 
@@ -1280,8 +1298,9 @@ async function handleUsers(env, user, request, origin, segments) {
     const body = await readJson(request);
     if (!body) return badRequest("Expected JSON");
 
-    const allowed = pick(body, ["full_name", "phone", "telegram_id", "login", "role", "is_active"]);
+    const allowed = pick(body, ["full_name", "phone", "telegram_id", "moizvonki_email", "login", "role", "is_active"]);
     if (!hasTgCol) delete allowed.telegram_id;
+    if (!hasMzEmailCol) delete allowed.moizvonki_email;
 
     if (!Object.keys(allowed).length) return badRequest("Nothing to update");
     if (allowed.role && !["admin", "pm", "fin", "sale", "rop"].includes(allowed.role)) return badRequest("Invalid role");
@@ -1292,6 +1311,11 @@ async function handleUsers(env, user, request, origin, segments) {
       } catch {
         return badRequest("Invalid telegram_id");
       }
+    }
+    if ("moizvonki_email" in allowed) {
+      const s = str(allowed.moizvonki_email).toLowerCase();
+      if (s && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return badRequest("Invalid moizvonki_email");
+      allowed.moizvonki_email = s || null;
     }
 
     const set = Object.keys(allowed).map((k) => `${k}=?`).join(", ");
@@ -1305,7 +1329,7 @@ async function handleUsers(env, user, request, origin, segments) {
       await env.DB.prepare(`UPDATE users SET ${set} WHERE id = ?`).bind(...binds, id).run();
       return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
     } catch {
-      return badRequest("Update failed (duplicate login/telegram_id?)");
+      return badRequest("Update failed (duplicate login/telegram_id/moizvonki_email?)");
     }
   }
 

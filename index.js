@@ -224,6 +224,7 @@ open_tasks: "Открыть задачи",
 filter_project: "Проект",
 filter_project_all: "Все",
 telegram_id: "Telegram ID",
+moizvonki_email: "MZ Email",
 
 
     },
@@ -386,6 +387,7 @@ open_tasks: "Vazifalarni ochish",
 filter_project: "Loyiha",
 filter_project_all: "Barchasi",
 telegram_id: "Telegram ID",
+moizvonki_email: "MZ Email",
 
     },
     en: {
@@ -547,6 +549,7 @@ open_tasks: "Open tasks",
 filter_project: "Project",
 filter_project_all: "All",
 telegram_id: "Telegram ID",
+moizvonki_email: "MZ Email",
 
     }
   };
@@ -3108,7 +3111,7 @@ createBtn.addEventListener("click", () => {
     const rows = all.filter(u => {
       if (onlyActive && !Number(u.is_active)) return false;
       if (!q) return true;
-      const s = `${u.id} ${u.full_name||""} ${u.login||""} ${u.phone||""} ${u.role||""} ${u.telegram_id||""}`.toLowerCase();
+      const s = `${u.id} ${u.full_name||""} ${u.login||""} ${u.phone||""} ${u.role||""} ${u.telegram_id||""} ${u.moizvonki_email||""}`.toLowerCase();
       return s.includes(q);
     });
 
@@ -3140,7 +3143,7 @@ createBtn.addEventListener("click", () => {
           el("div", { class: "vcol gap8" },
             el("div", { class: "uName" }, u.full_name || "—"),
             el("div", { class: "uMeta" },
-              `${t("role")}: ${u.role} • ${t("login")}: ${u.login}${u.telegram_id ? " • TG: " + u.telegram_id : ""}`
+              `${t("role")}: ${u.role} • ${t("login")}: ${u.login}${u.telegram_id ? " • TG: " + u.telegram_id : ""}${u.moizvonki_email ? " • MZ: " + u.moizvonki_email : ""}`
             )
           ),
           el("div", { class: "vcol gap8 uHideLg" },
@@ -3201,6 +3204,13 @@ createBtn.addEventListener("click", () => {
           el("div", { class: "muted2", style: "font-size:12px" }, "Telegram ID"),
           el("div", {}, u.telegram_id || "—")
         )
+      ),
+      el("div", { class: "grid2" },
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, t("moizvonki_email")),
+          el("div", {}, u.moizvonki_email || "—")
+        ),
+        el("div", {})
       )
     );
 
@@ -3212,6 +3222,7 @@ createBtn.addEventListener("click", () => {
     const phone = el("input", { value: u.phone || "" });
     const login = el("input", { value: u.login || "" });
     const telegram = el("input", { value: u.telegram_id || "", placeholder: "Telegram ID" });
+    const mzEmail = el("input", { value: u.moizvonki_email || "", placeholder: "email@example.com" });
 
     const roleSel = el("select", {});
     ROLES.forEach(r => roleSel.appendChild(el("option", { value: r, selected: r === u.role }, r)));
@@ -3230,6 +3241,10 @@ createBtn.addEventListener("click", () => {
         el("label", { class: "vcol gap8" }, el("span", { class: "muted2" }, "Telegram ID"), telegram)
       ),
       el("div", { class: "grid2" },
+        el("label", { class: "vcol gap8" }, el("span", { class: "muted2" }, t("moizvonki_email")), mzEmail),
+        el("div", {})
+      ),
+      el("div", { class: "grid2" },
         el("label", { class: "vcol gap8" }, el("span", { class: "muted2" }, t("role")), roleSel),
         el("label", { class: "vcol gap8" }, el("span", { class: "muted2" }, t("active")), activeSel)
       )
@@ -3244,6 +3259,7 @@ createBtn.addEventListener("click", () => {
           phone: phone.value.trim() || null,
           login: login.value.trim() || null,
           telegram_id: telegram.value.trim() || null,
+          moizvonki_email: mzEmail.value.trim() || null,
           role: roleSel.value,
           is_active: Number(activeSel.value) ? 1 : 0
         });
@@ -3258,6 +3274,7 @@ createBtn.addEventListener("click", () => {
     const phone = el("input", {placeholder: t("phone")});
     const login = el("input", {placeholder: t("login")});
     const telegram = el("input", { placeholder: "Telegram ID" });
+    const mzEmail = el("input", { placeholder: t("moizvonki_email") });
     const pass = el("input", { type: "password" ,
         placeholder: t("new_password")});
 
@@ -3265,7 +3282,7 @@ createBtn.addEventListener("click", () => {
     ROLES.forEach(r => roleSel.appendChild(el("option", { value: r }, r)));
 
     const form = el("div", { class: "vcol gap10" },
-      fullName, phone, login, telegram, roleSel, pass
+      fullName, phone, login, telegram, mzEmail, roleSel, pass
     );
 
     Modal.open(t("user_create"), form, [{
@@ -3277,6 +3294,7 @@ createBtn.addEventListener("click", () => {
           phone: phone.value.trim() || null,
           login: login.value.trim(),
           telegram_id: telegram.value.trim() || null,
+          moizvonki_email: mzEmail.value.trim() || null,
           role: roleSel.value,
           new_password: pass.value.trim()
         });
