@@ -6170,6 +6170,7 @@ App.renderCoursePayments = async function(host, routeId){
     if (key === "price") return num(a.course_price) - num(b.course_price);
     if (key === "agreed") return effectiveAgreed(a) - effectiveAgreed(b);
     if (key === "paid") return num(a.paid_amount) - num(b.paid_amount);
+    if (key === "debt") return (effectiveAgreed(a) - num(a.paid_amount)) - (effectiveAgreed(b) - num(b.paid_amount));
     if (key === "comment") return safe(a.comment).localeCompare(safe(b.comment), undefined, { sensitivity: "base" });
     return 0;
   };
@@ -6262,6 +6263,7 @@ App.renderCoursePayments = async function(host, routeId){
     { key: "price", label: tr({ ru: "Цена курса", uz: "Kurs narxi", en: "Course price" }) },
     { key: "agreed", label: tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" }) },
     { key: "paid", label: tr({ ru: "Оплатил", uz: "To'lagan", en: "Paid" }) },
+    { key: "debt", label: tr({ ru: "Долг", uz: "Qarz", en: "Debt" }) },
     { key: "comment", label: tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }) },
   ];
 
@@ -6290,6 +6292,7 @@ App.renderCoursePayments = async function(host, routeId){
     if (key === "price") return el("div", {}, fmtMoney(x.course_price, x.currency));
     if (key === "agreed") return el("div", {}, fmtMoney(effectiveAgreed(x), x.currency));
     if (key === "paid") return el("div", {}, fmtMoney(x.paid_amount, x.currency));
+    if (key === "debt") return el("div", {}, fmtMoney(effectiveAgreed(x) - num(x.paid_amount), x.currency));
     if (key === "comment") return el("div", {}, x.comment || "—");
     return el("div", {}, "—");
   };
@@ -6352,6 +6355,7 @@ App.renderCoursePayments = async function(host, routeId){
         el("td", {}, buildTdText(x, "price")),
         el("td", {}, buildTdText(x, "agreed")),
         el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))),
+        el("td", {}, buildTdText(x, "debt")),
         el("td", {}, el("div", { class: "cpCellEdit" }, buildTdText(x, "comment"), commentEditBtn(x))),
       );
       tbody.appendChild(trEl);
@@ -6364,13 +6368,17 @@ App.renderCoursePayments = async function(host, routeId){
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[2].label), el("div", { class: "cpCardVal" }, fmtDateOnly(x.course_start_date))),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[3].label), el("div", { class: "cpCardVal" }, stMap.get(String(x.status)) || x.status || "—")),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[4].label), el("div", { class: "cpCardVal" }, fmtMoney(x.course_price, x.currency))),
-          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[5].label), el("div", { class: "cpCardVal" }, fmtMoney(x.agreed_amount, x.currency))),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[5].label), el("div", { class: "cpCardVal" }, fmtMoney(effectiveAgreed(x), x.currency))),
           el("div", { class: "cpCardRow" },
             el("div", { class: "cpCardKey" }, columns[6].label),
             el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "paid"), paidEditBtn(x))
           ),
           el("div", { class: "cpCardRow" },
             el("div", { class: "cpCardKey" }, columns[7].label),
+            el("div", { class: "cpCardVal" }, buildTdText(x, "debt"))
+          ),
+          el("div", { class: "cpCardRow" },
+            el("div", { class: "cpCardKey" }, columns[8].label),
             el("div", { class: "cpCardVal cpCellEdit" }, buildTdText(x, "comment"), commentEditBtn(x))
           ),
         )
