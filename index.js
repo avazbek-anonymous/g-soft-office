@@ -620,6 +620,7 @@ telegram_id: "Telegram ID",
   // действия
   edit: `<img src="./icons/edit.svg" class="ico" alt="">`,
   trash: `<img src="./icons/delete.svg" class="ico" alt="">`,
+  send: `<img src="./icons/send.svg" class="ico" alt="">`,
 
   // оставляем как было (у тебя их в списке иконок нет)
   plus: `<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
@@ -5544,10 +5545,7 @@ App.renderCourses = async function (host, routeId) {
       class: "iconBtn chatSendBtn",
       type: "button",
       title: tr({ ru: "Отправить", uz: "Yuborish", en: "Send" })
-    }, el("span", {
-      class: "icoWrap",
-      html: `<svg viewBox="0 0 24 24" class="ico"><path d="M3 11.9 21 3l-4.8 18-4.1-6.3-9.1-2.8Zm8.6 1.9 2.6 4 2.8-10.6-12.2 6.1 6.8 0.5Z"/></svg>`
-    }));
+    }, el("span", { class: "icoWrap", html: ICONS.send }));
 
     const renderPager = () => {
       pagerEl.innerHTML = "";
