@@ -550,6 +550,9 @@ telegram_id: "Telegram ID",
 
     }
   };
+  DICT.ru.calendar_filter_active = "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435";
+  DICT.uz.calendar_filter_active = "Aktiv";
+  DICT.en.calendar_filter_active = "Active";
 
   function detectLang() {
     const saved = LS.get("gsoft_lang", "");
@@ -1445,6 +1448,8 @@ select option{
 .calTitle{font-weight:900;font-size:18px}
 .calFilters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .calFilters .input{min-width:180px}
+.calCheck{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--stroke);border-radius:12px;background:rgba(255,255,255,.03);font-size:14px;user-select:none;cursor:pointer}
+.calCheck input{margin:0}
 .calNav{display:flex;gap:8px;flex-wrap:wrap}
 .calWeek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .calWeek .calWeekDay{font-size:12px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px}
@@ -3255,6 +3260,7 @@ App.renderCalendar = async function(host, routeId){
     filters: {
       assignee_user_id: "",
       project_id: "",
+      active_only: false,
     },
     selectedId: null,
   };
@@ -3338,6 +3344,10 @@ App.renderCalendar = async function(host, routeId){
   const matchesFilters = (x) => {
     if (canUseUserFilter && state.filters.assignee_user_id && String(x.assignee_user_id || "") !== String(state.filters.assignee_user_id)) return false;
     if (canUseProjectFilter && state.filters.project_id && String(x.project_id || "") !== String(state.filters.project_id)) return false;
+    if (state.filters.active_only) {
+      const st = String(x.status || "");
+      if (st === "done" || st === "canceled") return false;
+    }
     return true;
   };
   const roleVisibleTasks = () => {
@@ -3536,6 +3546,18 @@ App.renderCalendar = async function(host, routeId){
       });
       filters.appendChild(projectSel);
     }
+    const activeChk = el("input", { type: "checkbox" });
+    activeChk.checked = !!state.filters.active_only;
+    activeChk.addEventListener("change", () => {
+      state.filters.active_only = !!activeChk.checked;
+      render();
+    });
+    filters.appendChild(
+      el("label", { class: "calCheck" },
+        activeChk,
+        el("span", {}, t("calendar_filter_active"))
+      )
+    );
 
     const prevBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(-1) }, t("calendar_prev"));
     const nextBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(1) }, t("calendar_next"));
