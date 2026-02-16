@@ -1963,8 +1963,14 @@ select option{
       const r = await API.main();
       if (App.state.routeId !== rid) return;
       const data = r.data || {};
+      const isMainVisibleTask = (x) => {
+        const st = String((x && x.status) || "");
+        return st !== "done" && st !== "canceled";
+      };
+      const visibleRows = (rows) => (rows || []).filter(isMainVisibleTask);
       host.innerHTML = "";
       const box = (title, rows) => {
+        const list = visibleRows(rows);
         return el("div", {
             class: "card"
           },
@@ -1977,12 +1983,12 @@ select option{
             el("div", {
               class: "muted2",
               style: "font-size:12px"
-            }, String((rows || []).length))
+            }, String(list.length))
           ),
           el("div", {
               class: "cardPad vcol gap10"
             },
-            (rows && rows.length) ? rows.map(x => el("div", {
+            list.length ? list.map(x => el("div", {
                 class: "kcard",
                 onClick: () => setHash("/tasks", {
                   open: x.id
@@ -2017,6 +2023,7 @@ select option{
         box(t("t_in_progress"), data.in_progress ? [data.in_progress] : []),
         box("Today", data.today || [])
       );
+      const overdueRows = visibleRows(data.overdue || []);
       const below = el("div", {
           class: "card cardPad vcol gap10",
           style: "margin-top:12px"
@@ -2024,10 +2031,10 @@ select option{
         el("div", {
           style: "font-weight:900"
         }, "Overdue"),
-        (data.overdue && data.overdue.length) ? el("div", {
+        overdueRows.length ? el("div", {
             class: "vcol gap10"
           },
-          data.overdue.map(x => el("div", {
+          overdueRows.map(x => el("div", {
               class: "kcard",
               onClick: () => setHash("/tasks", {
                 open: x.id
@@ -3271,6 +3278,16 @@ App.renderCalendar = async function(host, routeId){
     d.setHours(18, 0, 0, 0);
     return Math.floor(d.getTime() / 1000);
   };
+  const effectiveCalendarDeadline = (task) => {
+    const st = String((task && task.status) || "");
+    const updatedAt = Number(task && task.updated_at);
+    if ((st === "done" || st === "canceled") && Number.isFinite(updatedAt) && updatedAt > 0) {
+      return updatedAt;
+    }
+    const deadlineAt = Number(task && task.deadline_at);
+    if (Number.isFinite(deadlineAt) && deadlineAt > 0) return deadlineAt;
+    return fallbackDeadline();
+  };
 
   const langToLocale = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
   const calendarLocale = langToLocale[App.state.lang] || "ru-RU";
@@ -3350,7 +3367,7 @@ App.renderCalendar = async function(host, routeId){
           ),
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
-            el("div", {}, fmtDate(x.deadline_at || fallbackDeadline()))
+            el("div", {}, fmtDate(effectiveCalendarDeadline(x)))
           )
         ),
         el("div", { class: "grid2" },
@@ -3457,7 +3474,7 @@ App.renderCalendar = async function(host, routeId){
   async function updateDeadline(id, targetKey){
     const row = findTask(id);
     if (!row) return;
-    const curTs = row.deadline_at || fallbackDeadline();
+    const curTs = effectiveCalendarDeadline(row);
     const curKey = dateKey(new Date(curTs * 1000));
     if (curKey === targetKey) return;
 
@@ -3545,7 +3562,7 @@ App.renderCalendar = async function(host, routeId){
 
     const fallback = fallbackDeadline();
     const mapped = roleVisibleTasks().filter(matchesFilters).map(x => {
-      const eff = x.deadline_at || fallback;
+      const eff = effectiveCalendarDeadline(x) || fallback;
       const key = dateKey(new Date(eff * 1000));
       return { ...x, _eff_deadline: eff, _date_key: key };
     });
