@@ -5573,14 +5573,11 @@ App.renderCourses = async function (host, routeId) {
     let page = 1;
     let pageSize = 50;
     let totalPages = 1;
-    let callsDays = 7;
-    const callPeriods = [7, 14, 30, 60, 90, 180, 365];
 
     const feedEl = el("div", { class: "chatFeed" });
     const pinnedEl = el("div", { class: "vcol" });
     const callsEl = el("div", { class: "vcol" });
     const pagerEl = el("div", { class: "chatPager" });
-    const callsPeriodEl = el("div", { class: "hrow gap8", style: "flex-wrap:wrap" });
 
     const taskAssigneeSel = el("select", { class: "sel" }, el("option", { value: "" }, tr({ ru: "Исполнитель", uz: "Mas'ul", en: "Assignee" })));
     const taskDeadlineInp = el("input", { class: "input", type: "datetime-local" });
@@ -5767,13 +5764,12 @@ App.renderCourses = async function (host, routeId) {
     };
 
     const loadFeed = async () => {
-      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize, calls_days: callsDays });
+      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize });
       const data = r?.data || {};
       const pager = data.pagination || {};
       page = Number(pager.page || page || 1);
       pageSize = Number(pager.page_size || pageSize || 50);
       totalPages = Number(pager.pages || 1);
-      callsDays = [7, 14, 30, 60, 90, 180, 365].includes(Number(data.calls_days)) ? Number(data.calls_days) : callsDays;
       renderPinned(Array.isArray(data.pinned_tasks) ? data.pinned_tasks : []);
       const callItems = Array.isArray(data.calls) ? data.calls.slice() : [];
       renderCalls(callItems);
@@ -5783,18 +5779,6 @@ App.renderCourses = async function (host, routeId) {
       const feedItems = merged;
       renderFeed(feedItems);
       renderPager();
-      callsPeriodEl.innerHTML = "";
-      for (const d of callPeriods) {
-        callsPeriodEl.appendChild(el("button", {
-          class: `btn mini ${callsDays === d ? "primary" : "ghost"}`,
-          type: "button",
-          onClick: async () => {
-            callsDays = d;
-            page = 1;
-            await loadFeed();
-          }
-        }, `${d}`));
-      }
     };
 
     taskCreateBtn.onclick = async () => {
@@ -5869,7 +5853,7 @@ App.renderCourses = async function (host, routeId) {
     setSide(false);
 
     const body = el("div", { class: "chatShell" },
-      el("div", { class: "chatTools" }, taskToggleBtn, callsPeriodEl, pagerEl),
+      el("div", { class: "chatTools" }, taskToggleBtn, pagerEl),
       el("div", { class: "chatLayout" },
         sideBackdrop,
         sideEl,
