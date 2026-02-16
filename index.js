@@ -5314,7 +5314,7 @@ App.renderCourses = async function (host, routeId) {
     const type2 = el("select", { class: "sel" },
       el("option", { value: "" }, "—"),
       ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
-        el("option", { value: String(ct.id) }, ct.name, x.course_start_date || `#${ct.id}`)
+        el("option", { value: String(ct.id) }, ct.name || `#${ct.id}`)
       )
     );
 
