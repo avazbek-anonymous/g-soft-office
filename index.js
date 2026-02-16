@@ -567,7 +567,7 @@ moizvonki_email: "MZ Email",
   DICT.ru.main_today = DICT.ru.main_today || DICT.ru.calendar_today || "Segodnya";
   DICT.uz.main_today = DICT.uz.main_today || DICT.uz.calendar_today || "Bugun";
   DICT.en.main_today = DICT.en.main_today || DICT.en.calendar_today || "Today";
-  DICT.ru.main_overdue = DICT.ru.main_overdue || "Prosrochennye";
+  DICT.ru.main_overdue = DICT.ru.main_overdue || "Просроченные";
   DICT.uz.main_overdue = DICT.uz.main_overdue || "Muddati o'tgan";
   DICT.en.main_overdue = DICT.en.main_overdue || "Overdue";
   DICT.ru.calendar_filter_active = "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435";
