@@ -130,6 +130,12 @@
       calendar_next: "Вперёд",
       calendar_drag_hint: "Перетащите, чтобы изменить дедлайн",
       calendar_select_hint: "Выберите задачу и откройте",
+      calendar_filter_user: "Пользователь",
+      calendar_filter_project: "Проект",
+      calendar_filter_all: "Все",
+      calendar_time: "Время",
+      calendar_user: "Пользователь",
+      calendar_no_description: "Без описания",
       coming_soon: "Раздел в разработке. Следующим шагом подключим этот модуль к API.",
       t_new: "Новая",
       t_pause: "Пауза",
@@ -287,6 +293,12 @@ telegram_id: "Telegram ID",
       calendar_next: "Keyingi",
       calendar_drag_hint: "Muddatni o'zgartirish uchun sudrang",
       calendar_select_hint: "Vazifani tanlang va oching",
+      calendar_filter_user: "Foydalanuvchi",
+      calendar_filter_project: "Loyiha",
+      calendar_filter_all: "Barchasi",
+      calendar_time: "Vaqt",
+      calendar_user: "Foydalanuvchi",
+      calendar_no_description: "Tavsif yo'q",
       coming_soon: "Bo‘lim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
       t_new: "Boshlanmagan",
       t_pause: "Pauza",
@@ -442,6 +454,12 @@ telegram_id: "Telegram ID",
       calendar_next: "Next",
       calendar_drag_hint: "Drag to change deadline",
       calendar_select_hint: "Select a task, then open",
+      calendar_filter_user: "User",
+      calendar_filter_project: "Project",
+      calendar_filter_all: "All",
+      calendar_time: "Time",
+      calendar_user: "User",
+      calendar_no_description: "No description",
       coming_soon: "This section is under construction. Next step we’ll connect it to the API.",
       t_new: "New",
       t_pause: "Paused",
@@ -1425,6 +1443,8 @@ select option{
 .calWrap{display:flex;flex-direction:column;gap:12px}
 .calTop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .calTitle{font-weight:900;font-size:18px}
+.calFilters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.calFilters .input{min-width:180px}
 .calNav{display:flex;gap:8px;flex-wrap:wrap}
 .calWeek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .calWeek .calWeekDay{font-size:12px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px}
@@ -1440,7 +1460,8 @@ select option{
 .calTask.dragging{opacity:.55}
 .calTask.selected{outline:2px solid rgba(15,209,167,.5);outline-offset:0}
 .calTaskTitle{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.calTaskMeta{font-size:11px;color:var(--muted2);display:flex;gap:6px;flex-wrap:wrap}
+.calTaskDesc{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calTaskMeta{font-size:11px;color:var(--muted2);display:flex;flex-direction:column;gap:2px}
 
 .calTaskActions{display:flex;justify-content:flex-end}
 .calOpenBtn{padding:6px 8px;border-radius:10px;font-size:11px}
@@ -3216,6 +3237,12 @@ App.renderCalendar = async function(host, routeId){
     year: new Date().getFullYear(),
     month: new Date().getMonth(),
     tasks: [],
+    users: [],
+    projects: [],
+    filters: {
+      assignee_user_id: "",
+      project_id: "",
+    },
     selectedId: null,
   };
 
@@ -3276,6 +3303,11 @@ App.renderCalendar = async function(host, routeId){
   };
 
   const findTask = (id) => (state.tasks || []).find(x => Number(x.id) === Number(id));
+  const matchesFilters = (x) => {
+    if (state.filters.assignee_user_id && String(x.assignee_user_id || "") !== String(state.filters.assignee_user_id)) return false;
+    if (state.filters.project_id && String(x.project_id || "") !== String(state.filters.project_id)) return false;
+    return true;
+  };
 
   const setSelected = (task) => {
     state.selectedId = task ? task.id : null;
@@ -3429,6 +3461,34 @@ App.renderCalendar = async function(host, routeId){
     host.innerHTML = "";
 
     const title = el("div", { class: "calTitle" }, monthLabel());
+    const userSel = el("select", { class: "input", style: "min-width:180px" },
+      el("option", { value: "" }, `${t("calendar_filter_user")}: ${t("calendar_filter_all")}`)
+    );
+    for (const u of (state.users || [])) {
+      if (!u || !u.id) continue;
+      const name = (u.full_name || u.login || `#${u.id}`);
+      userSel.appendChild(el("option", { value: String(u.id) }, name));
+    }
+    userSel.value = String(state.filters.assignee_user_id || "");
+    userSel.addEventListener("change", () => {
+      state.filters.assignee_user_id = userSel.value || "";
+      render();
+    });
+
+    const projectSel = el("select", { class: "input", style: "min-width:220px" },
+      el("option", { value: "" }, `${t("calendar_filter_project")}: ${t("calendar_filter_all")}`)
+    );
+    for (const p of (state.projects || [])) {
+      if (!p || !p.id) continue;
+      const title = (p.company_name || p.client_company_name || p.title || `#${p.id}`);
+      projectSel.appendChild(el("option", { value: String(p.id) }, title));
+    }
+    projectSel.value = String(state.filters.project_id || "");
+    projectSel.addEventListener("change", () => {
+      state.filters.project_id = projectSel.value || "";
+      render();
+    });
+
     const prevBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(-1) }, t("calendar_prev"));
     const nextBtn = el("button", { class: "btn ghost", type: "button", onClick: () => shiftMonth(1) }, t("calendar_next"));
     const todayBtn = el("button", { class: "btn", type: "button", onClick: () => {
@@ -3440,6 +3500,7 @@ App.renderCalendar = async function(host, routeId){
 
     const top = el("div", { class: "calTop" },
       title,
+      el("div", { class: "calFilters" }, userSel, projectSel),
       el("div", { class: "calNav" }, prevBtn, todayBtn, nextBtn)
     );
 
@@ -3453,7 +3514,7 @@ App.renderCalendar = async function(host, routeId){
     const days = buildGridDates();
 
     const fallback = fallbackDeadline();
-    const mapped = (state.tasks || []).map(x => {
+    const mapped = (state.tasks || []).filter(matchesFilters).map(x => {
       const eff = x.deadline_at || fallback;
       const key = dateKey(new Date(eff * 1000));
       return { ...x, _eff_deadline: eff, _date_key: key };
@@ -3486,12 +3547,11 @@ App.renderCalendar = async function(host, routeId){
       for (const x of dayTasks) {
         const dot = el("span", { class: "dot", style: `background:${statusDotColor(x.status)}` });
         const titleEl = el("div", { class: "calTaskTitle" }, dot, " ", x.title || `#${x.id}`);
-        const metaParts = [
-          fmtTime(x._eff_deadline),
-          x.project_company_name ? x.project_company_name : "",
-          `#${x.id}`
-        ].filter(Boolean);
-        const meta = el("div", { class: "calTaskMeta" }, ...metaParts.map(m => el("span", {}, m)));
+        const descEl = el("div", { class: "calTaskDesc" }, (x.description || "").trim() || t("calendar_no_description"));
+        const meta = el("div", { class: "calTaskMeta" },
+          el("div", {}, `${t("calendar_time")}: ${fmtTime(x._eff_deadline)}`),
+          el("div", {}, `${t("calendar_user")}: ${x.assignee_name || "—"}`)
+        );
 
         const openBtn = el("button", {
           class: "btn ghost mini calOpenBtn",
@@ -3519,7 +3579,7 @@ App.renderCalendar = async function(host, routeId){
             card.classList.add("dragging");
           },
           onDragend: isMobile ? null : () => card.classList.remove("dragging"),
-        }, titleEl, meta, actions);
+        }, titleEl, descEl, meta, actions);
 
         if (!isMobile) {
           bindTouchDrag(card, async (id, targetKey) => {
@@ -3557,9 +3617,46 @@ App.renderCalendar = async function(host, routeId){
     host.innerHTML = "";
     host.appendChild(el("div", { class: "muted" }, t("loading")));
     try{
+      if (!Array.isArray(App.state.cache.users) || !App.state.cache.users.length) {
+        const users = await API.usersTryList();
+        if (Array.isArray(users)) App.state.cache.users = users;
+      }
+      if (!Array.isArray(App.state.cache.projects) || !App.state.cache.projects.length) {
+        const projects = await API.projectsTryList();
+        if (Array.isArray(projects)) App.state.cache.projects = projects;
+      }
+
       const r = await API.tasks.list({});
       if (App.state.routeId !== rid) return;
       state.tasks = (r.data || []).slice();
+      state.users = Array.isArray(App.state.cache.users) ? App.state.cache.users.slice() : [];
+      state.projects = Array.isArray(App.state.cache.projects) ? App.state.cache.projects.slice() : [];
+
+      if (!state.users.length) {
+        const byUser = new Map();
+        for (const x of state.tasks) {
+          if (!x.assignee_user_id) continue;
+          if (byUser.has(String(x.assignee_user_id))) continue;
+          byUser.set(String(x.assignee_user_id), {
+            id: x.assignee_user_id,
+            full_name: x.assignee_name || `#${x.assignee_user_id}`,
+          });
+        }
+        state.users = Array.from(byUser.values());
+      }
+      if (!state.projects.length) {
+        const byProject = new Map();
+        for (const x of state.tasks) {
+          if (!x.project_id) continue;
+          if (byProject.has(String(x.project_id))) continue;
+          byProject.set(String(x.project_id), {
+            id: x.project_id,
+            company_name: x.project_company_name || `#${x.project_id}`,
+          });
+        }
+        state.projects = Array.from(byProject.values());
+      }
+
       render();
     }catch(e){
       host.innerHTML = "";
