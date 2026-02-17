@@ -7142,6 +7142,7 @@ function injectCallsStyles() {
 App.renderCalls = async function(host, routeId){
   const rid = routeId || App.state.routeId;
   injectCallsStyles();
+  const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
   const role = App.state.user?.role || "";
   if (!(role === "admin" || role === "rop")) {
     host.innerHTML = "";
