@@ -29,7 +29,7 @@
   }
 
   function fmtDate(tsSec) {
-    if (!tsSec) return "вЂ”";
+    if (!tsSec) return "-";
     const d = new Date(tsSec * 1000);
     return d.toLocaleString(undefined, {
       year: "numeric",
@@ -1161,7 +1161,7 @@ function applyTheme(){
     if (s === "in_progress") return t("t_in_progress");
     if (s === "done") return t("t_done");
     if (s === "canceled") return t("t_canceled");
-    return s || "вЂ”";
+    return s || "-";
   }
 
   function statusDotColor(status) {
@@ -2375,7 +2375,7 @@ select option{
   };
 
   const onDown = (e) => {
-    // С‚РѕР»СЊРєРѕ touch/pen вЂ” РјС‹С€СЊ РїСѓСЃС‚СЊ СЂР°Р±РѕС‚Р°РµС‚ С‡РµСЂРµР· native drag
+    // С‚РѕР»СЊРєРѕ touch/pen - РјС‹С€СЊ РїСѓСЃС‚СЊ СЂР°Р±РѕС‚Р°РµС‚ С‡РµСЂРµР· native drag
     if (e.pointerType === "mouse") return;
 
     pointerId = e.pointerId;
@@ -2437,18 +2437,18 @@ select option{
     if (ghost) ghost.remove();
     ghost = null;
 
-    // РµСЃР»Рё СЂРµР°Р»СЊРЅРѕ РїРµСЂРµС‚Р°СЃРєРёРІР°Р»Рё вЂ” РґРµР»Р°РµРј drop
+    // РµСЃР»Рё СЂРµР°Р»СЊРЅРѕ РїРµСЂРµС‚Р°СЃРєРёРІР°Р»Рё - РґРµР»Р°РµРј drop
     if (dragging) {
       const target = lastList || pickListAt(clientX, clientY);
 
       // Р·РґРµСЃСЊ РѕР¶РёРґР°РµС‚СЃСЏ, С‡С‚Рѕ Сѓ drop-Р·РѕРЅС‹ РµСЃС‚СЊ data-drop (РєР°Рє Сѓ С‚РµР±СЏ)
-      // РµСЃР»Рё drop-Р·РѕРЅР° СЌС‚Рѕ .klist вЂ” Р±РµСЂРё СЃС‚Р°С‚СѓСЃ РёР· dataset:
+      // РµСЃР»Рё drop-Р·РѕРЅР° СЌС‚Рѕ .klist - Р±РµСЂРё СЃС‚Р°С‚СѓСЃ РёР· dataset:
       const status = target?.dataset?.drop || target?.getAttribute?.("data-drop") || null;
 
       if (status) {
         const id = getCardId();
 
-        // вњ… FIX: РµСЃР»Рё РѕР±СЂР°Р±РѕС‚С‡РёРє Р¶РґС‘С‚ (id, status) вЂ” РїРµСЂРµРґР°С‘Рј С‚Р°Рє
+        // вњ… FIX: РµСЃР»Рё РѕР±СЂР°Р±РѕС‚С‡РёРє Р¶РґС‘С‚ (id, status) - РїРµСЂРµРґР°С‘Рј С‚Р°Рє
         // вњ… РёРЅР°С‡Рµ РѕСЃС‚Р°РІР»СЏРµРј СЃС‚Р°СЂРѕРµ РїРѕРІРµРґРµРЅРёРµ (status)
         if (typeof onDrop === "function") {
           if (onDrop.length >= 2) onDrop(id, status);
@@ -2502,7 +2502,7 @@ select option{
         style: "min-width:220px"
       }, el("option", {
         value: ""
-      }, `${t("assignee")}: вЂ”`));
+      }, `${t("assignee")}: -`));
       qRow.append(usersSel);
     }
     qRow.append(searchInp);
@@ -2548,7 +2548,7 @@ select option{
       if (App.state.routeId !== rid) return;
       App.state.cache.users = list || [];
 
-      // dropdown СЃРІРµСЂС…Сѓ С‚РѕР»СЊРєРѕ Сѓ admin вЂ” РїРѕСЌС‚РѕРјСѓ РїСЂРѕРІРµСЂСЏРµРј
+      // dropdown СЃРІРµСЂС…Сѓ С‚РѕР»СЊРєРѕ Сѓ admin - РїРѕСЌС‚РѕРјСѓ РїСЂРѕРІРµСЂСЏРµРј
       if (usersSel) {
         for (const u of App.state.cache.users) {
           usersSel.appendChild(el("option", {
@@ -2578,7 +2578,7 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
   for (const p of App.state.cache.projects) {
     const title = (p.company_name || p.client_company_name || `#${p.id}`);
     const svc = (p.service_name_uz || p.service_name_ru || p.service_name_en || "");
-    projectSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} вЂ” ${svc}` : title));
+    projectSel.appendChild(el("option", { value: String(p.id) }, svc ? `${title} - ${svc}` : title));
   }
 
   projectSel.value = qpid0;
@@ -2706,7 +2706,7 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
           },
           el("span", {
             class: "badge"
-          }, `${t("assignee")}: ${x.assignee_name||"вЂ”"}`),
+          }, `${t("assignee")}: ${x.assignee_name||"-"}`),
           x.project_company_name ? el("span", {
             class: "badge"
           }, `${t("project")}: ${x.project_company_name}`) : null,
@@ -2868,7 +2868,7 @@ if (String(q.open_create || "") === "1") {
                 class: "muted2",
                 style: "font-size:12px"
               }, t("assignee")),
-              el("div", {}, x.assignee_name || "вЂ”")
+              el("div", {}, x.assignee_name || "-")
             ),
             el("div", {
                 class: "vcol gap8"
@@ -2896,7 +2896,7 @@ if (String(q.open_create || "") === "1") {
               class: "muted2",
               style: "font-size:12px"
             }, t("project")),
-            el("div", {}, x.project_company_name || "вЂ”")
+            el("div", {}, x.project_company_name || "-")
           ),
           el("div", {
               class: "vcol gap8"
@@ -2919,7 +2919,7 @@ if (String(q.open_create || "") === "1") {
             el("div", {
               class: "muted",
               style: "white-space:pre-wrap"
-            }, x.description || "вЂ”")
+            }, x.description || "-")
           ),
           el("div", {
             class: "muted2",
@@ -3051,7 +3051,7 @@ if (String(q.open_create || "") === "1") {
       deadlineInp.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
-    const projectSel = el("select", { class: "sel" }, el("option", { value: "" }, "вЂ”"));
+    const projectSel = el("select", { class: "sel" }, el("option", { value: "" }, "-"));
     for (const p of (App.state.cache.projects || [])) {
       projectSel.appendChild(el("option", {
         value: String(p.id),
@@ -3073,7 +3073,7 @@ if (String(q.open_create || "") === "1") {
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-          isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "вЂ”")
+          isAdmin ? assigneeSel : el("div", {}, x.assignee_name || "-")
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("deadline")),
@@ -3152,7 +3152,7 @@ if (String(q.open_create || "") === "1") {
       const descInp = el("textarea", { class: "input", rows: 5, placeholder: t("description") });
       const deadlineInp = el("input", { class: "input", type: "datetime-local" });
 
-      const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "вЂ”"));
+      const projSel = el("select", { class: "sel" }, el("option", { value: "" }, "-"));
       for (const p of (App.state.cache.projects || [])) {
         projSel.appendChild(el("option", { value: String(p.id) },
           p.company_name ? `#${p.id} В· ${p.company_name}` : `#${p.id}`
@@ -3160,7 +3160,7 @@ if (String(q.open_create || "") === "1") {
       }
 
       if (preset && preset.project_id) projSel.value = String(preset.project_id);
-      // РµСЃР»Рё С„РёР»СЊС‚СЂ СЃРІРµСЂС…Сѓ РІС‹Р±СЂР°РЅ вЂ” РїСѓСЃС‚СЊ С‚РѕР¶Рµ РїРѕРґСЃС‚Р°РІР»СЏРµС‚СЃСЏ
+      // РµСЃР»Рё С„РёР»СЊС‚СЂ СЃРІРµСЂС…Сѓ РІС‹Р±СЂР°РЅ - РїСѓСЃС‚СЊ С‚РѕР¶Рµ РїРѕРґСЃС‚Р°РІР»СЏРµС‚СЃСЏ
       if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
 
       let assigneeSel = el("select", { class: "sel" });
@@ -3297,8 +3297,8 @@ createBtn.addEventListener("click", () => {
   const ROLES = ["admin", "pm", "fin", "sale", "rop"];
 
   function fmtTs(ts) {
-    if (!ts) return "вЂ”";
-    try { return fmtDate(ts); } catch { return "вЂ”"; }
+    if (!ts) return "-";
+    try { return fmtDate(ts); } catch { return "-"; }
   }
 
   function render() {
@@ -3336,14 +3336,14 @@ createBtn.addEventListener("click", () => {
         el("div", { class: "uRow" },
           el("div", { class: "uId" }, `#${u.id}`),
           el("div", { class: "vcol gap8" },
-            el("div", { class: "uName" }, u.full_name || "вЂ”"),
+            el("div", { class: "uName" }, u.full_name || "-"),
             el("div", { class: "uMeta" },
               `${t("role")}: ${u.role} вЂў ${t("login")}: ${u.login}${u.telegram_id ? " вЂў TG: " + u.telegram_id : ""}${u.moizvonki_email ? " вЂў MZ: " + u.moizvonki_email : ""}`
             )
           ),
           el("div", { class: "vcol gap8 uHideLg" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("phone")),
-            el("div", {}, u.phone || "вЂ”")
+            el("div", {}, u.phone || "-")
           ),
           el("div", { class: "vcol gap8 uHideLg" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("last_login")),
@@ -3383,7 +3383,7 @@ createBtn.addEventListener("click", () => {
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("full_name")),
-          el("div", { style: "font-weight:900" }, u.full_name || "вЂ”")
+          el("div", { style: "font-weight:900" }, u.full_name || "-")
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("role")),
@@ -3397,13 +3397,13 @@ createBtn.addEventListener("click", () => {
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, "Telegram ID"),
-          el("div", {}, u.telegram_id || "вЂ”")
+          el("div", {}, u.telegram_id || "-")
         )
       ),
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("moizvonki_email")),
-          el("div", {}, u.moizvonki_email || "вЂ”")
+          el("div", {}, u.moizvonki_email || "-")
         ),
         el("div", {})
       )
@@ -3900,7 +3900,7 @@ App.renderCalendar = async function(host, routeId){
         const descEl = el("div", { class: "calTaskDesc" }, (x.description || "").trim() || t("calendar_no_description"));
         const meta = el("div", { class: "calTaskMeta" },
           el("div", {}, `${t("calendar_time")}: ${fmtTime(x._eff_deadline)}`),
-          el("div", {}, `${t("calendar_user")}: ${x.assignee_name || "вЂ”"}`)
+          el("div", {}, `${t("calendar_user")}: ${x.assignee_name || "-"}`)
         );
 
         const openBtn = el("button", {
@@ -4322,8 +4322,8 @@ App.renderSettings = async function(host, routeId){
     const rows = list.length ? list.map(item=>{
       const title = is3lang ? langLabel3(item) : (item.name || `#${item.id}`);
       const sub = is3lang
-        ? `RU: ${item.name_ru || "вЂ”"} вЂў UZ: ${item.name_uz || "вЂ”"} вЂў EN: ${item.name_en || "вЂ”"}`
-        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"вЂ”"} вЂў ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
+        ? `RU: ${item.name_ru || "-"} вЂў UZ: ${item.name_uz || "-"} вЂў EN: ${item.name_en || "-"}`
+        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"-"} вЂў ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
 
       return el("div",{class:"rowLine"},
         el("div",{class:"rowMain"},
@@ -4432,7 +4432,7 @@ function injectClientsStyles(){
 }
 
 function dictLabel(list,id){
-  if(!id) return "вЂ”";
+  if(!id) return "-";
   const row=(list||[]).find(x=>Number(x.id)===Number(id));
   if(!row) return `#${id}`;
   const key=`name_${App.state.lang}`;
@@ -4505,9 +4505,9 @@ App.renderProjects = async function (host, routeId) {
   };
 
   const fmtAmount = (amount, currency) => {
-    if (amount == null || amount === "") return "вЂ”";
+    if (amount == null || amount === "") return "-";
     const n = Number(amount);
-    if (!Number.isFinite(n)) return "вЂ”";
+    if (!Number.isFinite(n)) return "-";
     const cur = currency || "UZS";
     return `${n.toLocaleString(undefined)} ${cur}`;
   };
@@ -4686,7 +4686,7 @@ App.renderProjects = async function (host, routeId) {
 
     const title = el("div", { class: "pCardTitle" },
       el("div", {}, company || `#${p.id}`),
-      el("div", { class: "muted2", style: "font-size:12px;margin-top:2px" }, svc || "вЂ”")
+      el("div", { class: "muted2", style: "font-size:12px;margin-top:2px" }, svc || "-")
     );
 
     let bodyParts = [title];
@@ -4848,21 +4848,21 @@ App.renderProjects = async function (host, routeId) {
       const phone2      = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
 
       const citySel = el("select", { class: "sel" },
-        el("option", { value: "" }, "вЂ”"),
+        el("option", { value: "" }, "-"),
         ...cities.filter(x => Number(x.is_active) === 1).map(x =>
           el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
         )
       );
 
       const sourceSel = el("select", { class: "sel" },
-        el("option", { value: "" }, "вЂ”"),
+        el("option", { value: "" }, "-"),
         ...sources.filter(x => Number(x.is_active) === 1).map(x =>
           el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
         )
       );
 
       const sphereSel = el("select", { class: "sel" },
-        el("option", { value: "" }, "вЂ”"),
+        el("option", { value: "" }, "-"),
         ...spheres.filter(x => Number(x.is_active) === 1).map(x =>
           el("option", { value: String(x.id) }, (x[`name_${App.state.lang}`] || x.name_uz || x.name_ru || x.name_en || `#${x.id}`))
         )
@@ -4924,12 +4924,12 @@ App.renderProjects = async function (host, routeId) {
     const canPickPm = isAdmin || isRop;
 
     const companySel = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...companies.map(c => el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)))
     );
 
     const svcSel = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
         el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
       )
@@ -4949,14 +4949,14 @@ const otherLabel =
   "Р”СЂСѓРіРѕР№";
 
 const pmSel = el("select", { class: "sel" });
-pmSel.appendChild(el("option", { value: "" }, "вЂ”"));
+pmSel.appendChild(el("option", { value: "" }, "-"));
 for (const u of pmUsers) {
   pmSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
 pmSel.appendChild(el("option", { value: "__other__" }, otherLabel));
 
 const pmAnySel = el("select", { class: "sel", style: "display:none" });
-pmAnySel.appendChild(el("option", { value: "" }, "вЂ”"));
+pmAnySel.appendChild(el("option", { value: "" }, "-"));
 for (const u of allUsers) {
   pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
@@ -4996,22 +4996,22 @@ pmSel.addEventListener("change", () => {
     // owner info (readonly)
     const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
       el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р»Р°РґРµР»РµС† (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
-      el("div", { style: "font-weight:800" }, "вЂ”"),
-      el("div", { class: "muted2" }, "вЂ”")
+      el("div", { style: "font-weight:800" }, "-"),
+      el("div", { class: "muted2" }, "-")
     );
 
     const syncOwner = () => {
       const c = companyById(companySel.value);
-      const name = c ? (c.full_name || "вЂ”") : "вЂ”";
+      const name = c ? (c.full_name || "-") : "-";
       const ph = c ? (c.phone1 || "") : "";
       const ph2 = c ? (c.phone2 || "") : "";
       ownerBox.children[1].textContent = name;
-      ownerBox.children[2].textContent = (ph || ph2) ? [ph, ph2].filter(Boolean).join(" вЂў ") : "вЂ”";
+      ownerBox.children[2].textContent = (ph || ph2) ? [ph, ph2].filter(Boolean).join(" вЂў ") : "-";
     };
 
     companySel.addEventListener("change", syncOwner);
 
-    // вњ… "+ company" вЂ” important fix: reopen create modal with selected company
+    // вњ… "+ company" - important fix: reopen create modal with selected company
     const addCompanyBtn = el("button", { class: "btn ghost mini", type: "button" }, "+");
     addCompanyBtn.onclick = () => {
       // save draft
@@ -5142,13 +5142,13 @@ pmSel.addEventListener("change", () => {
     }
 
     const companySel = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...companies.map(c => el("option", { value: String(c.id) }, (c.company_name || c.full_name || `#${c.id}`)))
     );
     companySel.value = String(p.client_id || "");
 
     const svcSel = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...serviceTypes.filter(x => Number(x.is_active) === 1).map(s =>
         el("option", { value: String(s.id) }, nameByLang(s) || `#${s.id}`)
       )
@@ -5169,14 +5169,14 @@ const otherLabel =
   "Р”СЂСѓРіРѕР№";
 
 const pmSel = el("select", { class: "sel" });
-pmSel.appendChild(el("option", { value: "" }, "вЂ”"));
+pmSel.appendChild(el("option", { value: "" }, "-"));
 for (const u of pmUsers) {
   pmSel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
 pmSel.appendChild(el("option", { value: "__other__" }, otherLabel));
 
 const pmAnySel = el("select", { class: "sel", style: "display:none" });
-pmAnySel.appendChild(el("option", { value: "" }, "вЂ”"));
+pmAnySel.appendChild(el("option", { value: "" }, "-"));
 for (const u of allUsers) {
   pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
@@ -5219,8 +5219,8 @@ pmSel.addEventListener("change", () => {
 
     const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
       el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р»Р°РґРµР»РµС† (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
-      el("div", { style: "font-weight:800" }, p.owner_full_name || "вЂ”"),
-      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "вЂ”")
+      el("div", { style: "font-weight:800" }, p.owner_full_name || "-"),
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "-")
     );
 
     const reviewChkEdit = el("input", { type: "checkbox" });
@@ -5295,13 +5295,13 @@ pmSel.addEventListener("change", () => {
 
     const head = el("div", { class: "vcol gap8" },
       el("div", { style: "font-weight:900;font-size:18px" }, company || `#${p.id}`),
-      el("div", { class: "muted2" }, svc || "вЂ”")
+      el("div", { class: "muted2" }, svc || "-")
     );
 
     const owner = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
       el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р¤РРћ Рё С‚РµР»РµС„РѕРЅ РІР»Р°РґРµР»СЊС†Р° (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega FIO va telefon",en:"Owner name & phone"})),
-      el("div", { style: "font-weight:800" }, p.owner_full_name || "вЂ”"),
-      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "вЂ”")
+      el("div", { style: "font-weight:800" }, p.owner_full_name || "-"),
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "-")
     );
 
     const reviewChk = el("input", { type: "checkbox" });
@@ -5329,7 +5329,7 @@ pmSel.addEventListener("change", () => {
       p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Р”РµРґР»Р°Р№РЅ:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
       (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"РЎСѓРјРјР°:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
       p.pm_name ? el("div", { class: "pLine" }, "PM:", el("b", {}, p.pm_name)) : null,
-      (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"РџСЂРёС‡РёРЅР° РѕС‚РјРµРЅС‹:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "вЂ”")) : null,
+      (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"РџСЂРёС‡РёРЅР° РѕС‚РјРµРЅС‹:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "-")) : null,
       p.comment ? el("div", { class: "muted2", style: "white-space:pre-wrap;margin-top:6px" }, p.comment) : null,
     );
 
@@ -5523,9 +5523,9 @@ App.renderCourses = async function (host, routeId) {
   ];
 
   const fmtMoney = (amount, currency) => {
-    if (amount == null || amount === "") return "вЂ”";
+    if (amount == null || amount === "") return "-";
     const n = Number(amount);
-    if (!Number.isFinite(n)) return "вЂ”";
+    if (!Number.isFinite(n)) return "-";
     const cur = currency || "UZS";
     return `${n.toLocaleString(undefined)} ${cur}`;
   };
@@ -5540,7 +5540,7 @@ App.renderCourses = async function (host, routeId) {
   };
 
   const fmtDateOnly = (tsSec) => {
-    if (!tsSec) return "вЂ”";
+    if (!tsSec) return "-";
     const d = new Date(Number(tsSec) * 1000);
     return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
   };
@@ -6011,7 +6011,7 @@ App.renderCourses = async function (host, routeId) {
             el("div", { class: "muted2", style: "font-size:12px" }, row.text || row.task_description || ""),
             el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center;font-size:12px" },
               el("span", { class: `chatTaskStatus ${st.className}` }, `${st.icon} ${st.text}`),
-              el("span", { class: "muted2" }, row.task_deadline_at ? fmtDate(row.task_deadline_at) : "вЂ”")
+              el("span", { class: "muted2" }, row.task_deadline_at ? fmtDate(row.task_deadline_at) : "-")
             )
           )
         );
@@ -6032,13 +6032,13 @@ App.renderCourses = async function (host, routeId) {
             : tr({ ru: "Р—Р°РІРµСЂС€РµРЅ", uz: "Yakunlangan", en: "Ended" }));
         callsEl.appendChild(
           el("div", { class: "chatPinnedItem" },
-            el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "вЂ”"}`),
-            el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} вЂў ${Number(row.duration || 0)}s вЂў ${row.end_time ? fmtDate(row.end_time) : "вЂ”"}`),
+            el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "-"}`),
+            el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} вЂў ${Number(row.duration || 0)}s вЂў ${row.end_time ? fmtDate(row.end_time) : "-"}`),
             row.recording_url
               ? el("button", {
                   class: "chatAudioBtn",
                   type: "button",
-                  onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "вЂ”"}`)
+                  onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "-"}`)
                 }, tr({ ru: "РЎР»СѓС€Р°С‚СЊ Р·Р°РїРёСЃСЊ", uz: "Yozuvni tinglash", en: "Listen" }))
               : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РќРµС‚ Р·Р°РїРёСЃРё", uz: "Yozuv yo'q", en: "No recording" }))
           )
@@ -6087,15 +6087,15 @@ App.renderCourses = async function (host, routeId) {
           feedEl.appendChild(
             el("div", { class: "chatTaskRow" },
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
-                el("div", { style: "font-weight:800" }, `${tr({ ru: "Р—РІРѕРЅРѕРє", uz: "Qo'ng'iroq", en: "Call" })} #${row.db_call_id || "вЂ”"}`),
+                el("div", { style: "font-weight:800" }, `${tr({ ru: "Р—РІРѕРЅРѕРє", uz: "Qo'ng'iroq", en: "Call" })} #${row.db_call_id || "-"}`),
                 el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
               ),
-              el("div", {}, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "вЂ”"} вЂў ${statusText} вЂў ${Number(row.duration || 0)}s`),
+              el("div", {}, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "-"} вЂў ${statusText} вЂў ${Number(row.duration || 0)}s`),
               row.recording_url
                 ? el("button", {
                     class: "chatAudioBtn",
                     type: "button",
-                    onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "вЂ”"}`)
+                    onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "-"}`)
                   }, tr({ ru: "РЎР»СѓС€Р°С‚СЊ Р·Р°РїРёСЃСЊ", uz: "Yozuvni tinglash", en: "Listen" }))
                 : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РќРµС‚ Р·Р°РїРёСЃРё", uz: "Yozuv yo'q", en: "No recording" }))
             )
@@ -6106,7 +6106,7 @@ App.renderCourses = async function (host, routeId) {
         const mine = Number(row.user_id) === Number(App.state.user?.id);
         feedEl.appendChild(
           el("div", { class: `chatMsg ${mine ? "me" : ""}` },
-            el("div", { class: "chatMsgName" }, `${row.user_name || "вЂ”"} ${chatRoleLabel(row.user_role) ? `(${chatRoleLabel(row.user_role)})` : ""}`),
+            el("div", { class: "chatMsgName" }, `${row.user_name || "-"} ${chatRoleLabel(row.user_role) ? `(${chatRoleLabel(row.user_role)})` : ""}`),
             el("div", { class: "chatBubble" }, row.text || ""),
             el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
           )
@@ -6265,7 +6265,7 @@ App.renderCourses = async function (host, routeId) {
       if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Р”РѕРі.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
       if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "РћРїР».", uz: "ToвЂlov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
       if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
-            // РљРѕРјРјРµРЅС‚ РєСѓСЂСЃР° (course_lead.comment) вЂ” РїРѕРєР°Р·С‹РІР°РµРј РЅР° РєР°СЂС‚РѕС‡РєРµ
+            // РљРѕРјРјРµРЅС‚ РєСѓСЂСЃР° (course_lead.comment) - РїРѕРєР°Р·С‹РІР°РµРј РЅР° РєР°СЂС‚РѕС‡РєРµ
       if (x.comment) {
         lines.push(
           el("div", {
@@ -6369,20 +6369,20 @@ App.renderCourses = async function (host, routeId) {
     const createLeadToggle = el("button", { class: "btn mini", type: "button", style: "display:none" });
 
     const company2 = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...companies.filter(x => Number(x.is_active) === 1).map(c =>
         el("option", { value: String(c.id) }, companyLabel(c))
       )
     );
 
     const type2 = el("select", { class: "sel" },
-      el("option", { value: "" }, "вЂ”"),
+      el("option", { value: "" }, "-"),
       ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
         el("option", { value: String(ct.id) }, courseTypeLabel(ct))
       )
     );
 
-    const priceInp = el("input", { class: "input", disabled: true, placeholder: "вЂ”" });
+    const priceInp = el("input", { class: "input", disabled: true, placeholder: "-" });
     const startInp = el("input", { class: "input", type: "date", disabled: true });
 
     const agreedInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
@@ -6397,7 +6397,7 @@ App.renderCourses = async function (host, routeId) {
     const sourceSel = el("select", { class: "input" });
     const sphereSel = el("select", { class: "input" });
     const fillSel = (sel, list) => {
-      sel.appendChild(el("option", { value: "" }, "вЂ”"));
+      sel.appendChild(el("option", { value: "" }, "-"));
       (list || []).forEach(it => {
         const label = (it[`name_${App.state.lang}`] || it.name_uz || it.name_ru || it.name_en || `#${it.id}`);
         sel.appendChild(el("option", { value: String(it.id) }, label));
@@ -6660,7 +6660,7 @@ App.renderCourses = async function (host, routeId) {
             const parts = [];
 
             // Р¤РРћ
-            parts.push(el("span", {}, el("b", {}, x.lead_full_name || "вЂ”")));
+            parts.push(el("span", {}, el("b", {}, x.lead_full_name || "-")));
 
             // РўРµР»РµС„РѕРЅ
             if (x.lead_phone1) parts.push(el("span", {}, x.lead_phone1));
@@ -6685,7 +6685,7 @@ App.renderCourses = async function (host, routeId) {
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap6" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "РўРёРї РєСѓСЂСЃР°", uz: "Kurs turi", en: "Course type" })),
-            el("div", {}, courseTypeNameById(x.course_type_id, x.course_type_name || "вЂ”"))
+            el("div", {}, courseTypeNameById(x.course_type_id, x.course_type_name || "-"))
           ),
           el("div", { class: "vcol gap6" },
             el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”Р°С‚Р° СЃС‚Р°СЂС‚Р°", uz: "Boshlanish sanasi", en: "Start date" })),
@@ -6700,13 +6700,13 @@ App.renderCourses = async function (host, routeId) {
           ),
           el("div", { class: "vcol gap6" },
             el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" })),
-            el("div", {}, x.agreed_amount != null ? fmtMoney(x.agreed_amount, x.currency) : "вЂ”")
+            el("div", {}, x.agreed_amount != null ? fmtMoney(x.agreed_amount, x.currency) : "-")
           ),
         ),
 
         el("div", { class: "vcol gap6" },
           el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РћРїР»Р°С‚Р°", uz: "ToвЂlov", en: "Paid" })),
-          el("div", {}, x.paid_amount != null ? fmtMoney(x.paid_amount, x.currency) : "вЂ”")
+          el("div", {}, x.paid_amount != null ? fmtMoney(x.paid_amount, x.currency) : "-")
         ),
 
         x.comment ? el("div", { class: "vcol gap6" },
@@ -6786,14 +6786,14 @@ App.renderCourses = async function (host, routeId) {
       if (!x) return;
 
       const company2 = el("select", { class: "sel" },
-        el("option", { value: "" }, "вЂ”"),
+        el("option", { value: "" }, "-"),
         ...companies.filter(c => Number(c.is_active) === 1).map(c =>
           el("option", { value: String(c.id), selected: (Number(x.company_id) === Number(c.id)) ? "selected" : null }, companyLabel(c))
         )
       );
 
       const type2 = el("select", { class: "sel" },
-        el("option", { value: "" }, "вЂ”"),
+        el("option", { value: "" }, "-"),
         ...courseTypes.filter(ct => Number(ct.is_active) === 1).map(ct =>
           el("option", { value: String(ct.id), selected: (Number(x.course_type_id) === Number(ct.id)) ? "selected" : null }, courseTypeLabel(ct))
         )
@@ -6816,7 +6816,7 @@ App.renderCourses = async function (host, routeId) {
       refreshCourseSnapshot();
 
       const body = el("div", { class: "vcol gap10" },
-        el("div", { class: "cChip" }, el("b", {}, `#${x.id}`), el("span", {}, x.lead_full_name || "вЂ”")),
+        el("div", { class: "cChip" }, el("b", {}, `#${x.id}`), el("span", {}, x.lead_full_name || "-")),
 
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
@@ -6957,11 +6957,11 @@ App.renderCoursePayments = async function(host, routeId){
 
   const fmtMoney = (amount, currency) => {
     const n = Number(amount);
-    if (!Number.isFinite(n)) return "вЂ”";
+    if (!Number.isFinite(n)) return "-";
     return `${n.toLocaleString(undefined)} ${currency || "UZS"}`;
   };
   const fmtDateOnly = (tsSec) => {
-    if (!tsSec) return "вЂ”";
+    if (!tsSec) return "-";
     const d = new Date(Number(tsSec) * 1000);
     return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
   };
@@ -6992,7 +6992,7 @@ App.renderCoursePayments = async function(host, routeId){
   const getCourseTypeName = (x) => {
     if (x.course_type_name) return x.course_type_name;
     const row = ctById.get(Number(x.course_type_id));
-    return row?.name || row?.name_uz || row?.name_ru || row?.name_en || "вЂ”";
+    return row?.name || row?.name_uz || row?.name_ru || row?.name_en || "-";
   };
 
   let raw = Array.isArray(listRes?.data) ? listRes.data.slice() : [];
@@ -7164,18 +7164,18 @@ App.renderCoursePayments = async function(host, routeId){
 
   const buildTdText = (x, key) => {
     if (key === "fio_phone") return el("div", {},
-      el("div", { style: "font-weight:800" }, x.lead_full_name || "вЂ”"),
-      el("div", { class: "cpMuted" }, x.lead_phone1 || "вЂ”")
+      el("div", { style: "font-weight:800" }, x.lead_full_name || "-"),
+      el("div", { class: "cpMuted" }, x.lead_phone1 || "-")
     );
     if (key === "course_type") return el("div", {}, getCourseTypeName(x));
     if (key === "start_date") return el("div", {}, fmtDateOnly(x.course_start_date));
-    if (key === "status") return el("div", {}, stMap.get(String(x.status)) || x.status || "вЂ”");
+    if (key === "status") return el("div", {}, stMap.get(String(x.status)) || x.status || "-");
     if (key === "price") return el("div", {}, fmtMoney(x.course_price, x.currency));
     if (key === "agreed") return el("div", {}, fmtMoney(effectiveAgreed(x), x.currency));
     if (key === "paid") return el("div", {}, fmtMoney(x.paid_amount, x.currency));
     if (key === "debt") return el("div", {}, fmtMoney(effectiveAgreed(x) - num(x.paid_amount), x.currency));
-    if (key === "comment") return el("div", {}, x.comment || "вЂ”");
-    return el("div", {}, "вЂ”");
+    if (key === "comment") return el("div", {}, x.comment || "-");
+    return el("div", {}, "-");
   };
 
   const paidEditBtn = (x) => el("button", {
@@ -7261,11 +7261,11 @@ App.renderCoursePayments = async function(host, routeId){
 
       mobileWrap.appendChild(
         el("div", { class: "cpCard" },
-          el("div", { style: "font-weight:800" }, x.lead_full_name || "вЂ”"),
-          el("div", { class: "cpMuted" }, x.lead_phone1 || "вЂ”"),
+          el("div", { style: "font-weight:800" }, x.lead_full_name || "-"),
+          el("div", { class: "cpMuted" }, x.lead_phone1 || "-"),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[1].label), el("div", { class: "cpCardVal" }, getCourseTypeName(x))),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[2].label), el("div", { class: "cpCardVal" }, fmtDateOnly(x.course_start_date))),
-          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[3].label), el("div", { class: "cpCardVal" }, stMap.get(String(x.status)) || x.status || "вЂ”")),
+          el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[3].label), el("div", { class: "cpCardVal" }, stMap.get(String(x.status)) || x.status || "-")),
           el("div", { class: "cpCardRow" }, el("div", { class: "cpCardKey" }, columns[4].label), el("div", { class: "cpCardVal" }, fmtMoney(x.course_price, x.currency))),
           el("div", { class: "cpCardRow" },
             el("div", { class: "cpCardKey" }, columns[5].label),
@@ -7425,22 +7425,22 @@ App.renderCalls = async function(host, routeId){
       const dt = x.end_time || x.start_time || 0;
       listEl.appendChild(el("div", { class: "callRow" },
         el("div", {},
-          el("div", { style: "font-weight:800" }, dt ? fmtDate(dt) : "вЂ”"),
-          el("div", { class: "callMuted" }, `#${x.db_call_id || "вЂ”"}`)
+          el("div", { style: "font-weight:800" }, dt ? fmtDate(dt) : "-"),
+          el("div", { class: "callMuted" }, `#${x.db_call_id || "-"}`)
         ),
         el("div", {}, dirLabel(x)),
         el("div", {}, badgeByStatus(x)),
         el("div", {},
-          el("div", { style: "font-weight:700" }, x.client_number || "вЂ”"),
-          el("div", { class: "callMuted" }, x.client_name || "вЂ”")
+          el("div", { style: "font-weight:700" }, x.client_number || "-"),
+          el("div", { class: "callMuted" }, x.client_name || "-")
         ),
         el("div", {},
-          el("div", { style: "font-weight:700" }, x.app_user_name || "вЂ”"),
-          el("div", { class: "callMuted" }, x.mz_user_email || "вЂ”")
+          el("div", { style: "font-weight:700" }, x.app_user_name || "-"),
+          el("div", { class: "callMuted" }, x.mz_user_email || "-")
         ),
         el("div", {},
           el("div", { style: "font-weight:700" }, x.linked_client_name || tr({ ru: "Р‘РµР· СЃРІСЏР·РєРё", uz: "Bog'lanmagan", en: "Unlinked" })),
-          el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "вЂ”")
+          el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "-")
         ),
         el("div", {},
           el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
@@ -7524,7 +7524,7 @@ App.renderClients = async function(host, routeId){
   host.innerHTML = "";
   host.appendChild(el("div",{class:"muted"}, t("loading")));
 
-  // fin has no access in backend вЂ” show friendly card
+  // fin has no access in backend - show friendly card
   if((App.state.user?.role||"")==="fin"){
     host.appendChild(el("div",{class:"card cardPad vcol gap10"},
       el("div",{style:"font-weight:900"}, t("toast_error")),
@@ -7594,7 +7594,7 @@ App.renderClients = async function(host, routeId){
     const sphereSel = el("select",{class:"input"});
 
     const fillSel = (sel, list, cur)=>{
-      sel.appendChild(el("option",{value:""},"вЂ”"));
+      sel.appendChild(el("option",{value:""},"-"));
       (list||[]).forEach(it=>{
         const label = (it[`name_${App.state.lang}`] || it.name_uz || it.name_ru || it.name_en || `#${it.id}`);
         sel.appendChild(el("option",{value:String(it.id)}, label));
@@ -7608,7 +7608,7 @@ App.renderClients = async function(host, routeId){
     // lead => choose company_id (optional)
     if(type==="lead" && !state.companies.length) await loadCompaniesForSelect();
     const companySel = el("select",{class:"input"});
-    companySel.appendChild(el("option",{value:""},"вЂ”"));
+    companySel.appendChild(el("option",{value:""},"-"));
     state.companies.forEach(c=>{
       companySel.appendChild(el("option",{value:String(c.id)}, c.company_name || (`#${c.id}`)));
     });
@@ -7722,7 +7722,7 @@ App.renderClients = async function(host, routeId){
           )
         ),
         el("div",{class:"muted"},
-          `${t("client_full_name")}: ${c.full_name||"вЂ”"} вЂў ${t("client_phone1")}: ${c.phone1||"вЂ”"}`
+          `${t("client_full_name")}: ${c.full_name||"-"} вЂў ${t("client_phone1")}: ${c.phone1||"-"}`
         ),
         el("div",{class:"muted2",style:"font-size:12px"},
           `${t("client_city")}: ${dictLabel(state.refs.cities,c.city_id)} вЂў ${t("client_source")}: ${dictLabel(state.refs.sources,c.source_id)} вЂў ${t("client_sphere")}: ${dictLabel(state.refs.spheres,c.sphere_id)}`
@@ -7746,7 +7746,7 @@ App.renderClients = async function(host, routeId){
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
-                  // РїРѕРєР° Projects СЌС‚Р°Рї РЅРµ Р·Р°РІРµСЂС€С‘РЅ вЂ” РїСЂРѕСЃС‚Рѕ РїРµСЂРµС…РѕРґРёРј С‚СѓРґР°
+                  // РїРѕРєР° Projects СЌС‚Р°Рї РЅРµ Р·Р°РІРµСЂС€С‘РЅ - РїСЂРѕСЃС‚Рѕ РїРµСЂРµС…РѕРґРёРј С‚СѓРґР°
                   location.hash="#/projects";
                   Toast.show("Projects в†’ (filter later)", "ok");
                 }}, t("clients_open"))
@@ -7826,8 +7826,8 @@ App.renderClients = async function(host, routeId){
             : (row.full_name || `#${row.id}`);
 
           const subParts = [
-            `${t("client_full_name")}: ${row.full_name||"вЂ”"}`,
-            `${t("client_phone1")}: ${row.phone1||"вЂ”"}`,
+            `${t("client_full_name")}: ${row.full_name||"-"}`,
+            `${t("client_phone1")}: ${row.phone1||"-"}`,
             row.phone2 ? `${t("client_phone2")}: ${row.phone2}` : "",
             `${t("client_city")}: ${dictLabel(state.refs.cities,row.city_id)}`,
             `${t("client_source")}: ${dictLabel(state.refs.sources,row.source_id)}`,
