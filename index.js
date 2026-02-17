@@ -71,99 +71,99 @@
   const DICT = {
     ru: {
       edit: "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ",
-      full_name: "Р¤РРћ",
-      phone: "РўРµР»РµС„РѕРЅ",
+      full_name: "ФИО",
+      phone: "Телефон",
       role: "Р РѕР»СЊ",
-      active: "РђРєС‚РёРІРµРЅ",
+      active: "Активен",
       last_login: "РџРѕСЃР»РµРґРЅРёР№ РІС…РѕРґ",
       created_at: "РЎРѕР·РґР°РЅ",
-      updated_at: "РћР±РЅРѕРІР»С‘РЅ",
+      updated_at: "Обновлён",
       new_password: "РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ",
       reset_password: "РЎР±СЂРѕСЃРёС‚СЊ РїР°СЂРѕР»СЊ",
       activate: "РђРєС‚РёРІРёСЂРѕРІР°С‚СЊ",
       deactivate: "Р”РµР°РєС‚РёРІРёСЂРѕРІР°С‚СЊ",
       users_total: "Р’СЃРµРіРѕ",
-      only_active: "РўРѕР»СЊРєРѕ Р°РєС‚РёРІРЅС‹Рµ",
+      only_active: "Только активные",
       all_users: "Р’СЃРµ РїРѕР»СЊР·РѕРІР°С‚РµР»Рё",
       user_create: "РЎРѕР·РґР°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ",
       user_created: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃРѕР·РґР°РЅ",
       password_changed: "РџР°СЂРѕР»СЊ РѕР±РЅРѕРІР»С‘РЅ",
-      user_updated: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РѕР±РЅРѕРІР»С‘РЅ",
+      user_updated: "Пользователь обновлён",
       user_deactivated: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґРµР°РєС‚РёРІРёСЂРѕРІР°РЅ",
       app_name: "G-SOFT",
-      login_title: "Р’С…РѕРґ",
+      login_title: "Вход",
       login_hint: "Р’РІРµРґРёС‚Рµ Р»РѕРіРёРЅ Рё РїР°СЂРѕР»СЊ",
-      login: "Р›РѕРіРёРЅ",
+      login: "Логин",
       password: "РџР°СЂРѕР»СЊ",
-      sign_in: "Р’РѕР№С‚Рё",
-      signing_in: "Р’С…РѕРґРёРјвЂ¦",
-      sign_out: "Р’С‹Р№С‚Рё",
-      theme_dark: "РўС‘РјРЅР°СЏ",
+      sign_in: "Войти",
+      signing_in: "Входим…",
+      sign_out: "Выйти",
+      theme_dark: "Тёмная",
       theme_light: "РЎРІРµС‚Р»Р°СЏ",
       eye: "Eye",
       close: "Р—Р°РєСЂС‹С‚СЊ",
       save: "РЎРѕС…СЂР°РЅРёС‚СЊ",
-      cancel: "РћС‚РјРµРЅР°",
-      delete: "РЈРґР°Р»РёС‚СЊ",
+      cancel: "Отмена",
+      delete: "Удалить",
       create: "РЎРѕР·РґР°С‚СЊ",
       open: "РћС‚РєСЂС‹С‚СЊ",
-      search: "РџРѕРёСЃРєвЂ¦",
+      search: "РџРѕРёСЃРє…",
       assignee: "РСЃРїРѕР»РЅРёС‚РµР»СЊ",
       project: "РџСЂРѕРµРєС‚",
-      deadline: "Р”РµРґР»Р°Р№РЅ",
+      deadline: "Дедлайн",
       spent: "РџРѕС‚СЂР°С‡РµРЅРѕ",
       status: "РЎС‚Р°С‚СѓСЃ",
       description: "РћРїРёСЃР°РЅРёРµ",
-      title: "Р—Р°РіРѕР»РѕРІРѕРє",
+      title: "Заголовок",
       reason: "РџСЂРёС‡РёРЅР°",
       confirm: "РџРѕРґС‚РІРµСЂРґРёС‚СЊ",
-      yes: "Р”Р°",
-      no: "РќРµС‚",
-      loading: "Р—Р°РіСЂСѓР·РєР°вЂ¦",
-      no_data: "РќРµС‚ РґР°РЅРЅС‹С…",
+      yes: "Да",
+      no: "Нет",
+      loading: "Р—Р°РіСЂСѓР·РєР°…",
+      no_data: "Нет данных",
       need_reason: "РќСѓР¶РЅР° РїСЂРёС‡РёРЅР° РѕС‚РјРµРЅС‹",
-      route_main: "Р“Р»Р°РІРЅР°СЏ",
-      route_tasks: "Р—Р°РґР°С‡Рё",
+      route_main: "Главная",
+      route_tasks: "Задачи",
       route_calendar: "РљР°Р»РµРЅРґР°СЂСЊ",
       route_projects: "РџСЂРѕРµРєС‚С‹",
       route_courses: "РљСѓСЂСЃС‹",
-      route_clients: "РљР»РёРµРЅС‚С‹",
-      route_calls: "Р—РІРѕРЅРєРё",
+      route_clients: "Клиенты",
+      route_calls: "Звонки",
       route_settings: "РќР°СЃС‚СЂРѕР№РєРё",
-      route_users: "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё",
+      route_users: "Пользователи",
       calendar_today: "РЎРµРіРѕРґРЅСЏ",
-      calendar_prev: "РќР°Р·Р°Рґ",
+      calendar_prev: "Назад",
       calendar_next: "Р’РїРµСЂС‘Рґ",
       calendar_drag_hint: "РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ РёР·РјРµРЅРёС‚СЊ РґРµРґР»Р°Р№РЅ",
       calendar_select_hint: "Р’С‹Р±РµСЂРёС‚Рµ Р·Р°РґР°С‡Сѓ Рё РѕС‚РєСЂРѕР№С‚Рµ",
-      calendar_filter_user: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
+      calendar_filter_user: "Пользователь",
       calendar_filter_project: "РџСЂРѕРµРєС‚",
       calendar_filter_all: "Р’СЃРµ",
       calendar_time: "Р’СЂРµРјСЏ",
-      calendar_user: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
+      calendar_user: "Пользователь",
       calendar_no_description: "Р‘РµР· РѕРїРёСЃР°РЅРёСЏ",
       coming_soon: "Р Р°Р·РґРµР» РІ СЂР°Р·СЂР°Р±РѕС‚РєРµ. РЎР»РµРґСѓСЋС‰РёРј С€Р°РіРѕРј РїРѕРґРєР»СЋС‡РёРј СЌС‚РѕС‚ РјРѕРґСѓР»СЊ Рє API.",
-      t_new: "РќРѕРІР°СЏ",
-      t_pause: "РџР°СѓР·Р°",
+      t_new: "Новая",
+      t_pause: "Пауза",
       t_in_progress: "Р’ СЂР°Р±РѕС‚Рµ",
-      t_done: "Р“РѕС‚РѕРІРѕ",
-      t_review: "РћС‚Р·С‹РІ",
-      t_canceled: "РћС‚РјРµРЅР°",
+      t_done: "Готово",
+      t_review: "Отзыв",
+      t_canceled: "Отмена",
       action_start: "РЎС‚Р°СЂС‚",
-      action_pause: "РџР°СѓР·Р°",
-      action_done: "Р“РѕС‚РѕРІРѕ",
-      action_cancel: "РћС‚РјРµРЅР°",
+      action_pause: "Пауза",
+      action_done: "Готово",
+      action_cancel: "Отмена",
       toast_saved: "РЎРѕС…СЂР°РЅРµРЅРѕ",
-      toast_deleted: "РЈРґР°Р»РµРЅРѕ",
-      toast_error: "РћС€РёР±РєР°",
+      toast_deleted: "Удалено",
+      toast_error: "Ошибка",
       me: "РџСЂРѕС„РёР»СЊ",
-      menu: "РњРµРЅСЋ",
+      menu: "Меню",
       touch_drag_hint: "РќР° С‚РµР»РµС„РѕРЅРµ: СѓРґРµСЂР¶РёРІР°Р№ Рё РїРµСЂРµС‚Р°СЃРєРёРІР°Р№ РєР°СЂС‚РѕС‡РєСѓ",
       // ===== ADD: Settings i18n =====
 settings_title:"РќР°СЃС‚СЂРѕР№РєРё",
 settings_theme:"РЎРёСЃС‚РµРјРЅС‹Р№ РґРёР·Р°Р№РЅ",
 settings_theme_desc:"РўС‘РјРЅР°СЏ/СЃРІРµС‚Р»Р°СЏ С‚РµРјР°, С†РІРµС‚Р° Рё Р·Р°С‰РёС‚Р° РіР»Р°Р·",
-settings_edit:"РР·РјРµРЅРёС‚СЊ",
+settings_edit:"Изменить",
 settings_saved_apply:"РЎРѕС…СЂР°РЅРµРЅРѕ Рё РїСЂРёРјРµРЅРµРЅРѕ",
 
 settings_cities:"Р“РѕСЂРѕРґР°",
@@ -172,41 +172,41 @@ settings_sources:"РСЃС‚РѕС‡РЅРёРєРё",
 settings_service_types:"РўРёРїС‹ СѓСЃР»СѓРі",
 settings_course_types:"РўРёРїС‹ РєСѓСЂСЃРѕРІ",
 
-field_name:"РќР°Р·РІР°РЅРёРµ",
-field_name_ru:"РќР°Р·РІР°РЅРёРµ (RU)",
-field_name_uz:"РќР°Р·РІР°РЅРёРµ (UZ)",
-field_name_en:"РќР°Р·РІР°РЅРёРµ (EN)",
+field_name:"Название",
+field_name_ru:"Название (RU)",
+field_name_uz:"Название (UZ)",
+field_name_en:"Название (EN)",
 field_sort:"РЎРѕСЂС‚РёСЂРѕРІРєР°",
-field_active:"РђРєС‚РёРІРЅС‹Р№",
+field_active:"Активный",
 field_start_date:"Р”Р°С‚Р° СЃС‚Р°СЂС‚Р°",
 field_price:"РЎСѓРјРјР°",
-field_currency:"Р’Р°Р»СЋС‚Р°",
+field_currency:"Валюта",
 
-theme_dark_block:"РўС‘РјРЅР°СЏ С‚РµРјР°",
+theme_dark_block:"Тёмная тема",
 theme_light_block:"РЎРІРµС‚Р»Р°СЏ С‚РµРјР°",
-theme_bg:"Р¤РѕРЅ",
+theme_bg:"Фон",
 theme_text:"РўРµРєСЃС‚",
-theme_accent:"РљРЅРѕРїРєРё/РђРєС†РµРЅС‚",
-theme_eye_tint:"Р–С‘Р»С‚С‹Р№ РѕС‚С‚РµРЅРѕРє (eye)",
+theme_accent:"Кнопки/Акцент",
+theme_eye_tint:"Жёлтый оттенок (eye)",
 theme_eye_power:"РЎРёР»Р° eye",
 
-btn_add:"Р”РѕР±Р°РІРёС‚СЊ",
-btn_update:"РћР±РЅРѕРІРёС‚СЊ",
+btn_add:"Добавить",
+btn_update:"Обновить",
 // ===== Clients =====
-clients_title:"РљР»РёРµРЅС‚С‹",
-clients_companies:"РљРѕРјРїР°РЅРёРё",
-clients_leads:"Р›РёРґС‹",
+clients_title:"Клиенты",
+clients_companies:"Компании",
+clients_leads:"Лиды",
 clients_search:"РџРѕРёСЃРє...",
-clients_create_company:"Р”РѕР±Р°РІРёС‚СЊ РєРѕРјРїР°РЅРёСЋ",
-clients_create_lead:"Р”РѕР±Р°РІРёС‚СЊ Р»РёРґ",
+clients_create_company:"Добавить компанию",
+clients_create_lead:"Добавить лид",
 
-client_type:"РўРёРї",
-client_company:"РљРѕРјРїР°РЅРёСЏ",
-client_lead:"Р›РёРґ",
-client_company_name:"РќР°Р·РІР°РЅРёРµ РєРѕРјРїР°РЅРёРё",
-client_full_name:"Р¤РРћ",
-client_phone1:"РўРµР»РµС„РѕРЅ",
-client_phone2:"Р”РѕРї. С‚РµР»РµС„РѕРЅ",
+client_type:"Тип",
+client_company:"Компания",
+client_lead:"Лид",
+client_company_name:"Название компании",
+client_full_name:"ФИО",
+client_phone1:"Телефон",
+client_phone2:"Доп. телефон",
 client_city:"Р“РѕСЂРѕРґ",
 client_source:"РСЃС‚РѕС‡РЅРёРє",
 client_sphere:"РЎС„РµСЂР°",
@@ -215,9 +215,9 @@ client_tg_group:"РЎСЃС‹Р»РєР° РЅР° РіСЂСѓРїРїСѓ",
 client_link_company:"РЎРІСЏР·Р°РЅРЅР°СЏ РєРѕРјРїР°РЅРёСЏ",
 
 clients_open:"РћС‚РєСЂС‹С‚СЊ",
-clients_edit:"РР·РјРµРЅРёС‚СЊ",
+clients_edit:"Изменить",
 clients_delete_confirm:"РџРѕРґС‚РІРµСЂРґРёС‚СЊ СѓРґР°Р»РµРЅРёРµ?",
-clients_deleted:"РЈРґР°Р»РµРЅРѕ",
+clients_deleted:"Удалено",
 
 clients_card_projects:"РџСЂРѕРµРєС‚С‹",
 clients_card_course_leads:"РљСѓСЂСЃРѕРІС‹Рµ Р»РёРґС‹",
@@ -241,24 +241,24 @@ moizvonki_email: "MZ Email",
       login: "Login",
       password: "Parol",
       sign_in: "Kirish",
-      signing_in: "KirilmoqdaвЂ¦",
+      signing_in: "Kirilmoqda…",
       sign_out: "Chiqish",
-      theme_dark: "QorongвЂi",
-      theme_light: "YorugвЂ",
+      theme_dark: "Qorong'i",
+      theme_light: "Yorug'",
       eye: "Eye",
       close: "Yopish",
       save: "Saqlash",
       cancel: "Bekor",
-      delete: "OвЂchirish",
+      delete: "O'chirish",
       create: "Yaratish",
       open: "Ochish",
-      search: "QidiruvвЂ¦",
+      search: "Qidiruv…",
       edit: "Tahrirlash",
       full_name: "F.I.Sh",
       phone: "Telefon",
       role: "Rol",
       active: "Faol",
-      last_login: "SoвЂnggi kirish",
+      last_login: "So'nggi kirish",
       created_at: "Yaratilgan",
       updated_at: "Yangilangan",
       new_password: "Yangi parol",
@@ -273,7 +273,7 @@ moizvonki_email: "MZ Email",
       password_changed: "Parol yangilandi",
       user_updated: "Foydalanuvchi yangilandi",
       user_deactivated: "Foydalanuvchi faolsizlantirildi",
-      assignee: "MasвЂ™ul",
+      assignee: "Mas'ul",
       project: "Loyiha",
       deadline: "Muddat",
       spent: "Sarflandi",
@@ -283,9 +283,9 @@ moizvonki_email: "MZ Email",
       reason: "Sabab",
       confirm: "Tasdiqlash",
       yes: "Ha",
-      no: "YoвЂq",
-      loading: "YuklanmoqdaвЂ¦",
-      no_data: "MaвЂ™lumot yoвЂq",
+      no: "Yo'q",
+      loading: "Yuklanmoqda…",
+      no_data: "Ma'lumot yo'q",
       need_reason: "Bekor qilish sababi kerak",
       route_main: "Asosiy",
       route_tasks: "Vazifalar",
@@ -307,7 +307,7 @@ moizvonki_email: "MZ Email",
       calendar_time: "Vaqt",
       calendar_user: "Foydalanuvchi",
       calendar_no_description: "Tavsif yo'q",
-      coming_soon: "BoвЂlim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
+      coming_soon: "Bo'lim ishlab chiqilmoqda. Keyingi bosqichda API bilan ulaymiz.",
       t_new: "Boshlanmagan",
       t_pause: "Pauza",
       t_in_progress: "Jarayonda",
@@ -319,16 +319,16 @@ moizvonki_email: "MZ Email",
       action_done: "Bajarildi",
       action_cancel: "Bekor",
       toast_saved: "Saqlandi",
-      toast_deleted: "OвЂchirildi",
+      toast_deleted: "O'chirildi",
       toast_error: "Xatolik",
       me: "Profil",
       menu: "Menyu",
-      touch_drag_hint: "Telefonda: kartani bosib ushlab koвЂchiring",
+      touch_drag_hint: "Telefonda: kartani bosib ushlab ko'chiring",
       settings_title:"Sozlamalar",
 settings_theme:"Tizim dizayni",
-settings_theme_desc:"QorongвЂi/yorugвЂ tema, ranglar va eye himoya",
+settings_theme_desc:"Qorong'i/yorug' tema, ranglar va eye himoya",
 settings_edit:"Tahrirlash",
-settings_saved_apply:"Saqlanib qoвЂllandi",
+settings_saved_apply:"Saqlanib qo'llandi",
 
 settings_cities:"Shaharlar",
 settings_spheres:"Soha",
@@ -346,23 +346,23 @@ field_start_date:"Boshlanish sanasi",
 field_price:"Summa",
 field_currency:"Valyuta",
 
-theme_dark_block:"QorongвЂi tema",
-theme_light_block:"YorugвЂ tema",
+theme_dark_block:"Qorong'i tema",
+theme_light_block:"Yorug' tema",
 theme_bg:"Fon",
 theme_text:"Matn",
 theme_accent:"Tugma/Accent",
 theme_eye_tint:"Sariq tus (eye)",
 theme_eye_power:"Eye kuchi",
 
-btn_add:"QoвЂshish",
+btn_add:"Qo'shish",
 btn_update:"Yangilash",
 // ===== Clients =====
 clients_title:"Mijozlar",
 clients_companies:"Kompaniyalar",
 clients_leads:"Leadlar",
 clients_search:"Qidiruv...",
-clients_create_company:"Kompaniya qoвЂshish",
-clients_create_lead:"Lead qoвЂshish",
+clients_create_company:"Kompaniya qo'shish",
+clients_create_lead:"Lead qo'shish",
 
 client_type:"Turi",
 client_company:"Kompaniya",
@@ -370,24 +370,24 @@ client_lead:"Lead",
 client_company_name:"Kompaniya nomi",
 client_full_name:"F.I.O",
 client_phone1:"Telefon",
-client_phone2:"QoвЂshimcha tel",
+client_phone2:"Qo'shimcha tel",
 client_city:"Shahar",
 client_source:"Manba",
 client_sphere:"Soha",
 client_comment:"Izoh",
 client_tg_group:"Guruh link",
-client_link_company:"BogвЂlangan kompaniya",
+client_link_company:"Bog'langan kompaniya",
 
 clients_open:"Ochish",
 clients_edit:"Tahrirlash",
-clients_delete_confirm:"OвЂchirishni tasdiqlaysizmi?",
-clients_deleted:"OвЂchirildi",
+clients_delete_confirm:"O'chirishni tasdiqlaysizmi?",
+clients_deleted:"O'chirildi",
 
 clients_card_projects:"Loyihalar",
 clients_card_course_leads:"Kurs leadlari",
-clients_go_group:"Guruhga oвЂtish",
-clients_no_projects:"Loyihalar yoвЂq",
-clients_no_course_leads:"Kurs leadlari yoвЂq",
+clients_go_group:"Guruhga o'tish",
+clients_no_projects:"Loyihalar yo'q",
+clients_no_course_leads:"Kurs leadlari yo'q",
 service_type: "Xizmat turi",
 pm_label: "PM",
 open_tasks: "Vazifalarni ochish",
@@ -424,7 +424,7 @@ moizvonki_email: "MZ Email",
       user_updated: "User updated",
       user_deactivated: "User deactivated",
       sign_in: "Sign in",
-      signing_in: "Signing inвЂ¦",
+      signing_in: "Signing in…",
       sign_out: "Sign out",
       theme_dark: "Dark",
       theme_light: "Light",
@@ -435,7 +435,7 @@ moizvonki_email: "MZ Email",
       delete: "Delete",
       create: "Create",
       open: "Open",
-      search: "SearchвЂ¦",
+      search: "Search…",
       assignee: "Assignee",
       project: "Project",
       deadline: "Deadline",
@@ -447,7 +447,7 @@ moizvonki_email: "MZ Email",
       confirm: "Confirm",
       yes: "Yes",
       no: "No",
-      loading: "LoadingвЂ¦",
+      loading: "Loading…",
       no_data: "No data",
       need_reason: "Cancel reason required",
       route_main: "Home",
@@ -470,7 +470,7 @@ moizvonki_email: "MZ Email",
       calendar_time: "Time",
       calendar_user: "User",
       calendar_no_description: "No description",
-      coming_soon: "This section is under construction. Next step weвЂ™ll connect it to the API.",
+      coming_soon: "This section is under construction. Next step we'll connect it to the API.",
       t_new: "New",
       t_pause: "Paused",
       t_in_progress: "In progress",
@@ -1496,7 +1496,7 @@ select option{
   to{ box-shadow: inset 0 0 0 1px rgba(255,208,90,.22), 0 0 0 3px rgba(255,208,90,.06); }
 }
 
-/* РїР»Р°РІРЅРѕСЃС‚СЊ Рё РѕС‰СѓС‰РµРЅРёРµ "Р¶РёРІРѕРіРѕ" drag */
+/* РїР»Р°РІРЅРѕСЃС‚СЊ Рё РѕС‰СѓС‰РµРЅРёРµ "живого" drag */
 .kanbanWrap .kcard{
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, opacity .12s ease;
 }
@@ -1606,7 +1606,7 @@ select option{
     }, true);
 
     document.addEventListener("dragleave", () => {
-      // leave РёРЅРѕРіРґР° СЃСЂР°Р±Р°С‚С‹РІР°РµС‚ "Р»РѕР¶РЅРѕ", РїРѕСЌС‚РѕРјСѓ С‡РёСЃС‚РёРј РјСЏРіРєРѕ
+      // leave РёРЅРѕРіРґР° СЃСЂР°Р±Р°С‚С‹РІР°РµС‚ "ложно", РїРѕСЌС‚РѕРјСѓ С‡РёСЃС‚РёРј РјСЏРіРєРѕ
       // (СЂРµР°Р»СЊРЅРѕ Р·Р°С‡РёСЃС‚РєР° РїСЂРѕРёР·РѕР№РґС‘С‚ РЅР° drop/dragend)
     }, true);
 
@@ -1926,7 +1926,7 @@ select option{
               el("input", {
                 id: "passInp",
                 type: "password",
-                placeholder: "вЂўвЂўвЂўвЂўвЂўвЂўвЂўвЂў",
+                placeholder: "••••••••",
                 autocomplete: "current-password"
               })
             )
@@ -2115,22 +2115,22 @@ select option{
 
       if ((App.state.user?.role || "") === "admin") {
         const statusLabels = {
-          new: { ru: "РќРѕРІС‹Р№", uz: "Yangi", en: "New" },
-          need_call: { ru: "РќСѓР¶РЅРѕ Р·РІРѕРЅРёС‚СЊ", uz: "Qo'ng'iroq kerak", en: "Need call" },
-          thinking: { ru: "Р”СѓРјР°РµС‚", uz: "O'ylab ko'rmoqda", en: "Thinking" },
+          new: { ru: "Новый", uz: "Yangi", en: "New" },
+          need_call: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" },
+          thinking: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" },
           enrolled: { ru: "Р—Р°РїРёСЃР°РЅ", uz: "Kursga yozildi", en: "Enrolled" },
           studying: { ru: "РЈСЃРїРµС€РЅРѕ", uz: "Muvaffaqiyatli", en: "Success" },
-          canceled: { ru: "РћС‚РјРµРЅР°", uz: "Bekor", en: "Canceled" },
+          canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
         };
         const projectStageLabels = {
-          new: { ru: "РќРѕРІС‹Р№", uz: "Yangi", en: "New" },
-          tz_given: { ru: "РўР— РґР°РЅРѕ", uz: "TZ berilgan", en: "TZ given" },
-          offer_given: { ru: "РћС„С„РµСЂ РґР°РЅ", uz: "Taklif berilgan", en: "Offer given" },
+          new: { ru: "Новый", uz: "Yangi", en: "New" },
+          tz_given: { ru: "ТЗ дано", uz: "TZ berilgan", en: "TZ given" },
+          offer_given: { ru: "Оффер дан", uz: "Taklif berilgan", en: "Offer given" },
           in_progress: { ru: "Р’ СЂР°Р±РѕС‚Рµ", uz: "Jarayonda", en: "In progress" },
-          later: { ru: "РџРѕР·Р¶Рµ", uz: "Keyinroq", en: "Later" },
-          review: { ru: "РћС‚Р·С‹РІ", uz: "Ko'rib chiqish", en: "Review" },
-          done: { ru: "Р“РѕС‚РѕРІРѕ", uz: "Tayyor", en: "Done" },
-          canceled: { ru: "РћС‚РјРµРЅР°", uz: "Bekor", en: "Canceled" },
+          later: { ru: "Позже", uz: "Keyinroq", en: "Later" },
+          review: { ru: "Отзыв", uz: "Ko'rib chiqish", en: "Review" },
+          done: { ru: "Готово", uz: "Tayyor", en: "Done" },
+          canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
         };
         const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
         const courseTypeLabel = (row) =>
@@ -2243,7 +2243,7 @@ select option{
             ),
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
               el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
-                el("div", { class: "mainDashTitle" }, tr({ ru: "Р­С‚Р°РїС‹ Р»РёРґРѕРІ", uz: "Lid bosqichlari", en: "Lead stages" })),
+                el("div", { class: "mainDashTitle" }, tr({ ru: "Этапы лидов", uz: "Lid bosqichlari", en: "Lead stages" })),
                 typeSel
               ),
               pieEl,
@@ -2584,7 +2584,7 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
   projectSel.value = qpid0;
   qRow.appendChild(projectSel);
 
-  // РјРµРЅСЏРµРј hash в†’ Tasks РїРµСЂРµСЂРµРЅРґРµСЂРёС‚СЃСЏ СЃР°Рј
+  // меняем hash -> Tasks перерендерится сам
   projectSel.addEventListener("change", () => {
   const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
   if (projectSel.value) sp.set("project_id", projectSel.value);
@@ -2887,7 +2887,7 @@ if (String(q.open_create || "") === "1") {
               class: "muted2",
               style: "font-size:12px"
             }, "Course/lead"),
-            el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` вЂў ${x.lead_phone1}` : ""}`)
+            el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` • ${x.lead_phone1}` : ""}`)
           ) : null,
           el("div", {
               class: "vcol gap8"
@@ -3338,7 +3338,7 @@ createBtn.addEventListener("click", () => {
           el("div", { class: "vcol gap8" },
             el("div", { class: "uName" }, u.full_name || "-"),
             el("div", { class: "uMeta" },
-              `${t("role")}: ${u.role} вЂў ${t("login")}: ${u.login}${u.telegram_id ? " вЂў TG: " + u.telegram_id : ""}${u.moizvonki_email ? " вЂў MZ: " + u.moizvonki_email : ""}`
+              `${t("role")}: ${u.role} • ${t("login")}: ${u.login}${u.telegram_id ? " • TG: " + u.telegram_id : ""}${u.moizvonki_email ? " • MZ: " + u.moizvonki_email : ""}`
             )
           ),
           el("div", { class: "vcol gap8 uHideLg" },
@@ -3568,12 +3568,12 @@ App.renderCalendar = async function(host, routeId){
   const langToLocale = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
   const calendarLocale = langToLocale[App.state.lang] || "ru-RU";
   const calMonthNames = {
-    ru: ["СЏРЅРІР°СЂСЊ","С„РµРІСЂР°Р»СЊ","РјР°СЂС‚","Р°РїСЂРµР»СЊ","РјР°Р№","РёСЋРЅСЊ","РёСЋР»СЊ","Р°РІРіСѓСЃС‚","СЃРµРЅС‚СЏР±СЂСЊ","РѕРєС‚СЏР±СЂСЊ","РЅРѕСЏР±СЂСЊ","РґРµРєР°Р±СЂСЊ"],
+    ru: ["СЏРЅРІР°СЂСЊ","С„РµРІСЂР°Р»СЊ","РјР°СЂС‚","Р°РїСЂРµР»СЊ","май","июнь","июль","Р°РІРіСѓСЃС‚","СЃРµРЅС‚СЏР±СЂСЊ","РѕРєС‚СЏР±СЂСЊ","РЅРѕСЏР±СЂСЊ","РґРµРєР°Р±СЂСЊ"],
     uz: ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentyabr","oktyabr","noyabr","dekabr"],
     en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
   };
   const calWeekNames = {
-    ru: ["РџРќ","Р’Рў","РЎР ","Р§Рў","РџРў","РЎР‘","Р’РЎ"],
+    ru: ["ПН","ВТ","РЎР ","ЧТ","ПТ","РЎР‘","ВС"],
     uz: ["DU","SE","CH","PA","JU","SH","YA"],
     en: ["MON","TUE","WED","THU","FRI","SAT","SUN"],
   };
@@ -3662,7 +3662,7 @@ App.renderCalendar = async function(host, routeId){
         ),
         x.lead_id ? el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, "Course/lead"),
-          el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` вЂў ${x.lead_phone1}` : ""}`)
+          el("div", {}, `${x.lead_name || `#${x.lead_id}`}${x.lead_phone1 ? ` • ${x.lead_phone1}` : ""}`)
         ) : null,
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("title")),
@@ -4322,13 +4322,13 @@ App.renderSettings = async function(host, routeId){
     const rows = list.length ? list.map(item=>{
       const title = is3lang ? langLabel3(item) : (item.name || `#${item.id}`);
       const sub = is3lang
-        ? `RU: ${item.name_ru || "-"} вЂў UZ: ${item.name_uz || "-"} вЂў EN: ${item.name_en || "-"}`
-        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"-"} вЂў ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
+        ? `RU: ${item.name_ru || "-"} • UZ: ${item.name_uz || "-"} • EN: ${item.name_en || "-"}`
+        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"-"} • ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
 
       return el("div",{class:"rowLine"},
         el("div",{class:"rowMain"},
           el("div",{class:"rowTitle"}, title),
-          el("div",{class:"rowSub"}, sub, ` вЂў sort:${item.sort ?? 1000}`, ` вЂў ${Number(item.is_active)!==0 ? "active" : "off"}`)
+          el("div",{class:"rowSub"}, sub, ` • sort:${item.sort ?? 1000}`, ` • ${Number(item.is_active)!==0 ? "active" : "off"}`)
         ),
         el("div",{class:"rowActions"},
           el("button",{class:"iconBtn miniIcon",type:"button",title:t("settings_edit"),onClick:()=>openDictModal(kind,is3lang,item)},
@@ -4472,14 +4472,14 @@ App.renderProjects = async function (host, routeId) {
 
   // вњ… PROJECT STATUSES by TZ
   const statusCols = [
-    { key: "new",         label: { ru: "РќРѕРІС‹Р№",          uz: "Yangi",          en: "New" } },
-    { key: "tz_given",    label: { ru: "РўР— РІС‹РґР°РЅРѕ",      uz: "Tz berildi",     en: "TZ given" } },
+    { key: "new",         label: { ru: "Новый",          uz: "Yangi",          en: "New" } },
+    { key: "tz_given",    label: { ru: "ТЗ выдано",      uz: "Tz berildi",     en: "TZ given" } },
     { key: "offer_given", label: { ru: "РџСЂРµРґР»РѕР¶РµРЅРёРµ",    uz: "Taklif berildi", en: "Offer given" } },
     { key: "in_progress", label: { ru: "Р’ РїСЂРѕС†РµСЃСЃРµ",     uz: "Jarayonda",      en: "In progress" } },
-    { key: "later",       label: { ru: "РџРѕР·Р¶Рµ",          uz: "Keyinroq",       en: "Later" } },
-    { key: "done",        label: { ru: "Р—Р°РІРµСЂС€РµРЅРѕ",      uz: "Bajarildi",      en: "Done" } },
-    { key: "review",      label: { ru: "РћС‚Р·С‹РІ",          uz: "Tasurot",        en: "Review" } },
-    { key: "canceled",    label: { ru: "РћС‚РјРµРЅР°",         uz: "Otmen",          en: "Canceled" } },
+    { key: "later",       label: { ru: "Позже",          uz: "Keyinroq",       en: "Later" } },
+    { key: "done",        label: { ru: "ЗавершенРѕ",      uz: "Bajarildi",      en: "Done" } },
+    { key: "review",      label: { ru: "Отзыв",          uz: "Tasurot",        en: "Review" } },
+    { key: "canceled",    label: { ru: "Отмена",         uz: "Otmen",          en: "Canceled" } },
   ];
 
   // helpers
@@ -4697,7 +4697,7 @@ App.renderProjects = async function (host, routeId) {
       if (p.comment) {
         bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "рџ’¬ ", el("b", {}, p.comment)));
       }
-      const reviewText = tr({ ru: "РћС‚Р·С‹РІ РІР·СЏС‚", uz: "Tasurot olingan", en: "Review taken" });
+      const reviewText = tr({ ru: "Отзыв взят", uz: "Tasurot olingan", en: "Review taken" });
       if (Number(p.review) === 1) {
         bodyParts.push(el("div", { class: "pLine" }, "вњ… ", el("b", {}, reviewText)));
       }
@@ -4758,7 +4758,7 @@ App.renderProjects = async function (host, routeId) {
   const listSrc = !q ? all : all.filter(p => {
     const stLabel = tr(statusCols.find(x => x.key === p.status)?.label || { ru: p.status, uz: p.status, en: p.status });
     const svcLabel = p.service_name_uz || p.service_name_ru || p.service_name_en || "";
-    const reviewText = Number(p.review) === 1 ? tr({ ru: "РћС‚Р·С‹РІ РІР·СЏС‚", uz: "Tasurot olingan", en: "Review taken" }) : "";
+    const reviewText = Number(p.review) === 1 ? tr({ ru: "Отзыв взят", uz: "Tasurot olingan", en: "Review taken" }) : "";
     const hay = [
       p.id,
       p.company_name,
@@ -4995,7 +4995,7 @@ pmSel.addEventListener("change", () => {
 
     // owner info (readonly)
     const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
-      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р»Р°РґРµР»РµС† (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Владелец (из компании)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
       el("div", { style: "font-weight:800" }, "-"),
       el("div", { class: "muted2" }, "-")
     );
@@ -5006,7 +5006,7 @@ pmSel.addEventListener("change", () => {
       const ph = c ? (c.phone1 || "") : "";
       const ph2 = c ? (c.phone2 || "") : "";
       ownerBox.children[1].textContent = name;
-      ownerBox.children[2].textContent = (ph || ph2) ? [ph, ph2].filter(Boolean).join(" вЂў ") : "-";
+      ownerBox.children[2].textContent = (ph || ph2) ? [ph, ph2].filter(Boolean).join(" • ") : "-";
     };
 
     companySel.addEventListener("change", syncOwner);
@@ -5073,11 +5073,11 @@ pmSel.addEventListener("change", () => {
       ),
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"SummР° (faqat Admin)",en:"Amount (Admin only)"})),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})),
           amountInp
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р°Р»СЋС‚Р°",uz:"Valyuta",en:"Currency"})),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})),
           curSel
         ),
       ),
@@ -5107,7 +5107,7 @@ pmSel.addEventListener("change", () => {
             };
 
             if (!payload.client_id || !payload.service_type_id || !payload.pm_user_id) {
-              Toast.show(tr({ru:"Р—Р°РїРѕР»РЅРё Company/Service/PM",uz:"Company/Service/PM ni to'ldiring",en:"Fill Company/Service/PM"}), "bad");
+              Toast.show(tr({ru:"Заполни Company/Service/PM",uz:"Company/Service/PM ni to'ldiring",en:"Fill Company/Service/PM"}), "bad");
               return;
             }
 
@@ -5218,9 +5218,9 @@ pmSel.addEventListener("change", () => {
     commentInp.value = p.comment || "";
 
     const ownerBox = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
-      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р»Р°РґРµР»РµС† (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Владелец (из компании)",uz:"Ega (kompaniyadan)",en:"Owner (from company)"})),
       el("div", { style: "font-weight:800" }, p.owner_full_name || "-"),
-      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "-")
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "-")
     );
 
     const reviewChkEdit = el("input", { type: "checkbox" });
@@ -5237,16 +5237,16 @@ pmSel.addEventListener("change", () => {
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("deadline") || "Deadline"), dlInp),
       ),
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"SummР° (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р’Р°Р»СЋС‚Р°",uz:"Valyuta",en:"Currency"})), curSel),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), curSel),
       ),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РћС‚РІРµС‚СЃС‚РІРµРЅРЅС‹Р№",uz:"Mas'ul",en:"Responsible"})), pmSel, pmAnySel),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
       el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РћС‚Р·С‹РІ",uz:"Tasurot",en:"Review"})),
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Отзыв",uz:"Tasurot",en:"Review"})),
         el("label", { class: "hrow gap8" },
           reviewChkEdit,
-          el("span", {}, tr({ru:"РћС‚Р·С‹РІ РІР·СЏС‚",uz:"Tasurot olingan",en:"Review taken"}))
+          el("span", {}, tr({ru:"Отзыв взят",uz:"Tasurot olingan",en:"Review taken"}))
         )
       ),
     );
@@ -5299,9 +5299,9 @@ pmSel.addEventListener("change", () => {
     );
 
     const owner = el("div", { class: "card cardPad vcol gap6", style: "background:rgba(255,255,255,.03)" },
-      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Р¤РРћ Рё С‚РµР»РµС„РѕРЅ РІР»Р°РґРµР»СЊС†Р° (РёР· РєРѕРјРїР°РЅРёРё)",uz:"Ega FIO va telefon",en:"Owner name & phone"})),
+      el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"ФИО и телефон владельца (из компании)",uz:"Ega FIO va telefon",en:"Owner name & phone"})),
       el("div", { style: "font-weight:800" }, p.owner_full_name || "-"),
-      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" вЂў ") || "-")
+      el("div", { class: "muted2" }, [p.owner_phone1, p.owner_phone2].filter(Boolean).join(" • ") || "-")
     );
 
     const reviewChk = el("input", { type: "checkbox" });
@@ -5321,12 +5321,12 @@ pmSel.addEventListener("change", () => {
     const lines = el("div", { class: "vcol gap8" },
       el("div", { class: "pLine" }, tr({ru:"РЎС‚Р°С‚СѓСЃ:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
       el("div", { class: "pLine" },
-        tr({ru:"РћС‚Р·С‹РІ:",uz:"Tasurot:",en:"Review:"}),
-        el("b", {}, reviewChk.checked ? tr({ru:"Р’Р·СЏС‚",uz:"Olingan",en:"Taken"}) : tr({ru:"РќРµС‚",uz:"YoвЂq",en:"No"})),
+        tr({ru:"Отзыв:",uz:"Tasurot:",en:"Review:"}),
+        el("b", {}, reviewChk.checked ? tr({ru:"Взят",uz:"Olingan",en:"Taken"}) : tr({ru:"Нет",uz:"Yo'q",en:"No"})),
         el("span", { style: "margin-left:8px" }, reviewChk)
       ),
       p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Р’СЃС‚СЂРµС‡Р°:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
-      p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Р”РµРґР»Р°Р№РЅ:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
+      p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Дедлайн:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
       (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"РЎСѓРјРјР°:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
       p.pm_name ? el("div", { class: "pLine" }, "PM:", el("b", {}, p.pm_name)) : null,
       (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"РџСЂРёС‡РёРЅР° РѕС‚РјРµРЅС‹:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "-")) : null,
@@ -5351,8 +5351,8 @@ pmSel.addEventListener("change", () => {
 
       lines.appendChild(
         el("div", { class: "pLine" },
-          tr({ru:"Р­С‚Р°Рї:",uz:"Bosqich:",en:"Stage:"}),
-          el("b", {}, stageChk.checked ? tr({ru:"РћС‚Р·С‹РІ",uz:"Tasurot",en:"Review"}) : tr({ru:"Р—Р°РІРµСЂС€РµРЅРѕ",uz:"Bajarildi",en:"Done"})),
+          tr({ru:"Этап:",uz:"Bosqich:",en:"Stage:"}),
+          el("b", {}, stageChk.checked ? tr({ru:"Отзыв",uz:"Tasurot",en:"Review"}) : tr({ru:"ЗавершенРѕ",uz:"Bajarildi",en:"Done"})),
           el("span", { style: "margin-left:8px" }, stageChk)
         )
       );
@@ -5514,12 +5514,12 @@ App.renderCourses = async function (host, routeId) {
   const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
 
   const statusCols = [
-    { key: "new",       label: { ru: "РќРѕРІС‹Р№",            uz: "Yangi",                 en: "New" } },
-    { key: "need_call", label: { ru: "РќСѓР¶РЅРѕ Р·РІРѕРЅРёС‚СЊ",    uz: "Qo'ng'iroq kerak",      en: "Need call" } },
-    { key: "thinking",  label: { ru: "Р”СѓРјР°РµС‚",           uz: "O'ylab ko'rmoqda",      en: "Thinking" } },
+    { key: "new",       label: { ru: "Новый",            uz: "Yangi",                 en: "New" } },
+    { key: "need_call", label: { ru: "Нужно звонить",    uz: "Qo'ng'iroq kerak",      en: "Need call" } },
+    { key: "thinking",  label: { ru: "Думает",           uz: "O'ylab ko'rmoqda",      en: "Thinking" } },
     { key: "enrolled",  label: { ru: "Р—Р°РїРёСЃР°РЅ",          uz: "Kursga yozildi",        en: "Enrolled" } },
     { key: "studying",  label: { ru: "РЈСЃРїРµС€РЅРѕ",          uz: "Muvaffaqiyatli",        en: "Success" } },
-    { key: "canceled",  label: { ru: "РћС‚РјРµРЅР°",           uz: "Otmen",                 en: "Canceled" } },
+    { key: "canceled",  label: { ru: "Отмена",           uz: "Otmen",                 en: "Canceled" } },
   ];
 
   const fmtMoney = (amount, currency) => {
@@ -5583,7 +5583,7 @@ App.renderCourses = async function (host, routeId) {
   const leadLabel = (l) => {
     if (!l) return "";
     const fio = l.full_name || `#${l.id}`;
-    const ph = l.phone1 ? ` вЂў ${l.phone1}` : "";
+    const ph = l.phone1 ? ` • ${l.phone1}` : "";
     return `${fio}${ph}`;
   };
 
@@ -5819,7 +5819,7 @@ App.renderCourses = async function (host, routeId) {
     const inp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
     Modal.open(tr(titleObj),
       el("div", { class: "vcol gap10" },
-        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РЈРєР°Р¶Рё СЃСѓРјРјСѓ РѕРїР»Р°С‚С‹:", uz: "ToвЂlov summasini kiriting:", en: "Enter paid amount:" })),
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Укажи сумму оплаты:", uz: "To'lov summasini kiriting:", en: "Enter paid amount:" })),
         inp
       ),
       [
@@ -6021,26 +6021,26 @@ App.renderCourses = async function (host, routeId) {
     const renderCalls = (rows) => {
       callsEl.innerHTML = "";
       if (!rows || !rows.length) {
-        callsEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р—РІРѕРЅРєРѕРІ РЅРµС‚", uz: "Qo'ng'iroqlar yo'q", en: "No calls" })));
+        callsEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Звонков нет", uz: "Qo'ng'iroqlar yo'q", en: "No calls" })));
         return;
       }
       for (const row of rows) {
         const statusText = row.status === "answered"
-          ? tr({ ru: "РћС‚РІРµС‡РµРЅ", uz: "Javob berilgan", en: "Answered" })
+          ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
           : (row.status === "missed"
-            ? tr({ ru: "РџСЂРѕРїСѓС‰РµРЅ", uz: "Javobsiz", en: "Missed" })
-            : tr({ ru: "Р—Р°РІРµСЂС€РµРЅ", uz: "Yakunlangan", en: "Ended" }));
+            ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
+            : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
         callsEl.appendChild(
           el("div", { class: "chatPinnedItem" },
-            el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "-"}`),
-            el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} вЂў ${Number(row.duration || 0)}s вЂў ${row.end_time ? fmtDate(row.end_time) : "-"}`),
+            el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "-"}`),
+            el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} • ${Number(row.duration || 0)}s • ${row.end_time ? fmtDate(row.end_time) : "-"}`),
             row.recording_url
               ? el("button", {
                   class: "chatAudioBtn",
                   type: "button",
                   onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "-"}`)
-                }, tr({ ru: "РЎР»СѓС€Р°С‚СЊ Р·Р°РїРёСЃСЊ", uz: "Yozuvni tinglash", en: "Listen" }))
-              : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РќРµС‚ Р·Р°РїРёСЃРё", uz: "Yozuv yo'q", en: "No recording" }))
+                }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+              : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
           )
         );
       }
@@ -6049,7 +6049,7 @@ App.renderCourses = async function (host, routeId) {
     const renderFeed = (rows) => {
       feedEl.innerHTML = "";
       if (!rows || !rows.length) {
-        feedEl.appendChild(el("div", { class: "muted2" }, tr({ ru: "РџРѕРєР° РЅРµС‚ СЃРѕРѕР±С‰РµРЅРёР№", uz: "Hozircha xabarlar yo'q", en: "No messages yet" })));
+        feedEl.appendChild(el("div", { class: "muted2" }, tr({ ru: "Пока нет сообщений", uz: "Hozircha xabarlar yo'q", en: "No messages yet" })));
         return;
       }
       let lastDay = "";
@@ -6065,13 +6065,13 @@ App.renderCourses = async function (host, routeId) {
           feedEl.appendChild(
             el("div", { class: "chatTaskRow" },
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
-                el("div", { style: "font-weight:800" }, `${tr({ ru: "Р—Р°РґР°С‡Р°", uz: "Vazifa", en: "Task" })} #${row.task_id}`),
+                el("div", { style: "font-weight:800" }, `${tr({ ru: "Задача", uz: "Vazifa", en: "Task" })} #${row.task_id}`),
                 el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
               ),
               el("div", {}, row.text || row.task_description || ""),
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center;margin-top:4px;font-size:12px" },
                 el("span", { class: `chatTaskStatus ${st.className}` }, `${st.icon} ${st.text}`),
-                el("span", { class: "muted2" }, `${row.task_assignee_name || ""}${row.task_deadline_at ? ` вЂў ${fmtDate(row.task_deadline_at)}` : ""}`)
+                el("span", { class: "muted2" }, `${row.task_assignee_name || ""}${row.task_deadline_at ? ` • ${fmtDate(row.task_deadline_at)}` : ""}`)
               )
             )
           );
@@ -6080,24 +6080,24 @@ App.renderCourses = async function (host, routeId) {
 
         if (row.item_type === "call") {
           const statusText = row.status === "answered"
-            ? tr({ ru: "РћС‚РІРµС‡РµРЅ", uz: "Javob berilgan", en: "Answered" })
+            ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
             : (row.status === "missed"
-              ? tr({ ru: "РџСЂРѕРїСѓС‰РµРЅ", uz: "Javobsiz", en: "Missed" })
-              : tr({ ru: "Р—Р°РІРµСЂС€РµРЅ", uz: "Yakunlangan", en: "Ended" }));
+              ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
+              : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
           feedEl.appendChild(
             el("div", { class: "chatTaskRow" },
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
-                el("div", { style: "font-weight:800" }, `${tr({ ru: "Р—РІРѕРЅРѕРє", uz: "Qo'ng'iroq", en: "Call" })} #${row.db_call_id || "-"}`),
+                el("div", { style: "font-weight:800" }, `${tr({ ru: "Звонок", uz: "Qo'ng'iroq", en: "Call" })} #${row.db_call_id || "-"}`),
                 el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
               ),
-              el("div", {}, `${row.direction_label === "outgoing" ? "в†—" : "в†"} ${row.client_number || "-"} вЂў ${statusText} вЂў ${Number(row.duration || 0)}s`),
+              el("div", {}, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "-"} • ${statusText} • ${Number(row.duration || 0)}s`),
               row.recording_url
                 ? el("button", {
                     class: "chatAudioBtn",
                     type: "button",
                     onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "-"}`)
-                  }, tr({ ru: "РЎР»СѓС€Р°С‚СЊ Р·Р°РїРёСЃСЊ", uz: "Yozuvni tinglash", en: "Listen" }))
-                : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РќРµС‚ Р·Р°РїРёСЃРё", uz: "Yozuv yo'q", en: "No recording" }))
+                  }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+                : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
             )
           );
           continue;
@@ -6159,7 +6159,7 @@ App.renderCourses = async function (host, routeId) {
           return;
         }
         if (!taskDeadlineInp.value) {
-          Toast.show(tr({ ru: "РЈРєР°Р¶Рё РґРµРґР»Р°Р№РЅ", uz: "Muddatni kiriting", en: "Set deadline" }), "bad");
+          Toast.show(tr({ ru: "Укажи дедлайн", uz: "Muddatni kiriting", en: "Set deadline" }), "bad");
           return;
         }
         const deadline_at = Math.floor(new Date(taskDeadlineInp.value).getTime() / 1000);
@@ -6191,7 +6191,7 @@ App.renderCourses = async function (host, routeId) {
 
     const sideEl = el("div", { class: "chatSide" },
       el("div", { class: "chatTaskBox vcol gap8" },
-        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Р—Р°РґР°С‡Р°", uz: "Vazifa", en: "Task" })),
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" })),
         taskAssigneeSel,
         taskDeadlineInp,
         taskTextInp,
@@ -6202,12 +6202,12 @@ App.renderCourses = async function (host, routeId) {
         pinnedEl
       ),
       el("div", { class: "chatPinnedBox" },
-        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Р—РІРѕРЅРєРё", uz: "Qo'ng'iroqlar", en: "Calls" })),
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Звонки", uz: "Qo'ng'iroqlar", en: "Calls" })),
         callsEl
       )
     );
     const sideBackdrop = el("button", { class: "chatSideBackdrop", type: "button" });
-    const taskToggleBtn = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Р—Р°РґР°С‡Р°", uz: "Vazifa", en: "Task" }));
+    const taskToggleBtn = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Задача", uz: "Vazifa", en: "Task" }));
 
     function setSide(open) {
       sideEl.classList.toggle("open", !!open);
@@ -6262,8 +6262,8 @@ App.renderCourses = async function (host, routeId) {
 
       const nums = [];
       if (x.course_start_date) nums.push(el("span", {}, `${tr({ ru: "РЎС‚Р°СЂС‚", uz: "Start", en: "Start" })}: `, el("b", {}, fmtDateOnly(x.course_start_date))));
-      if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Р”РѕРі.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
-      if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "РћРїР».", uz: "ToвЂlov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
+      if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
+      if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To'lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
       if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
             // РљРѕРјРјРµРЅС‚ РєСѓСЂСЃР° (course_lead.comment) - РїРѕРєР°Р·С‹РІР°РµРј РЅР° РєР°СЂС‚РѕС‡РєРµ
       if (x.comment) {
@@ -6365,7 +6365,7 @@ App.renderCourses = async function (host, routeId) {
 
     const sug = el("div", { class: "cSug", style: "display:none" });
     const pickChip = el("div", { class: "cChip", style: "display:none" });
-    const noLeadHint = el("div", { class: "muted2", style: "font-size:12px;display:none" }, tr({ ru: "Р›РёРґ РЅРµ РЅР°Р№РґРµРЅ", uz: "Lead topilmadi", en: "Lead not found" }));
+    const noLeadHint = el("div", { class: "muted2", style: "font-size:12px;display:none" }, tr({ ru: "Лид не найден", uz: "Lead topilmadi", en: "Lead not found" }));
     const createLeadToggle = el("button", { class: "btn mini", type: "button", style: "display:none" });
 
     const company2 = el("select", { class: "sel" },
@@ -6410,7 +6410,7 @@ App.renderCourses = async function (host, routeId) {
     const leadExtraWrap = el("div", { class: "vcol gap10", style: "display:none" },
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2") || tr({ ru: "Р”РѕРї. С‚РµР»РµС„РѕРЅ", uz: "QoвЂshimcha tel", en: "Extra phone" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2") || tr({ ru: "Доп. телефон", uz: "Qo'shimcha tel", en: "Extra phone" })),
           phone2Inp
         ),
         el("div", { class: "vcol gap8" },
@@ -6519,7 +6519,7 @@ App.renderCourses = async function (host, routeId) {
 
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р›РёРґ", uz: "Lead", en: "Lead" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
           fioInp,
           phoneInp,
           sug,
@@ -6528,7 +6528,7 @@ App.renderCourses = async function (host, routeId) {
           createLeadToggle
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "РљРѕРјРїР°РЅРёСЏ", uz: "Kompaniya", en: "Company" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
           company2
         ),
       ),
@@ -6557,7 +6557,7 @@ App.renderCourses = async function (host, routeId) {
           agreedInp
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РћРїР»Р°С‚Р°", uz: "ToвЂlov", en: "Paid" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
           paidInp
         ),
       ),
@@ -6604,8 +6604,8 @@ App.renderCourses = async function (host, routeId) {
 
             let agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
             const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
-            if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "РќРµРІРµСЂРЅР°СЏ РґРѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv notoвЂgвЂri", en: "Invalid agreed amount" }), "bad"); return; }
-            if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "РќРµРІРµСЂРЅР°СЏ РѕРїР»Р°С‚Р°", uz: "ToвЂlov notoвЂgвЂri", en: "Invalid paid amount" }), "bad"); return; }
+            if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto'g'ri", en: "Invalid agreed amount" }), "bad"); return; }
+            if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To'lov noto'g'ri", en: "Invalid paid amount" }), "bad"); return; }
             const ctRow = ctById.get(Number(course_type_id));
             const ctPrice = Number(ctRow?.price);
             if ((agreed_amount == null || agreed_amount === 0) && Number.isFinite(ctPrice) && ctPrice > 0) {
@@ -6647,7 +6647,7 @@ App.renderCourses = async function (host, routeId) {
           el("span", {}, tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status }))
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р›РёРґ", uz: "Lead", en: "Lead" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
 
           (() => {
             const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
@@ -6655,7 +6655,7 @@ App.renderCourses = async function (host, routeId) {
             const city   = refNameById(refs.cities, x.lead_city_id, x.lead_city_name || x.city_name || x.lead_city || "");
             const lcomm  = x.lead_comment || x.lead_client_comment || x.lead_note || "";
 
-            const short = (s, n=80) => (String(s || "").length > n ? String(s).slice(0, n) + "вЂ¦" : String(s || ""));
+            const short = (s, n=80) => (String(s || "").length > n ? String(s).slice(0, n) + "…" : String(s || ""));
 
             const parts = [];
 
@@ -6671,14 +6671,14 @@ App.renderCourses = async function (host, routeId) {
             if (city)   parts.push(el("span", {}, `${tr({ru:"Р“РѕСЂРѕРґ",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
 
             // РљРѕРјРјРµРЅС‚ Р»РёРґР° (РІ РѕРґРЅРѕР№ СЃС‚СЂРѕРєРµ, РЅРѕ Р°РєРєСѓСЂР°С‚РЅРѕ РїРѕРґСЂРµР·Р°РµРј)
-            if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"РљРѕРјРј.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
+            if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"Комм.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
 
             return el("div", { class: "cLine" }, ...parts);
           })()
         ),
 
         x.company_name ? el("div", { class: "vcol gap6" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "РљРѕРјРїР°РЅРёСЏ", uz: "Kompaniya", en: "Company" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
           el("div", {}, x.company_name)
         ) : null,
 
@@ -6705,7 +6705,7 @@ App.renderCourses = async function (host, routeId) {
         ),
 
         el("div", { class: "vcol gap6" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РћРїР»Р°С‚Р°", uz: "ToвЂlov", en: "Paid" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
           el("div", {}, x.paid_amount != null ? fmtMoney(x.paid_amount, x.currency) : "-")
         ),
 
@@ -6820,7 +6820,7 @@ App.renderCourses = async function (host, routeId) {
 
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "РљРѕРјРїР°РЅРёСЏ", uz: "Kompaniya", en: "Company" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
             company2
           ),
           el("div", { class: "vcol gap8" },
@@ -6846,7 +6846,7 @@ App.renderCourses = async function (host, routeId) {
             agreedInp
           ),
           el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РћРїР»Р°С‚Р°", uz: "ToвЂlov", en: "Paid" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
             paidInp
           ),
         ),
@@ -6863,8 +6863,8 @@ App.renderCourses = async function (host, routeId) {
             try {
               const agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
               const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
-              if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "РќРµРІРµСЂРЅР°СЏ РґРѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv notoвЂgвЂri", en: "Invalid agreed amount" }), "bad"); return; }
-              if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "РќРµРІРµСЂРЅР°СЏ РѕРїР»Р°С‚Р°", uz: "ToвЂlov notoвЂgвЂri", en: "Invalid paid amount" }), "bad"); return; }
+              if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto'g'ri", en: "Invalid agreed amount" }), "bad"); return; }
+              if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To'lov noto'g'ri", en: "Invalid paid amount" }), "bad"); return; }
 
               const body = {
                 company_id: company2.value ? Number(company2.value) : null,
@@ -6946,12 +6946,12 @@ App.renderCoursePayments = async function(host, routeId){
   const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
 
   const statusCols = [
-    { key: "new",       label: { ru: "РќРѕРІС‹Р№", uz: "Yangi", en: "New" } },
-    { key: "need_call", label: { ru: "РќСѓР¶РЅРѕ Р·РІРѕРЅРёС‚СЊ", uz: "Qo'ng'iroq kerak", en: "Need call" } },
-    { key: "thinking",  label: { ru: "Р”СѓРјР°РµС‚", uz: "O'ylab ko'rmoqda", en: "Thinking" } },
+    { key: "new",       label: { ru: "Новый", uz: "Yangi", en: "New" } },
+    { key: "need_call", label: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" } },
+    { key: "thinking",  label: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" } },
     { key: "enrolled",  label: { ru: "Р—Р°РїРёСЃР°РЅ", uz: "Kursga yozildi", en: "Enrolled" } },
     { key: "studying",  label: { ru: "РЈСЃРїРµС€РЅРѕ", uz: "Muvaffaqiyatli", en: "Success" } },
-    { key: "canceled",  label: { ru: "РћС‚РјРµРЅР°", uz: "Bekor", en: "Canceled" } },
+    { key: "canceled",  label: { ru: "Отмена", uz: "Bekor", en: "Canceled" } },
   ];
   const stMap = new Map(statusCols.map(s => [String(s.key), tr(s.label)]));
 
@@ -7115,9 +7115,9 @@ App.renderCoursePayments = async function(host, routeId){
   const qInp = el("input", { class: "input", placeholder: t("search") || "Search..." });
   const paySel = el("select", { class: "sel" },
     el("option", { value: "all" }, tr({ ru: "РўРёРї: Р’СЃРµ", uz: "Tur: Barchasi", en: "Type: All" })),
-    el("option", { value: "paid" }, tr({ ru: "РўРёРї: РћРїР»Р°С‡РµРЅРѕ", uz: "Tur: To'langan", en: "Type: Paid" })),
-    el("option", { value: "unpaid" }, tr({ ru: "РўРёРї: РќРµ РѕРїР»Р°С‡РµРЅРѕ", uz: "Tur: To'lanmagan", en: "Type: Unpaid" })),
-    el("option", { value: "debts" }, tr({ ru: "РўРёРї: Р”РѕР»РіРё", uz: "Tur: Qarzdorlar", en: "Type: Debts" })),
+    el("option", { value: "paid" }, tr({ ru: "Тип: Оплачено", uz: "Tur: To'langan", en: "Type: Paid" })),
+    el("option", { value: "unpaid" }, tr({ ru: "Тип: Не оплачено", uz: "Tur: To'lanmagan", en: "Type: Unpaid" })),
+    el("option", { value: "debts" }, tr({ ru: "Тип: Долги", uz: "Tur: Qarzdorlar", en: "Type: Debts" })),
     el("option", { value: "closed" }, tr({ ru: "РўРёРї: Р—Р°РєСЂС‹С‚Рѕ", uz: "Tur: Yopilgan", en: "Type: Closed" })),
     el("option", { value: "overpaid" }, tr({ ru: "РўРёРї: РџРµСЂРµРїР»Р°С‚Р°", uz: "Tur: Ortiqcha to'lov", en: "Type: Overpaid" }))
   );
@@ -7137,15 +7137,15 @@ App.renderCoursePayments = async function(host, routeId){
   const filters = el("div", { class: "card cardPad cpFilters" }, qInp, paySel, typeSel, stageSel, countEl);
 
   const columns = [
-    { key: "fio_phone", label: tr({ ru: "Р¤РРћ/РЅРѕРјРµСЂ", uz: "FIO/raqam", en: "Full name/phone" }) },
+    { key: "fio_phone", label: tr({ ru: "ФИО/номер", uz: "FIO/raqam", en: "Full name/phone" }) },
     { key: "course_type", label: tr({ ru: "РўРёРї РєСѓСЂСЃР°", uz: "Kurs turi", en: "Course type" }) },
-    { key: "start_date", label: tr({ ru: "Р”Р°С‚Р° РЅР°С‡Р°Р»Р°", uz: "Boshlanish", en: "Start date" }) },
+    { key: "start_date", label: tr({ ru: "Дата начала", uz: "Boshlanish", en: "Start date" }) },
     { key: "status", label: tr({ ru: "РЎС‚Р°С‚СѓСЃ", uz: "Status", en: "Status" }) },
     { key: "price", label: tr({ ru: "Р¦РµРЅР° РєСѓСЂСЃР°", uz: "Kurs narxi", en: "Course price" }) },
     { key: "agreed", label: tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" }) },
-    { key: "paid", label: tr({ ru: "РћРїР»Р°С‚РёР»", uz: "To'lagan", en: "Paid" }) },
-    { key: "debt", label: tr({ ru: "Р”РѕР»Рі", uz: "Qarz", en: "Debt" }) },
-    { key: "comment", label: tr({ ru: "РљРѕРјРјРµРЅС‚", uz: "Izoh", en: "Comment" }) },
+    { key: "paid", label: tr({ ru: "Оплатил", uz: "To'lagan", en: "Paid" }) },
+    { key: "debt", label: tr({ ru: "Долг", uz: "Qarz", en: "Debt" }) },
+    { key: "comment", label: tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }) },
   ];
 
   const mkSortTh = (c) => el("th", {},
@@ -7181,9 +7181,9 @@ App.renderCoursePayments = async function(host, routeId){
   const paidEditBtn = (x) => el("button", {
     class: "cpEditBtn",
     type: "button",
-    title: tr({ ru: "РР·РјРµРЅРёС‚СЊ РѕРїР»Р°С‚Сѓ", uz: "To'lovni o'zgartirish", en: "Edit paid amount" }),
+    title: tr({ ru: "Изменить оплату", uz: "To'lovni o'zgartirish", en: "Edit paid amount" }),
     onClick: async () => {
-      const res = await askEdit(tr({ ru: "РћРїР»Р°С‚Р°", uz: "To'lov", en: "Paid amount" }), x.paid_amount, "number");
+      const res = await askEdit(tr({ ru: "Оплата", uz: "To'lov", en: "Paid amount" }), x.paid_amount, "number");
       if (!res.ok) return;
       try {
         await saveField(x.id, { paid_amount: res.value });
@@ -7371,11 +7371,11 @@ App.renderCalls = async function(host, routeId){
     )
   );
 
-  const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "РќРѕРјРµСЂ С‚РµР»РµС„РѕРЅР°", uz: "Telefon raqami", en: "Phone number" }) });
+  const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "Номер телефона", uz: "Telefon raqami", en: "Phone number" }) });
   const linkedSel = el("select", { class: "input" },
     el("option", { value: "all" }, tr({ ru: "Р’СЃРµ", uz: "Barchasi", en: "All" })),
     el("option", { value: "linked" }, tr({ ru: "Р•СЃС‚СЊ РІ Р±Р°Р·Рµ", uz: "Bazaga bog'langan", en: "Linked" })),
-    el("option", { value: "unlinked" }, tr({ ru: "РќРµС‚ РІ Р±Р°Р·Рµ", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
+    el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
   );
   linkedSel.value = state.linked;
 
@@ -7405,18 +7405,18 @@ App.renderCalls = async function(host, routeId){
   };
 
   const badgeByStatus = (x) => {
-    if (x.status === "answered") return el("span", { class: "callBadge ok" }, tr({ ru: "РћС‚РІРµС‡РµРЅ", uz: "Javob berilgan", en: "Answered" }));
-    if (x.status === "missed") return el("span", { class: "callBadge bad" }, tr({ ru: "РџСЂРѕРїСѓС‰РµРЅ", uz: "Javobsiz", en: "Missed" }));
-    return el("span", { class: "callBadge neutral" }, tr({ ru: "Р—Р°РІРµСЂС€РµРЅ", uz: "Yakunlangan", en: "Ended" }));
+    if (x.status === "answered") return el("span", { class: "callBadge ok" }, tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" }));
+    if (x.status === "missed") return el("span", { class: "callBadge bad" }, tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" }));
+    return el("span", { class: "callBadge neutral" }, tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
   };
 
   const dirLabel = (x) => x.direction_label === "outgoing"
     ? tr({ ru: "РСЃС…РѕРґСЏС‰РёР№", uz: "Chiquvchi", en: "Outgoing" })
-    : tr({ ru: "Р’С…РѕРґСЏС‰РёР№", uz: "Kiruvchi", en: "Incoming" });
+    : tr({ ru: "Входящий", uz: "Kiruvchi", en: "Incoming" });
 
   const render = () => {
     listEl.innerHTML = "";
-    metaEl.textContent = `${tr({ ru: "РќР°Р№РґРµРЅРѕ", uz: "Topildi", en: "Found" })}: ${state.rows.length}`;
+    metaEl.textContent = `${tr({ ru: "Найдено", uz: "Topildi", en: "Found" })}: ${state.rows.length}`;
     if (!state.rows.length) {
       listEl.appendChild(el("div", { class: "muted" }, t("no_data")));
       return;
@@ -7445,8 +7445,8 @@ App.renderCalls = async function(host, routeId){
         el("div", {},
           el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
           x.recording_url
-            ? el("a", { class: "callLink", href: x.recording_url, target: "_blank", rel: "noopener" }, tr({ ru: "РЎР»СѓС€Р°С‚СЊ Р·Р°РїРёСЃСЊ", uz: "Yozuvni tinglash", en: "Listen" }))
-            : el("div", { class: "callMuted" }, tr({ ru: "РќРµС‚ Р·Р°РїРёСЃРё", uz: "Yozuv yo'q", en: "No recording" }))
+            ? el("a", { class: "callLink", href: x.recording_url, target: "_blank", rel: "noopener" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+            : el("div", { class: "callMuted" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
         )
       ));
     }
@@ -7578,7 +7578,7 @@ App.renderClients = async function(host, routeId){
 
   const openUpsertModal = async (type, row=null)=>{
     const isEdit=!!row;
-    const title = isEdit ? `${t("clients_edit")} вЂў ${type}` : (type==="company" ? t("clients_create_company") : t("clients_create_lead"));
+    const title = isEdit ? `${t("clients_edit")} • ${type}` : (type==="company" ? t("clients_create_company") : t("clients_create_lead"));
 
     // fields
     const companyNameInp = el("input",{class:"input",value:row?.company_name||"",placeholder:t("client_company_name")});
@@ -7722,10 +7722,10 @@ App.renderClients = async function(host, routeId){
           )
         ),
         el("div",{class:"muted"},
-          `${t("client_full_name")}: ${c.full_name||"-"} вЂў ${t("client_phone1")}: ${c.phone1||"-"}`
+          `${t("client_full_name")}: ${c.full_name||"-"} • ${t("client_phone1")}: ${c.phone1||"-"}`
         ),
         el("div",{class:"muted2",style:"font-size:12px"},
-          `${t("client_city")}: ${dictLabel(state.refs.cities,c.city_id)} вЂў ${t("client_source")}: ${dictLabel(state.refs.sources,c.source_id)} вЂў ${t("client_sphere")}: ${dictLabel(state.refs.spheres,c.sphere_id)}`
+          `${t("client_city")}: ${dictLabel(state.refs.cities,c.city_id)} • ${t("client_source")}: ${dictLabel(state.refs.sources,c.source_id)} • ${t("client_sphere")}: ${dictLabel(state.refs.spheres,c.sphere_id)}`
         ),
         c.comment ? el("div",{class:"muted2",style:"font-size:12px"}, c.comment) : null
       );
@@ -7748,7 +7748,7 @@ App.renderClients = async function(host, routeId){
                 el("button",{class:"btn",type:"button",onClick:()=>{
                   // РїРѕРєР° Projects СЌС‚Р°Рї РЅРµ Р·Р°РІРµСЂС€С‘РЅ - РїСЂРѕСЃС‚Рѕ РїРµСЂРµС…РѕРґРёРј С‚СѓРґР°
                   location.hash="#/projects";
-                  Toast.show("Projects в†’ (filter later)", "ok");
+                  Toast.show("Projects → (filter later)", "ok");
                 }}, t("clients_open"))
               )
           )))
@@ -7900,6 +7900,10 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
+
+
+
+
 
 
 
