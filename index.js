@@ -5515,8 +5515,8 @@ App.renderCourses = async function (host, routeId) {
 
   const statusCols = [
     { key: "new",       label: { ru: "РќРѕРІС‹Р№",            uz: "Yangi",                 en: "New" } },
-    { key: "need_call", label: { ru: "РќСѓР¶РЅРѕ Р·РІРѕРЅРёС‚СЊ",    uz: "QoвЂngвЂiroq kerak",      en: "Need call" } },
-    { key: "thinking",  label: { ru: "Р”СѓРјР°РµС‚",           uz: "OвЂylab koвЂrmoqda",      en: "Thinking" } },
+    { key: "need_call", label: { ru: "РќСѓР¶РЅРѕ Р·РІРѕРЅРёС‚СЊ",    uz: "Qo'ng'iroq kerak",      en: "Need call" } },
+    { key: "thinking",  label: { ru: "Р”СѓРјР°РµС‚",           uz: "O'ylab ko'rmoqda",      en: "Thinking" } },
     { key: "enrolled",  label: { ru: "Р—Р°РїРёСЃР°РЅ",          uz: "Kursga yozildi",        en: "Enrolled" } },
     { key: "studying",  label: { ru: "РЈСЃРїРµС€РЅРѕ",          uz: "Muvaffaqiyatli",        en: "Success" } },
     { key: "canceled",  label: { ru: "РћС‚РјРµРЅР°",           uz: "Otmen",                 en: "Canceled" } },
@@ -5789,6 +5789,32 @@ App.renderCourses = async function (host, routeId) {
     );
   });
 
+  const askCourseTypeForMove = (currentCourseTypeId) => new Promise((resolve) => {
+    const keepOptValue = "__keep__";
+    const sel = el("select", { class: "input" },
+      el("option", { value: keepOptValue }, tr({ ru: "Оставить этот", uz: "Shuni qoldirish", en: "Keep this one" })),
+      ...activeCourseTypes.map(ct => el("option", { value: String(ct.id) }, courseTypeLabel(ct)))
+    );
+    const curId = Number(currentCourseTypeId || 0);
+    if (curId && activeCourseTypes.some(ct => Number(ct.id) === curId)) sel.value = keepOptValue;
+    Modal.open(
+      tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" }),
+      el("div", { class: "vcol gap10" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Выберите воронку для этого этапа:", uz: "Ushbu bosqich uchun voronkani tanlang:", en: "Select funnel for this stage:" })),
+        sel
+      ),
+      [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve({ canceled: true }); } },
+        { label: t("save") || "Save", kind: "primary", onClick: () => {
+            const v = String(sel.value || keepOptValue);
+            Modal.close();
+            resolve({ canceled: false, keep: v === keepOptValue, nextCourseTypeId: v === keepOptValue ? null : Number(v) });
+          }
+        }
+      ]
+    );
+  });
+
   const askPaidAmount = (titleObj) => new Promise((resolve) => {
     const inp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
     Modal.open(tr(titleObj),
@@ -5816,11 +5842,6 @@ App.renderCourses = async function (host, routeId) {
 
       let extra = {};
       let finalStatus = status;
-      if (status === "canceled") {
-        const reason = await askCancelReason();
-        if (!reason) return;
-        extra.cancel_reason = reason;
-      }
       if (status === "studying" || status === "canceled") {
         const pick = await askCourseTypeForMove(cur?.course_type_id);
         if (!pick || pick.canceled) return false;
@@ -5833,6 +5854,11 @@ App.renderCourses = async function (host, routeId) {
           finalStatus = "need_call";
           delete extra.cancel_reason;
         }
+      }
+      if (status === "canceled" && finalStatus === "canceled") {
+        const reason = await askCancelReason();
+        if (!reason) return false;
+        extra.cancel_reason = reason;
       }
 
       await apiFetch(`/api/course_leads/${id}/move`, {
