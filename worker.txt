@@ -717,11 +717,7 @@ function courseAmountVisible(user) {
 }
 
 async function ensurePaidRequiredForCourseStatus(bodyStatus, paidAmount) {
-  if (bodyStatus === "enrolled" || bodyStatus === "studying") {
-    if (paidAmount === null || paidAmount === undefined || Number.isNaN(Number(paidAmount))) {
-      return "paid_amount_required";
-    }
-  }
+  // paid_amount is optional for stage moves; keep existing value when omitted
   return null;
 }
 
@@ -2599,20 +2595,14 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     const paidReq = await ensurePaidRequiredForCourseStatus(status, paid_amount);
     if (paidReq === "paid_amount_required") return badRequest("paid_amount_required");
 
-    // update status, cancel_reason, optionally paid_amount
-    if (status === "enrolled" || status === "studying") {
-      await env.DB.prepare(
-        `UPDATE course_leads SET status=?, cancel_reason=NULL, paid_amount=? WHERE id=?`
-      )
-        .bind(status, paid_amount, id)
-        .run();
-    } else {
-      await env.DB.prepare(
-        `UPDATE course_leads SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount) WHERE id=?`
-      )
-        .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
-        .run();
-    }
+    // update status/cancel_reason and keep paid_amount unchanged when omitted
+    await env.DB.prepare(
+      `UPDATE course_leads
+       SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount)
+       WHERE id=?`
+    )
+      .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
+      .run();
 
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
   }
