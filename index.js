@@ -5443,6 +5443,8 @@ App.renderCourses = async function (host, routeId) {
       .chatMsgTime{font-size:11px;color:#b7c2d4;text-align:right}
       .chatTaskRow{border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.06)}
       .chatTaskStatus{font-size:12px;font-weight:700}
+      .chatAudioBtn{margin-top:6px;display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.08);cursor:pointer}
+      .chatAudioBtn:hover{background:rgba(255,255,255,.14)}
       .chatComposer{display:flex;gap:8px}
       .chatComposer .input{flex:1}
       .chatSendBtn{width:48px;min-width:48px;height:48px;border-radius:14px}
@@ -5836,6 +5838,30 @@ App.renderCourses = async function (host, routeId) {
     return { icon: ".", text: "new", className: "new" };
   };
 
+  const openRecordingPlayer = (url, titleText) => {
+    if (!url) return;
+    const audio = el("audio", {
+      controls: "controls",
+      autoplay: "autoplay",
+      preload: "metadata",
+      src: String(url),
+      style: "width:100%"
+    });
+    const body = el("div", { class: "vcol gap10" },
+      el("div", { class: "muted2", style: "font-size:12px" }, titleText || tr({ ru: "Запись звонка", uz: "Qo'ng'iroq yozuvi", en: "Call recording" })),
+      audio,
+      el("a", {
+        href: String(url),
+        target: "_blank",
+        rel: "noopener",
+        style: "font-size:12px;color:var(--acc)"
+      }, tr({ ru: "Открыть в новой вкладке", uz: "Yangi oynada ochish", en: "Open in new tab" }))
+    );
+    Modal.open(tr({ ru: "Прослушивание", uz: "Tinglash", en: "Playback" }), body, [
+      { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() }
+    ]);
+  };
+
   async function openCourseChat(id) {
     const leadId = Number(id);
     if (!leadId) return;
@@ -5948,7 +5974,11 @@ App.renderCourses = async function (host, routeId) {
             el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "—"}`),
             el("div", { class: "muted2", style: "font-size:12px" }, `${statusText} • ${Number(row.duration || 0)}s • ${row.end_time ? fmtDate(row.end_time) : "—"}`),
             row.recording_url
-              ? el("a", { href: row.recording_url, target: "_blank", rel: "noopener", style: "font-size:12px;color:var(--acc)" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+              ? el("button", {
+                  class: "chatAudioBtn",
+                  type: "button",
+                  onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "—"}`)
+                }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
               : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
           )
         );
@@ -6001,7 +6031,11 @@ App.renderCourses = async function (host, routeId) {
               ),
               el("div", {}, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "—"} • ${statusText} • ${Number(row.duration || 0)}s`),
               row.recording_url
-                ? el("a", { href: row.recording_url, target: "_blank", rel: "noopener", style: "font-size:12px;color:var(--acc)" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+                ? el("button", {
+                    class: "chatAudioBtn",
+                    type: "button",
+                    onClick: () => openRecordingPlayer(row.recording_url, `#${row.db_call_id || "—"}`)
+                  }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
                 : el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
             )
           );
