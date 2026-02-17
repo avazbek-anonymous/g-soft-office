@@ -2029,6 +2029,10 @@ select option{
       App.state.mainDashCleanup();
       App.state.mainDashCleanup = null;
     }
+    if (path !== "/courses" && typeof App.state.coursesTabsResizeCleanup === "function") {
+      App.state.coursesTabsResizeCleanup();
+      App.state.coursesTabsResizeCleanup = null;
+    }
     App.state.current = { path, query };
     App.state.routeId = (App.state.routeId || 0) + 1;
     const routeId = App.state.routeId;
@@ -5404,6 +5408,13 @@ App.renderCourses = async function (host, routeId) {
       .cSug .it:last-child{border-bottom:0}
       .cSug .it:hover{background:rgba(255,208,90,.07)}
       .cChip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--stroke);border-radius:999px;background:rgba(255,255,255,.04);font-size:12px}
+      .courseTypeTabs{display:flex;align-items:center;gap:8px;min-width:0}
+      .courseTypeTabTrack{display:grid;grid-template-columns:repeat(var(--tab-limit,5), minmax(0,1fr));gap:8px;flex:1;min-width:0}
+      .courseTypeTab{border:1px solid var(--stroke);background:rgba(255,255,255,.04);border-radius:12px;padding:9px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+      .courseTypeTab:hover{background:rgba(255,255,255,.08)}
+      .courseTypeTab.active{border-color:rgba(255,208,90,.55);background:rgba(255,208,90,.12);color:var(--text);font-weight:700}
+      .courseTypeNav{width:36px;min-width:36px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+      .courseTypeNav:disabled{opacity:.45;cursor:default}
       .modalCard.chatModalCard{width:min(1200px,98vw);height:min(92vh,920px);max-height:92vh;overflow:hidden;display:flex;flex-direction:column}
       .modalCard.chatModalCard .modalBody{padding:10px;flex:1;min-height:0;overflow:hidden}
       .modalCard.chatModalCard .modalHead{padding:12px 14px}
@@ -5444,6 +5455,7 @@ App.renderCourses = async function (host, routeId) {
       .chatShell *{box-sizing:border-box}
       .chatShell .input,.chatShell .sel,.chatShell .btn,.chatShell textarea,.chatShell select,.chatShell input{max-width:100%;min-width:0}
       @media (max-width:900px){
+        .courseTypeTabTrack{--tab-limit:3}
         .modalCard.chatModalCard{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}
         .modalCard.chatModalCard .modalBody{padding:8px}
         .chatLayout{gap:0}
@@ -5557,26 +5569,42 @@ App.renderCourses = async function (host, routeId) {
     )
   );
 
-  const typeSel = el("select", { class: "sel" },
-    el("option", { value: "" }, "Kurs turi"),
-    ...courseTypes.filter(x => Number(x.is_active) === 1).map(ct =>
-      el("option", { value: String(ct.id) }, courseTypeLabel(ct))
-    )
-  );
-
   const createBtn = el("button", { class: "btn primary", type: "button" }, t("create") || "Create");
   createBtn.onclick = () => openCreate();
+
+  const activeCourseTypes = courseTypes
+    .filter(x => Number(x.is_active) === 1)
+    .slice()
+    .sort((a, b) => {
+      const sa = Number(a.sort);
+      const sb = Number(b.sort);
+      const va = Number.isFinite(sa) ? sa : 1000;
+      const vb = Number.isFinite(sb) ? sb : 1000;
+      if (va !== vb) return va - vb;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+  const qTypeId = intId(App.state.current?.query?.course_type_id);
+  let selectedCourseTypeId = null;
+  if (activeCourseTypes.length) {
+    const hasQ = qTypeId && activeCourseTypes.some(x => Number(x.id) === Number(qTypeId));
+    selectedCourseTypeId = hasQ ? Number(qTypeId) : Number(activeCourseTypes[0].id);
+  }
+  const tabsLimit = () => window.matchMedia("(max-width:900px)").matches ? 3 : 5;
+  let tabsOffset = 0;
+  const tabsPrevBtn = el("button", { class: "btn ghost courseTypeNav", type: "button" }, "<");
+  const tabsNextBtn = el("button", { class: "btn ghost courseTypeNav", type: "button" }, ">");
+  const tabsTrack = el("div", { class: "courseTypeTabTrack" });
+  const tabsRow = el("div", { class: "courseTypeTabs", style: activeCourseTypes.length ? "" : "display:none" }, tabsPrevBtn, tabsTrack, tabsNextBtn);
 
   const row = el("div", { class: "hrow gap10", style: "flex-wrap:wrap;justify-content:space-between" },
     el("div", { class: "hrow gap10", style: "flex:1;min-width:260px;flex-wrap:wrap" },
       qInp,
       el("div", { style: "min-width:220px" }, companySel),
-      el("div", { style: "min-width:220px" }, typeSel),
     ),
     createBtn
   );
 
-  const toolbar = el("div", { class: "card cardPad vcol gap10" }, row);
+  const toolbar = el("div", { class: "card cardPad vcol gap10" }, row, tabsRow);
   const board = el("div", { class: "kanbanWrap", id: "courseBoard" });
   host.innerHTML = "";
   host.append(toolbar, board);
@@ -5612,6 +5640,75 @@ App.renderCourses = async function (host, routeId) {
 
   // ---- data ----
   let raw = [];
+
+  const clampTabsOffset = () => {
+    const lim = tabsLimit();
+    const maxOffset = Math.max(0, activeCourseTypes.length - lim);
+    if (tabsOffset < 0) tabsOffset = 0;
+    if (tabsOffset > maxOffset) tabsOffset = maxOffset;
+  };
+  const ensureSelectedTabVisible = () => {
+    if (!activeCourseTypes.length || !selectedCourseTypeId) return;
+    const idx = activeCourseTypes.findIndex(x => Number(x.id) === Number(selectedCourseTypeId));
+    if (idx < 0) return;
+    const lim = tabsLimit();
+    if (idx < tabsOffset) tabsOffset = idx;
+    if (idx >= tabsOffset + lim) tabsOffset = idx - lim + 1;
+    clampTabsOffset();
+  };
+  const renderTypeTabs = () => {
+    if (!activeCourseTypes.length) {
+      tabsRow.style.display = "none";
+      return;
+    }
+    tabsRow.style.display = "";
+    ensureSelectedTabVisible();
+    const lim = tabsLimit();
+    tabsTrack.style.setProperty("--tab-limit", String(lim));
+    const maxOffset = Math.max(0, activeCourseTypes.length - lim);
+    tabsPrevBtn.disabled = tabsOffset <= 0 ? "disabled" : null;
+    tabsNextBtn.disabled = tabsOffset >= maxOffset ? "disabled" : null;
+
+    tabsTrack.innerHTML = "";
+    const visible = activeCourseTypes.slice(tabsOffset, tabsOffset + lim);
+    for (const ct of visible) {
+      const idNum = Number(ct.id);
+      tabsTrack.appendChild(
+        el("button", {
+          class: `courseTypeTab ${idNum === Number(selectedCourseTypeId) ? "active" : ""}`,
+          type: "button",
+          title: courseTypeLabel(ct),
+          onClick: async () => {
+            if (idNum === Number(selectedCourseTypeId)) return;
+            selectedCourseTypeId = idNum;
+            renderTypeTabs();
+            await load();
+          }
+        }, courseTypeLabel(ct))
+      );
+    }
+  };
+  tabsPrevBtn.onclick = async () => {
+    tabsOffset -= 1;
+    clampTabsOffset();
+    renderTypeTabs();
+  };
+  tabsNextBtn.onclick = async () => {
+    tabsOffset += 1;
+    clampTabsOffset();
+    renderTypeTabs();
+  };
+  if (typeof App.state.coursesTabsResizeCleanup === "function") {
+    App.state.coursesTabsResizeCleanup();
+    App.state.coursesTabsResizeCleanup = null;
+  }
+  const onCoursesTabsResize = () => {
+    if (App.state.routeId !== rid) return;
+    renderTypeTabs();
+  };
+  window.addEventListener("resize", onCoursesTabsResize);
+  App.state.coursesTabsResizeCleanup = () => window.removeEventListener("resize", onCoursesTabsResize);
+  renderTypeTabs();
 
   const filterRows = () => {
     const q = String(qInp.value || "").trim().toLowerCase();
@@ -6144,7 +6241,7 @@ App.renderCourses = async function (host, routeId) {
   let loadTimer = null;
   const load = async () => {
     const company_id = companySel.value ? Number(companySel.value) : null;
-    const course_type_id = typeSel.value ? Number(typeSel.value) : null;
+    const course_type_id = selectedCourseTypeId ? Number(selectedCourseTypeId) : null;
 
     const sp = new URLSearchParams();
     if (company_id) sp.set("company_id", String(company_id));
@@ -6162,7 +6259,6 @@ App.renderCourses = async function (host, routeId) {
     loadTimer = setTimeout(render, 150);
   });
   companySel.addEventListener("change", load);
-  typeSel.addEventListener("change", load);
 
   // ---- MODALS ----
   function openCreate() {
