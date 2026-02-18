@@ -2213,7 +2213,7 @@ select option{
           new: { ru: "Новый", uz: "Yangi", en: "New" },
           tz_given: { ru: "ТЗ дано", uz: "TZ berilgan", en: "TZ given" },
           offer_given: { ru: "Оффер дан", uz: "Taklif berilgan", en: "Offer given" },
-          in_progress: { ru: "Р’ работе", uz: "Jarayonda", en: "In progress" },
+          in_progress: { ru: "В работе", uz: "Jarayonda", en: "In progress" },
           later: { ru: "Позже", uz: "Keyinroq", en: "Later" },
           review: { ru: "Отзыв", uz: "Ko'rib chiqish", en: "Review" },
           done: { ru: "Готово", uz: "Tayyor", en: "Done" },
@@ -3026,7 +3026,7 @@ if (String(q.open_create || "") === "1") {
         // вњЋ Edit
         if (canEdit) {
           actions.push({
-            label: "вњЋ " + (DICT[App.state.lang] ?.edit || "Edit"),
+            label: "✎ " + (DICT[App.state.lang] ?.edit || "Edit"),
             kind: "primary",
             onClick: () => {
               Modal.close();
@@ -3181,7 +3181,7 @@ if (String(q.open_create || "") === "1") {
       )
     );
 
-    Modal.open("вњЋ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
+    Modal.open("✎ " + (DICT[App.state.lang]?.edit || "Edit"), form, [
       { label: t("cancel"), kind: "ghost", onClick: () => Modal.close() },
       {
         label: t("save"),
@@ -3412,7 +3412,7 @@ createBtn.addEventListener("click", () => {
 
       const actions = el("div", { class: "uActions hdrActions" },
         el("button", { class: "btn mini ghost", type: "button", onClick: () => openUserView(u) }, t("open")),
-        el("button", { class: "btn mini ghost", type: "button", onClick: () => openUserEdit(u) }, "вњЋ " + t("edit")),
+        el("button", { class: "btn mini ghost", type: "button", onClick: () => openUserEdit(u) }, "✎ " + t("edit")),
         el("button", { class: "btn mini ghost", type: "button", onClick: () => openResetPassword(u) }, t("reset_password")),
         Number(u.is_active)
           ? el("button", { class: "btn mini danger", type: "button", onClick: () => deactivateUser(u) }, t("deactivate"))
@@ -3532,7 +3532,7 @@ createBtn.addEventListener("click", () => {
       )
     );
 
-    Modal.open("вњЋ " + t("edit"), form, [{
+    Modal.open("✎ " + t("edit"), form, [{
       label: t("save"),
       kind: "primary",
       onClick: async () => {
@@ -3740,11 +3740,11 @@ App.renderCalendar = async function(host, routeId){
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("assignee")),
-            el("div", {}, x.assignee_name || "пїЅ")
+            el("div", {}, x.assignee_name || "-")
           ),
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("project")),
-            el("div", {}, x.project_company_name || "пїЅ")
+            el("div", {}, x.project_company_name || "-")
           )
         ),
         x.lead_id ? el("div", { class: "vcol gap8" },
@@ -3757,7 +3757,7 @@ App.renderCalendar = async function(host, routeId){
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("description")),
-          el("div", { class: "muted", style: "white-space:pre-wrap" }, x.description || "пїЅ")
+          el("div", { class: "muted", style: "white-space:pre-wrap" }, x.description || "-")
         )
       );
 
@@ -4562,7 +4562,7 @@ App.renderProjects = async function (host, routeId) {
     { key: "new",         label: { ru: "Новый",          uz: "Yangi",          en: "New" } },
     { key: "tz_given",    label: { ru: "ТЗ выдано",      uz: "Tz berildi",     en: "TZ given" } },
     { key: "offer_given", label: { ru: "Предложение",    uz: "Taklif berildi", en: "Offer given" } },
-    { key: "in_progress", label: { ru: "Р’ процессе",     uz: "Jarayonda",      en: "In progress" } },
+    { key: "in_progress", label: { ru: "В процессе",      uz: "Jarayonda",      en: "In progress" } },
     { key: "later",       label: { ru: "Позже",          uz: "Keyinroq",       en: "Later" } },
     { key: "done",        label: { ru: "Завершено",      uz: "Bajarildi",      en: "Done" } },
     { key: "review",      label: { ru: "Отзыв",          uz: "Tasurot",        en: "Review" } },
@@ -4782,11 +4782,11 @@ App.renderProjects = async function (host, routeId) {
     if (st === "done" || st === "review") {
       // no extra lines
       if (p.comment) {
-        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "рџ’¬ ", el("b", {}, p.comment)));
+        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "💬 ", el("b", {}, p.comment)));
       }
       const reviewText = tr({ ru: "Отзыв взят", uz: "Tasurot olingan", en: "Review taken" });
       if (Number(p.review) === 1) {
-        bodyParts.push(el("div", { class: "pLine" }, "вњ… ", el("b", {}, reviewText)));
+        bodyParts.push(el("div", { class: "pLine" }, "✓ ", el("b", {}, reviewText)));
       }
     }
     // вњ… CANCELED: 3 lines (company + service + reason)
@@ -4800,19 +4800,19 @@ App.renderProjects = async function (host, routeId) {
     else {
       // meeting time only for new + tz_given
       if ((st === "new" || st === "tz_given") && p.meeting_at) {
-        bodyParts.push(el("div", { class: "pLine" }, "рџ•’ ", el("b", {}, fmtDate(p.meeting_at))));
+        bodyParts.push(el("div", { class: "pLine" }, "🕒 ", el("b", {}, fmtDate(p.meeting_at))));
       }
       if (p.deadline_at) {
-        bodyParts.push(el("div", { class: "pLine" }, "вЏі ", el("b", {}, fmtDate(p.deadline_at))));
+        bodyParts.push(el("div", { class: "pLine" }, "⏳ ", el("b", {}, fmtDate(p.deadline_at))));
       }
       if (isAdmin && p.amount != null) {
-        bodyParts.push(el("div", { class: "pLine" }, "рџ’° ", el("b", {}, fmtAmount(p.amount, p.currency))));
+        bodyParts.push(el("div", { class: "pLine" }, "💰 ", el("b", {}, fmtAmount(p.amount, p.currency))));
       }
       if (p.pm_name) {
-        bodyParts.push(el("div", { class: "pLine" }, "рџ‘¤ ", el("b", {}, p.pm_name)));
+        bodyParts.push(el("div", { class: "pLine" }, "👤 ", el("b", {}, p.pm_name)));
       }
       if (p.comment) {
-        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "рџ’¬ ", el("b", {}, p.comment)));
+        bodyParts.push(el("div", { class: "pLine", style: "white-space:pre-wrap" }, "💬 ", el("b", {}, p.comment)));
       }
     }
 
@@ -5999,7 +5999,7 @@ App.renderCourses = async function (host, routeId) {
     return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   };
   const taskStatusVisual = (status) => {
-    if (status === "done") return { icon: "вњ“", text: "done", className: "ok" };
+    if (status === "done") return { icon: "✓", text: "done", className: "ok" };
     if (status === "canceled") return { icon: "x", text: "canceled", className: "bad" };
     if (status === "in_progress") return { icon: ">", text: "in_progress", className: "run" };
     if (status === "pause") return { icon: "||", text: "pause", className: "pause" };
@@ -6854,9 +6854,9 @@ App.renderCourses = async function (host, routeId) {
             .map(s => {
               const baseLabel = tr(s.label) || s.key;
               const mark =
-                s.key === "enrolled" ? "рџџў " :
-                s.key === "studying" ? "рџ”· " :
-                s.key === "canceled" ? "рџ”ґ " : "";
+                s.key === "enrolled" ? "🟢 " :
+                s.key === "studying" ? "🔵 " :
+                s.key === "canceled" ? "🔴 " : "";
               return {
                 label: `${mark}${baseLabel}`,
                 kind: (s.key === "canceled") ? "danger" : "primary",
