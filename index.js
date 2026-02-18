@@ -728,7 +728,7 @@ moizvonki_email: "MZ Email",
   trash: `<img src="./icons/delete.svg" class="ico" alt="">`,
   send: `<img src="./icons/send.svg" class="ico" alt="">`,
 
-  // оставляем как было (Сѓ тебя их РІ списке иконок нет)
+  // оставляем как было (Сѓ тебя их в списке иконок нет)
   plus: `<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
   palette: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 2 0 0 0 2-2c0-1.1-.9-2-2-2h-1a3 3 0 0 1 0-6h6a4 4 0 0 0 0-8h-6z"/></svg>`,
   };
@@ -2424,7 +2424,7 @@ select option{
       null;
 
     const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : raw; // РІ норме будет number
+    return Number.isFinite(n) && n > 0 ? n : raw; // в норме будет number
   };
 
   const clearHover = () => {
@@ -3668,7 +3668,7 @@ App.renderCalendar = async function(host, routeId){
 
   const monthLabel = () => {
     const names = calMonthNames[App.state.lang] || calMonthNames.ru;
-    if (App.state.lang === "ru") return `${names[state.month]} ${state.year} Рі.`;
+    if (App.state.lang === "ru") return `${names[state.month]} ${state.year}`;
     if (App.state.lang === "en") return `${names[state.month]} ${state.year}`;
     return `${names[state.month]} ${state.year}`;
   };
@@ -6023,7 +6023,7 @@ App.renderCourses = async function (host, routeId) {
         target: "_blank",
         rel: "noopener",
         style: "font-size:12px;color:var(--acc)"
-      }, tr({ ru: "Открыть РІ новой вкладке", uz: "Yangi oynada ochish", en: "Open in new tab" }))
+      }, tr({ ru: "Открыть в новой вкладке", uz: "Yangi oynada ochish", en: "Open in new tab" }))
     );
     Modal.open(tr({ ru: "Прослушивание", uz: "Tinglash", en: "Playback" }), body, [
       { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() }
@@ -6125,6 +6125,16 @@ App.renderCourses = async function (host, routeId) {
       }
     };
 
+    const callStatusText = (row) => {
+      if (row.status === "answered") return tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" });
+      if (row.status === "missed") {
+        return row.direction_label === "outgoing"
+          ? tr({ ru: "Не отвечен", uz: "Javob berilmagan", en: "Not answered" })
+          : tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" });
+      }
+      return tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" });
+    };
+
     const renderCalls = (rows) => {
       callsEl.innerHTML = "";
       if (!rows || !rows.length) {
@@ -6132,11 +6142,7 @@ App.renderCourses = async function (host, routeId) {
         return;
       }
       for (const row of rows) {
-        const statusText = row.status === "answered"
-          ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
-          : (row.status === "missed"
-            ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
-            : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
+        const statusText = callStatusText(row);
         callsEl.appendChild(
           el("div", { class: "chatPinnedItem" },
             el("div", { style: "font-weight:800" }, `${row.direction_label === "outgoing" ? "↗" : "↘"} ${row.client_number || "-"}`),
@@ -6186,11 +6192,7 @@ App.renderCourses = async function (host, routeId) {
         }
 
         if (row.item_type === "call") {
-          const statusText = row.status === "answered"
-            ? tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" })
-            : (row.status === "missed"
-              ? tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" })
-              : tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
+          const statusText = callStatusText(row);
           feedEl.appendChild(
             el("div", { class: "chatTaskRow" },
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
@@ -6795,7 +6797,7 @@ App.renderCourses = async function (host, routeId) {
             if (sphere) parts.push(el("span", {}, `${tr({ru:"Сфера",uz:"Soha",en:"Sphere"})}: `, el("b", {}, sphere)));
             if (city)   parts.push(el("span", {}, `${tr({ru:"Город",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
 
-            // Коммент лида (РІ одной строке, но аккуратно подрезаем)
+            // Коммент лида (в одной строке, но аккуратно подрезаем)
             if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"Комм.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
 
             return el("div", { class: "cLine" }, ...parts);
@@ -7499,7 +7501,7 @@ App.renderCalls = async function(host, routeId){
   const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "Номер телефона", uz: "Telefon raqami", en: "Phone number" }) });
   const linkedSel = el("select", { class: "input" },
     el("option", { value: "all" }, tr({ ru: "Все", uz: "Barchasi", en: "All" })),
-    el("option", { value: "linked" }, tr({ ru: "Есть РІ базе", uz: "Bazaga bog'langan", en: "Linked" })),
+    el("option", { value: "linked" }, tr({ ru: "Есть в базе", uz: "Bazaga bog'langan", en: "Linked" })),
     el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
   );
   linkedSel.value = state.linked;
@@ -7531,7 +7533,12 @@ App.renderCalls = async function(host, routeId){
 
   const badgeByStatus = (x) => {
     if (x.status === "answered") return el("span", { class: "callBadge ok" }, tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" }));
-    if (x.status === "missed") return el("span", { class: "callBadge bad" }, tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" }));
+    if (x.status === "missed") {
+      const missedLabel = x.direction_label === "outgoing"
+        ? tr({ ru: "Не отвечен", uz: "Javob berilmagan", en: "Not answered" })
+        : tr({ ru: "Пропущен", uz: "Javobsiz", en: "Missed" });
+      return el("span", { class: "callBadge bad" }, missedLabel);
+    }
     return el("span", { class: "callBadge neutral" }, tr({ ru: "Завершен", uz: "Yakunlangan", en: "Ended" }));
   };
 
