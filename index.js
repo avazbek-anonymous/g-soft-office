@@ -618,7 +618,7 @@ moizvonki_email: "MZ Email",
   const ICONS = {
   burger: `<svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>`,
 
-  // РјРµРЅСЋ
+  // меню
   home: `<img src="./icons/asosiy.svg" class="ico" alt="">`,
   tasks: `<img src="./icons/tasks.svg" class="ico" alt="">`,
   chat: `<img src="./icons/chat.svg" class="ico" alt="">`,
@@ -631,17 +631,17 @@ moizvonki_email: "MZ Email",
   settings: `<img src="./icons/settings.svg" class="ico" alt="">`,
   users: `<img src="./icons/users.svg" class="ico" alt="">`,
 
-  // С‚РµРјС‹/Р·Р°С‰РёС‚Р° РіР»Р°Р·
+  // темы/защита глаз
   sun: `<img src="./icons/light.svg" class="ico" alt="">`,
   moon: `<img src="./icons/dark.svg" class="ico" alt="">`,
   eye: `<img src="./icons/eye.svg" class="ico" alt="">`,
 
-  // РґРµР№СЃС‚РІРёСЏ
+  // действия
   edit: `<img src="./icons/edit.svg" class="ico" alt="">`,
   trash: `<img src="./icons/delete.svg" class="ico" alt="">`,
   send: `<img src="./icons/send.svg" class="ico" alt="">`,
 
-  // РѕСЃС‚Р°РІР»СЏРµРј РєР°Рє Р±С‹Р»Рѕ (Сѓ С‚РµР±СЏ РёС… РІ СЃРїРёСЃРєРµ РёРєРѕРЅРѕРє РЅРµС‚)
+  // оставляем как было (Сѓ тебя их РІ списке иконок нет)
   plus: `<svg viewBox="0 0 24 24" class="ico"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>`,
   palette: `<svg viewBox="0 0 24 24" class="ico"><path d="M12 3a9 9 0 0 0 0 18h1a2 2 0 0 0 2-2c0-1.1-.9-2-2-2h-1a3 3 0 0 1 0-6h6a4 4 0 0 0 0-8h-6z"/></svg>`,
   };
@@ -872,7 +872,7 @@ moizvonki_email: "MZ Email",
     list: (q = {}) => {
       const sp = new URLSearchParams();
       if (q.assignee_user_id) sp.set("assignee_user_id", q.assignee_user_id);
-      if (q.project_id) sp.set("project_id", q.project_id); // вњ… Р’РђР–РќРћ РїРѕ РўР—
+      if (q.project_id) sp.set("project_id", q.project_id); // вњ… ВАЖНО по ТЗ
       const s = sp.toString();
       return apiFetch(`/api/tasks${s ? "?" + s : ""}`);
     },
@@ -1100,7 +1100,7 @@ function applyTheme(){
   root.dataset.theme=App.state.theme.mode;
   root.dataset.eye=App.state.theme.eye?"1":"0";
 
-  // Р±РµСЂРµРј cfg РёР· РїР°РјСЏС‚Рё, РёРЅР°С‡Рµ РґРµС„РѕР»С‚
+  // берем cfg из памяти, иначе дефолт
   const cfg = normalizeThemeCfg(App.state.themeCfg);
 
   const mode = App.state.theme.mode;
@@ -1113,7 +1113,7 @@ function applyTheme(){
   root.style.setProperty("--bg", bg);
   root.style.setProperty("--bg2", bg2);
 
-  // text (РґРµР»Р°РµРј RGBA РєР°Рє СЂР°РЅСЊС€Рµ)
+  // text (делаем RGBA как раньше)
   const trgb = hexToRgb(m.text||"#ffffff") || {r:255,g:255,b:255};
   root.style.setProperty("--text", `rgba(${trgb.r},${trgb.g},${trgb.b},.90)`);
   root.style.setProperty("--muted", `rgba(${trgb.r},${trgb.g},${trgb.b},.65)`);
@@ -1356,7 +1356,7 @@ text-decoration:none;
 .main{min-height:100vh}
 .content{flex:1;overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
-/* Kanban should fill width nicely (no РїСѓСЃС‚РѕС‚С‹ СЃРїСЂР°РІР°) */
+/* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
   --cols:8;
   display:grid;
@@ -1459,14 +1459,14 @@ select option{
 }
 
 /* ==========================================================
-   вњ… KANBAN DnD UPGRADE PACK (РўРћР›Р¬РљРћ Р”РћР‘РђР’РљР, РќР• Р›РћРњРђР•Рњ РЎРўРђР РћР•)
-   - drop target РЅР° РІСЃСЋ РІС‹СЃРѕС‚Сѓ
-   - РїРѕРґСЃРІРµС‚РєР°
-   - Р°РЅРёРјР°С†РёСЏ
-   - РјС‹С€СЊ + touch (РІРёР·СѓР°Р» + С…РѕРІРµСЂ)
+   ✅ KANBAN DnD UPGRADE PACK (ТОЛЬКО ДОБАВКИ, НЕ ЛОМАЕМ СТАРОЕ)
+   - drop target на всю высоту
+   - подсветка
+   - анимация
+   - мышь + touch (визуал + ховер)
    ========================================================== */
 
-/* drop-zone СЂРµР°Р»СЊРЅРѕ "РІС‹СЃРѕРєР°СЏ" РґР°Р¶Рµ РµСЃР»Рё РєР°СЂС‚РѕС‡РµРє РјР°Р»Рѕ */
+/* drop-zone реально "высокая" даже если карточек мало */
 .kanbanWrap .kcol{
   display:flex;
   flex-direction:column;
@@ -1475,12 +1475,12 @@ select option{
 .kanbanWrap .khead{flex:0 0 auto}
 .kanbanWrap .klist{
   flex:1 1 auto;
-  /* РіР»Р°РІРЅРѕРµ: Р·РѕРЅР° РґСЂРѕРїР° РІС‹СЃРѕРєР°СЏ */
+  /* главное: зона дропа высокая */
   min-height:max(160px, calc(100vh - 260px));
   transition: background .12s ease, outline-color .12s ease, box-shadow .12s ease, transform .12s ease;
 }
 
-/* РїРѕРґСЃРІРµС‚РєР° / С…РѕРІРµСЂ */
+/* подсветка / ховер */
 .kanbanWrap .klist.drop,
 .kanbanWrap .klist.dropHover,
 .kanbanWrap .klist[data-drop].dropHover{
@@ -1496,7 +1496,7 @@ select option{
   to{ box-shadow: inset 0 0 0 1px rgba(255,208,90,.22), 0 0 0 3px rgba(255,208,90,.06); }
 }
 
-/* РїР»Р°РІРЅРѕСЃС‚СЊ Рё РѕС‰СѓС‰РµРЅРёРµ "живого" drag */
+/* плавность Рё ощущение "живого" drag */
 .kanbanWrap .kcard{
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, opacity .12s ease;
 }
@@ -1506,7 +1506,7 @@ select option{
   transform: scale(.985);
 }
 
-/* РЅР° С‚РµР»РµС„РѕРЅРµ: РЅРµ Р·Р°СЃС‚Р°РІР»СЏРµРј РєР°РЅР±Р°РЅ Р±С‹С‚СЊ РІС‹СЃРѕРєРёРј "РєР°Рє РґРµСЃРєС‚РѕРї" */
+/* на телефоне: не заставляем канбан быть высоким "как десктоп" */
 @media (max-width:900px){
   .calOpenBtn{display:none}
   .kanbanWrap .klist{
@@ -1574,7 +1574,7 @@ select option{
 
   document.head.appendChild(el("style", { id: "gsoftStyles" }, css));
 
-  // вњ… РїРѕРґСЃРІРµС‚РєР° drop-Р·РѕРЅС‹ РґР»СЏ РјС‹С€Рё (HTML5 Drag&Drop)
+  // вњ… подсветка drop-зоны для мыши (HTML5 Drag&Drop)
   if (!window.__gsoftDnDHoverInit) {
     window.__gsoftDnDHoverInit = 1;
 
@@ -1588,7 +1588,7 @@ select option{
     const pickList = (x, y) => {
       const elAt = document.elementFromPoint(x, y);
       if (!elAt) return null;
-      // РїРѕРґРґРµСЂР¶РёРј Рё .klist, Рё [data-drop]
+      // поддержим Рё .klist, Рё [data-drop]
       return elAt.closest?.(".klist") || elAt.closest?.("[data-drop]") || null;
     };
 
@@ -1606,8 +1606,8 @@ select option{
     }, true);
 
     document.addEventListener("dragleave", () => {
-      // leave РёРЅРѕРіРґР° СЃСЂР°Р±Р°С‚С‹РІР°РµС‚ "ложно", РїРѕСЌС‚РѕРјСѓ С‡РёСЃС‚РёРј РјСЏРіРєРѕ
-      // (СЂРµР°Р»СЊРЅРѕ Р·Р°С‡РёСЃС‚РєР° РїСЂРѕРёР·РѕР№РґС‘С‚ РЅР° drop/dragend)
+      // leave иногда срабатывает "ложно", поэтому чистим мягко
+      // (реально зачистка произойдёт на drop/dragend)
     }, true);
 
     document.addEventListener("drop", clear, true);
@@ -2119,14 +2119,14 @@ select option{
           need_call: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" },
           thinking: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" },
           enrolled: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" },
-          studying: { ru: "РЈСЃРїРµС€РЅРѕ", uz: "Muvaffaqiyatli", en: "Success" },
+          studying: { ru: "Успешно", uz: "Muvaffaqiyatli", en: "Success" },
           canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
         };
         const projectStageLabels = {
           new: { ru: "Новый", uz: "Yangi", en: "New" },
           tz_given: { ru: "ТЗ дано", uz: "TZ berilgan", en: "TZ given" },
           offer_given: { ru: "Оффер дан", uz: "Taklif berilgan", en: "Offer given" },
-          in_progress: { ru: "Р’ СЂР°Р±РѕС‚Рµ", uz: "Jarayonda", en: "In progress" },
+          in_progress: { ru: "Р’ работе", uz: "Jarayonda", en: "In progress" },
           later: { ru: "Позже", uz: "Keyinroq", en: "Later" },
           review: { ru: "Отзыв", uz: "Ko'rib chiqish", en: "Review" },
           done: { ru: "Готово", uz: "Tayyor", en: "Done" },
@@ -2236,7 +2236,7 @@ select option{
         const dash = el("div", { class: "mainDashWrap vcol gap12", id: "mainDashWrap" },
           el("div", { class: "mainDashGrid" },
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
-              el("div", { class: "mainDashTitle" }, tr({ ru: "РљСѓСЂСЃС‹", uz: "Kurslar", en: "Courses" })),
+              el("div", { class: "mainDashTitle" }, tr({ ru: "Курсы", uz: "Kurslar", en: "Courses" })),
               el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
               makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, barMax),
               makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, barMax, "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
@@ -2250,7 +2250,7 @@ select option{
               pieLegend
             ),
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
-              el("div", { class: "mainDashTitle" }, tr({ ru: "РџСЂРѕРµРєС‚С‹ РїРѕ СЌС‚Р°РїР°Рј", uz: "Loyihalar bosqichi", en: "Projects by stage" })),
+              el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты по этапам", uz: "Loyihalar bosqichi", en: "Projects by stage" })),
               ...Object.entries(projectCounts)
                 .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
                 .map(([k, v], i) => makeBar(
@@ -2320,7 +2320,7 @@ select option{
   };
 
   function bindTouchDrag(cardEl, onDrop) {
-  // РїРѕРґРґРµСЂР¶РєР°: Pointer Events (touch + pen + РјС‹С€СЊ)
+  // поддержка: Pointer Events (touch + pen + мышь)
   let dragging = false;
   let started = false;
   let startX = 0, startY = 0;
@@ -2330,14 +2330,14 @@ select option{
   let lastList = null;
 
   const getCardId = () => {
-    // Сѓ С‚РµР±СЏ РЅР° РєР°СЂС‚РѕС‡РєР°С… СЃС‚РѕРёС‚ data-id
+    // Сѓ тебя на карточках стоит data-id
     const raw =
       (cardEl && cardEl.dataset && (cardEl.dataset.id || cardEl.dataset.taskId || cardEl.dataset.projectId || cardEl.dataset.courseId)) ||
       cardEl.getAttribute?.("data-id") ||
       null;
 
     const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : raw; // РІ РЅРѕСЂРјРµ Р±СѓРґРµС‚ number
+    return Number.isFinite(n) && n > 0 ? n : raw; // РІ норме будет number
   };
 
   const clearHover = () => {
@@ -2375,7 +2375,7 @@ select option{
   };
 
   const onDown = (e) => {
-    // С‚РѕР»СЊРєРѕ touch/pen - РјС‹С€СЊ РїСѓСЃС‚СЊ СЂР°Р±РѕС‚Р°РµС‚ С‡РµСЂРµР· native drag
+    // только touch/pen - мышь пусть работает через native drag
     if (e.pointerType === "mouse") return;
 
     pointerId = e.pointerId;
@@ -2387,7 +2387,7 @@ select option{
 
     try { cardEl.setPointerCapture(pointerId); } catch {}
 
-    // Р·Р°РїСЂРµС‚РёРј СЃРєСЂРѕР»Р» СЃС‚СЂР°РЅРёС†С‹ РїРѕРєР° РґРµСЂР¶РёРј РєР°СЂС‚РѕС‡РєСѓ
+    // запретим скролл страницы пока держим карточку
     e.preventDefault();
   };
 
@@ -2398,7 +2398,7 @@ select option{
     dx = e.clientX - startX;
     dy = e.clientY - startY;
 
-    // РїРѕСЂРѕРі РЅР°С‡Р°Р»Р° РїРµСЂРµС‚Р°СЃРєРёРІР°РЅРёСЏ
+    // порог начала перетаскивания
     if (!dragging) {
       if (Math.hypot(dx, dy) < 6) return;
       dragging = true;
@@ -2409,7 +2409,7 @@ select option{
     e.preventDefault();
     moveGhost(dx, dy);
 
-    // РїРѕРґСЃРІРµС‚РєР° РєРѕР»РѕРЅРєРё РїРѕРґ РїР°Р»СЊС†РµРј
+    // подсветка колонки под пальцем
     const list = pickListAt(e.clientX, e.clientY);
     if (list && list.classList) {
       if (lastList !== list) {
@@ -2433,23 +2433,23 @@ select option{
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    // cleanup РІРёР·СѓР°Р»Р°
+    // cleanup визуала
     if (ghost) ghost.remove();
     ghost = null;
 
-    // РµСЃР»Рё СЂРµР°Р»СЊРЅРѕ РїРµСЂРµС‚Р°СЃРєРёРІР°Р»Рё - РґРµР»Р°РµРј drop
+    // если реально перетаскивали - делаем drop
     if (dragging) {
       const target = lastList || pickListAt(clientX, clientY);
 
-      // Р·РґРµСЃСЊ РѕР¶РёРґР°РµС‚СЃСЏ, С‡С‚Рѕ Сѓ drop-Р·РѕРЅС‹ РµСЃС‚СЊ data-drop (РєР°Рє Сѓ С‚РµР±СЏ)
-      // РµСЃР»Рё drop-Р·РѕРЅР° СЌС‚Рѕ .klist - Р±РµСЂРё СЃС‚Р°С‚СѓСЃ РёР· dataset:
+      // здесь ожидается, что Сѓ drop-зоны есть data-drop (как Сѓ тебя)
+      // если drop-зона это .klist - бери статус из dataset:
       const status = target?.dataset?.drop || target?.getAttribute?.("data-drop") || null;
 
       if (status) {
         const id = getCardId();
 
-        // вњ… FIX: РµСЃР»Рё РѕР±СЂР°Р±РѕС‚С‡РёРє Р¶РґС‘С‚ (id, status) - РїРµСЂРµРґР°С‘Рј С‚Р°Рє
-        // вњ… РёРЅР°С‡Рµ РѕСЃС‚Р°РІР»СЏРµРј СЃС‚Р°СЂРѕРµ РїРѕРІРµРґРµРЅРёРµ (status)
+        // вњ… FIX: если обработчик ждёт (id, status) - передаём так
+        // вњ… иначе оставляем старое поведение (status)
         if (typeof onDrop === "function") {
           if (onDrop.length >= 2) onDrop(id, status);
           else onDrop(status);
@@ -2548,7 +2548,7 @@ select option{
       if (App.state.routeId !== rid) return;
       App.state.cache.users = list || [];
 
-      // dropdown СЃРІРµСЂС…Сѓ С‚РѕР»СЊРєРѕ Сѓ admin - РїРѕСЌС‚РѕРјСѓ РїСЂРѕРІРµСЂСЏРµРј
+      // dropdown сверху только Сѓ admin - поэтому проверяем
       if (usersSel) {
         for (const u of App.state.cache.users) {
           usersSel.appendChild(el("option", {
@@ -2565,7 +2565,7 @@ select option{
       App.state.cache.projects = pr || [];
     }
 
-    // вњ… Project filter (РїРѕ РўР—)
+    // вњ… Project filter (по ТЗ)
 let projectSel = null;
 const qpid0 = (App.state.current.query && App.state.current.query.project_id)
   ? String(App.state.current.query.project_id)
@@ -2590,7 +2590,7 @@ if (Array.isArray(App.state.cache.projects) && App.state.cache.projects.length) 
   if (projectSel.value) sp.set("project_id", projectSel.value);
   else sp.delete("project_id");
 
-  // РѕРґРЅРѕСЂР°Р·РѕРІС‹Рµ С„Р»Р°РіРё РЅРµР»СЊР·СЏ С‚СЏРЅСѓС‚СЊ РґР°Р»СЊС€Рµ, РёРЅР°С‡Рµ Р±СѓРґРµС‚ РјСѓСЃРѕСЂ
+  // одноразовые флаги нельзя тянуть дальше, иначе будет мусор
   sp.delete("open_create");
   sp.delete("open");
 
@@ -2775,7 +2775,7 @@ const project_id =
 
 const r = await API.tasks.list({
   assignee_user_id: assignee_user_id ? Number(assignee_user_id) : null,
-  project_id: project_id ? Number(project_id) : null, // вњ… Р’РђР–РќРћ РїРѕ РўР—
+  project_id: project_id ? Number(project_id) : null, // вњ… ВАЖНО по ТЗ
 });
 
         if (App.state.routeId !== rid) return;
@@ -2783,12 +2783,12 @@ const r = await API.tasks.list({
         render();
         if (openId) openTask(openId);
 
-// one-time: РѕС‚РєСЂС‹С‚СЊ СЃРѕР·РґР°РЅРёРµ Р·Р°РґР°С‡Рё РёР· Projects (#/tasks?project_id=..&open_create=1)
+// one-time: открыть создание задачи из Projects (#/tasks?project_id=..&open_create=1)
 const q = (App.state.current && App.state.current.query) ? App.state.current.query : {};
 if (String(q.open_create || "") === "1") {
   openTaskCreate({ project_id: q.project_id ? Number(q.project_id) : null });
 
-  // СѓР±СЂР°С‚СЊ С„Р»Р°Рі, С‡С‚РѕР±С‹ РјРѕРґР°Р»РєР° РЅРµ РѕС‚РєСЂС‹РІР°Р»Р°СЃСЊ СЃРЅРѕРІР° РїСЂРё refresh
+  // убрать флаг, чтобы модалка не открывалась снова при refresh
   try {
     const sp = new URLSearchParams(window.location.hash.split("?")[1] || "");
     sp.delete("open_create");
@@ -3160,7 +3160,7 @@ if (String(q.open_create || "") === "1") {
       }
 
       if (preset && preset.project_id) projSel.value = String(preset.project_id);
-      // РµСЃР»Рё С„РёР»СЊС‚СЂ СЃРІРµСЂС…Сѓ РІС‹Р±СЂР°РЅ - РїСѓСЃС‚СЊ С‚РѕР¶Рµ РїРѕРґСЃС‚Р°РІР»СЏРµС‚СЃСЏ
+      // если фильтр сверху выбран - пусть тоже подставляется
       if (!projSel.value && projectSel && projectSel.value) projSel.value = String(projectSel.value);
 
       let assigneeSel = el("select", { class: "sel" });
@@ -3568,12 +3568,12 @@ App.renderCalendar = async function(host, routeId){
   const langToLocale = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
   const calendarLocale = langToLocale[App.state.lang] || "ru-RU";
   const calMonthNames = {
-    ru: ["СЏРЅРІР°СЂСЊ","С„РµРІСЂР°Р»СЊ","РјР°СЂС‚","Р°РїСЂРµР»СЊ","май","июнь","июль","Р°РІРіСѓСЃС‚","СЃРµРЅС‚СЏР±СЂСЊ","РѕРєС‚СЏР±СЂСЊ","РЅРѕСЏР±СЂСЊ","РґРµРєР°Р±СЂСЊ"],
+    ru: ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"],
     uz: ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentyabr","oktyabr","noyabr","dekabr"],
     en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
   };
   const calWeekNames = {
-    ru: ["ПН","ВТ","РЎР ","ЧТ","ПТ","РЎР‘","ВС"],
+    ru: ["ПН","ВТ","СР","ЧТ","ПТ","СБ","ВС"],
     uz: ["DU","SE","CH","PA","JU","SH","YA"],
     en: ["MON","TUE","WED","THU","FRI","SAT","SUN"],
   };
@@ -4098,7 +4098,7 @@ function langLabel3(row){
 
 async function tryLoadThemeFromServer(){
   try{
-    const r=await API.settings.themeGet(); // admin-only, РЅРѕ РјС‹ Р»РѕРІРёРј РѕС€РёР±РєРё
+    const r=await API.settings.themeGet(); // admin-only, но мы ловим ошибки
     const v=r?.data?.value || null;
     App.state.themeCfg = normalizeThemeCfg(v);
     applyTheme();
@@ -4375,7 +4375,7 @@ App.renderSettings = async function(host, routeId){
       dictCard("settings_sources","sources",state.sources,true),
       dictCard("settings_service_types","service_types",state.service_types,true),
       dictCard("settings_course_types","course_types",state.course_types,false),
-      el("div") // С‡С‚РѕР±С‹ СЃРµС‚РєР° СЂРѕРІРЅРѕ РІС‹РіР»СЏРґРµР»Р°
+      el("div") // чтобы сетка ровно выглядела
     );
 
     host.append(top, grid);
@@ -4475,7 +4475,7 @@ App.renderProjects = async function (host, routeId) {
     { key: "new",         label: { ru: "Новый",          uz: "Yangi",          en: "New" } },
     { key: "tz_given",    label: { ru: "ТЗ выдано",      uz: "Tz berildi",     en: "TZ given" } },
     { key: "offer_given", label: { ru: "Предложение",    uz: "Taklif berildi", en: "Offer given" } },
-    { key: "in_progress", label: { ru: "Р’ РїСЂРѕС†РµСЃСЃРµ",     uz: "Jarayonda",      en: "In progress" } },
+    { key: "in_progress", label: { ru: "Р’ процессе",     uz: "Jarayonda",      en: "In progress" } },
     { key: "later",       label: { ru: "Позже",          uz: "Keyinroq",       en: "Later" } },
     { key: "done",        label: { ru: "Завершено",      uz: "Bajarildi",      en: "Done" } },
     { key: "review",      label: { ru: "Отзыв",          uz: "Tasurot",        en: "Review" } },
@@ -4655,7 +4655,7 @@ App.renderProjects = async function (host, routeId) {
       }
       await API.projects.move(id, status, extra);
 
-      // вњ… СѓСЃРєРѕСЂРµРЅРёРµ: РЅРµ РіСЂСѓР·РёРј Р·Р°РЅРѕРІРѕ СЃ СЃРµСЂРІРµСЂР°, РѕР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅРѕ
+      // вњ… ускорение: не грузим заново СЃ сервера, обновляем локально
       const row = all.find(x => Number(x.id) === Number(id));
       if (row) {
         row.status = status;
@@ -4946,7 +4946,7 @@ const pmUsers = allUsers.filter(u => u.role === "pm");
 const otherLabel =
   (App.state.lang === "uz") ? "Boshqa" :
   (App.state.lang === "en") ? "Another" :
-  "Р”СЂСѓРіРѕР№";
+  "Другой";
 
 const pmSel = el("select", { class: "sel" });
 pmSel.appendChild(el("option", { value: "" }, "-"));
@@ -4961,7 +4961,7 @@ for (const u of allUsers) {
   pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
 
-// default: СЃС‚Р°РІРёРј С‚РµРєСѓС‰РµРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (С‡С‚РѕР±С‹ РЅРµ "обязательность руками")
+// default: ставим текущего пользователя (чтобы не "обязательность руками")
 const presetId = Number(App.state.user?.id || 0);
 const presetIsPm = pmUsers.some(u => Number(u.id) === presetId);
 if (presetId && !presetIsPm) {
@@ -5073,7 +5073,7 @@ pmSel.addEventListener("change", () => {
       ),
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})),
           amountInp
         ),
         el("div", { class: "vcol gap8" },
@@ -5082,7 +5082,7 @@ pmSel.addEventListener("change", () => {
         ),
       ),
       el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РћС‚РІРµС‚СЃС‚РІРµРЅРЅС‹Р№",uz:"Mas'ul",en:"Responsible"})),
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный",uz:"Mas'ul",en:"Responsible"})),
         pmSel, pmAnySel
       ),
       el("div", { class: "vcol gap8" },
@@ -5114,7 +5114,7 @@ pmSel.addEventListener("change", () => {
             const res = await API.projects.create(payload);
             const newId = (res && res.data && res.data.id) ? res.data.id : null;
 
-            // вњ… Р»РѕРєР°Р»СЊРЅРѕ РґРѕР±Р°РІР»СЏРµРј, РЅРµ РїРѕР»РЅС‹Р№ reload
+            // вњ… локально добавляем, не полный reload
             if (newId) {
               const full = await API.projects.get(newId).catch(() => null);
               if (full && full.data) all.unshift(full.data);
@@ -5166,7 +5166,7 @@ const pmUsers  = allUsers.filter(u => u.role === "pm");
 const otherLabel =
   (App.state.lang === "uz") ? "Boshqa" :
   (App.state.lang === "en") ? "Another" :
-  "Р”СЂСѓРіРѕР№";
+  "Другой";
 
 const pmSel = el("select", { class: "sel" });
 pmSel.appendChild(el("option", { value: "" }, "-"));
@@ -5181,7 +5181,7 @@ for (const u of allUsers) {
   pmAnySel.appendChild(el("option", { value: String(u.id) }, `${u.full_name} (${u.role})`));
 }
 
-// preset: С‚РµРєСѓС‰РёР№ pm_user_id РїСЂРѕРµРєС‚Р°
+// preset: текущий pm_user_id проекта
 const presetId   = Number(p.pm_user_id || 0);
 const presetIsPm = pmUsers.some(u => Number(u.id) === presetId);
 
@@ -5237,10 +5237,10 @@ pmSel.addEventListener("change", () => {
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("deadline") || "Deadline"), dlInp),
       ),
       el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РЎСѓРјРјР° (С‚РѕР»СЊРєРѕ Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
+        el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Сумма (только Admin)",uz:"Summа (faqat Admin)",en:"Amount (Admin only)"})), amountInp),
         el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), curSel),
       ),
-      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"РћС‚РІРµС‚СЃС‚РІРµРЅРЅС‹Р№",uz:"Mas'ul",en:"Responsible"})), pmSel, pmAnySel),
+      el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Ответственный",uz:"Mas'ul",en:"Responsible"})), pmSel, pmAnySel),
       el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("comment") || "Comment"), commentInp),
       el("div", { class: "vcol gap8" },
         el("div", { class: "muted2", style: "font-size:12px" }, tr({ru:"Отзыв",uz:"Tasurot",en:"Review"})),
@@ -5319,15 +5319,15 @@ pmSel.addEventListener("change", () => {
     });
 
     const lines = el("div", { class: "vcol gap8" },
-      el("div", { class: "pLine" }, tr({ru:"РЎС‚Р°С‚СѓСЃ:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
+      el("div", { class: "pLine" }, tr({ru:"Статус:",uz:"Status:",en:"Status:"}), el("b", {}, tr(statusCols.find(x=>x.key===p.status)?.label || {}))),
       el("div", { class: "pLine" },
         tr({ru:"Отзыв:",uz:"Tasurot:",en:"Review:"}),
         el("b", {}, reviewChk.checked ? tr({ru:"Взят",uz:"Olingan",en:"Taken"}) : tr({ru:"Нет",uz:"Yo'q",en:"No"})),
         el("span", { style: "margin-left:8px" }, reviewChk)
       ),
-      p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Р’СЃС‚СЂРµС‡Р°:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
+      p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Встреча:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
       p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Дедлайн:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
-      (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"РЎСѓРјРјР°:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
+      (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"Сумма:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
       p.pm_name ? el("div", { class: "pLine" }, "PM:", el("b", {}, p.pm_name)) : null,
       (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"Причина отмены:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "-")) : null,
       p.comment ? el("div", { class: "muted2", style: "white-space:pre-wrap;margin-top:6px" }, p.comment) : null,
@@ -5518,7 +5518,7 @@ App.renderCourses = async function (host, routeId) {
     { key: "need_call", label: { ru: "Нужно звонить",    uz: "Qo'ng'iroq kerak",      en: "Need call" } },
     { key: "thinking",  label: { ru: "Думает",           uz: "O'ylab ko'rmoqda",      en: "Thinking" } },
     { key: "enrolled",  label: { ru: "Записан",          uz: "Kursga yozildi",        en: "Enrolled" } },
-    { key: "studying",  label: { ru: "РЈСЃРїРµС€РЅРѕ",          uz: "Muvaffaqiyatli",        en: "Success" } },
+    { key: "studying",  label: { ru: "Успешно",          uz: "Muvaffaqiyatli",        en: "Success" } },
     { key: "canceled",  label: { ru: "Отмена",           uz: "Otmen",                 en: "Canceled" } },
   ];
 
@@ -5827,7 +5827,7 @@ App.renderCourses = async function (host, routeId) {
         { label: t("save") || "Save", kind: "primary", onClick: () => {
             const v = (inp.value || "").trim();
             const n = Number(v);
-            if (!v || !Number.isFinite(n)) { Toast.show(tr({ ru: "РЎСѓРјРјР° РѕР±СЏР·Р°С‚РµР»СЊРЅР°", uz: "Summa majburiy", en: "Amount required" }), "bad"); return; }
+            if (!v || !Number.isFinite(n)) { Toast.show(tr({ ru: "Сумма обязательна", uz: "Summa majburiy", en: "Amount required" }), "bad"); return; }
             Modal.close(); resolve(n);
           }
         }
@@ -5916,7 +5916,7 @@ App.renderCourses = async function (host, routeId) {
         target: "_blank",
         rel: "noopener",
         style: "font-size:12px;color:var(--acc)"
-      }, tr({ ru: "РћС‚РєСЂС‹С‚СЊ РІ РЅРѕРІРѕР№ РІРєР»Р°РґРєРµ", uz: "Yangi oynada ochish", en: "Open in new tab" }))
+      }, tr({ ru: "Открыть РІ новой вкладке", uz: "Yangi oynada ochish", en: "Open in new tab" }))
     );
     Modal.open(tr({ ru: "Прослушивание", uz: "Tinglash", en: "Playback" }), body, [
       { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() }
@@ -5943,12 +5943,12 @@ App.renderCourses = async function (host, routeId) {
       rows: 4,
       placeholder: tr({ ru: "Текст задачи", uz: "Vazifa matni", en: "Task text" })
     });
-    const taskCreateBtn = el("button", { class: "btn", type: "button" }, tr({ ru: "РЎРѕР·РґР°С‚СЊ Р·Р°РґР°С‡Сѓ", uz: "Vazifa yaratish", en: "Create task" }));
+    const taskCreateBtn = el("button", { class: "btn", type: "button" }, tr({ ru: "Создать задачу", uz: "Vazifa yaratish", en: "Create task" }));
 
     const msgInp = el("textarea", {
       class: "input",
       rows: 1,
-      placeholder: tr({ ru: "РЎРѕРѕР±С‰РµРЅРёРµ...", uz: "Xabar...", en: "Message..." })
+      placeholder: tr({ ru: "Сообщение...", uz: "Xabar...", en: "Message..." })
     });
     const msgSendBtn = el("button", {
       class: "iconBtn chatSendBtn",
@@ -6000,7 +6000,7 @@ App.renderCourses = async function (host, routeId) {
     const renderPinned = (rows) => {
       pinnedEl.innerHTML = "";
       if (!rows || !rows.length) {
-        pinnedEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РќРµС‚ Р·Р°РєСЂРµРїР»РµРЅРЅС‹С… Р·Р°РґР°С‡", uz: "Biriktirilgan vazifa yo'q", en: "No pinned tasks" })));
+        pinnedEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Нет закрепленных задач", uz: "Biriktirilgan vazifa yo'q", en: "No pinned tasks" })));
         return;
       }
       for (const row of rows) {
@@ -6164,7 +6164,7 @@ App.renderCourses = async function (host, routeId) {
         }
         const deadline_at = Math.floor(new Date(taskDeadlineInp.value).getTime() / 1000);
         if (!Number.isFinite(deadline_at) || deadline_at <= 0) {
-          Toast.show(tr({ ru: "РќРµРІРµСЂРЅС‹Р№ РґРµРґР»Р°Р№РЅ", uz: "Muddat noto'g'ri", en: "Invalid deadline" }), "bad");
+          Toast.show(tr({ ru: "Неверный дедлайн", uz: "Muddat noto'g'ri", en: "Invalid deadline" }), "bad");
           return;
         }
         await API.courseChat.createTask(leadId, { assignee_user_id, description: txt, deadline_at });
@@ -6198,7 +6198,7 @@ App.renderCourses = async function (host, routeId) {
         taskCreateBtn
       ),
       el("div", { class: "chatPinnedBox" },
-        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Р—Р°РєСЂРµРїР»РµРЅРЅС‹Рµ", uz: "Biriktirilgan", en: "Pinned" })),
+        el("div", { class: "chatPinnedTitle" }, tr({ ru: "Закрепленные", uz: "Biriktirilgan", en: "Pinned" })),
         pinnedEl
       ),
       el("div", { class: "chatPinnedBox" },
@@ -6231,7 +6231,7 @@ App.renderCourses = async function (host, routeId) {
     );
 
     await Promise.all([loadAssignees(), loadFeed()]);
-    Modal.open(tr({ ru: "Р§Р°С‚ РєСѓСЂСЃР°", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: "chatModalCard" });
+    Modal.open(tr({ ru: "Чат курса", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: "chatModalCard" });
   }
 
   const cardFor = (x) => {
@@ -6261,11 +6261,11 @@ App.renderCourses = async function (host, routeId) {
       if (meta.length) lines.push(el("div", { class: "cLine" }, ...meta));
 
       const nums = [];
-      if (x.course_start_date) nums.push(el("span", {}, `${tr({ ru: "РЎС‚Р°СЂС‚", uz: "Start", en: "Start" })}: `, el("b", {}, fmtDateOnly(x.course_start_date))));
+      if (x.course_start_date) nums.push(el("span", {}, `${tr({ ru: "Старт", uz: "Start", en: "Start" })}: `, el("b", {}, fmtDateOnly(x.course_start_date))));
       if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
       if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To'lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
       if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
-            // РљРѕРјРјРµРЅС‚ РєСѓСЂСЃР° (course_lead.comment) - РїРѕРєР°Р·С‹РІР°РµРј РЅР° РєР°СЂС‚РѕС‡РєРµ
+            // Коммент курса (course_lead.comment) - показываем на карточке
       if (x.comment) {
         lines.push(
           el("div", {
@@ -6279,8 +6279,8 @@ App.renderCourses = async function (host, routeId) {
 
     const leadMeta = [];
     if (source) leadMeta.push(el("span", {}, `${tr({ ru: "Источник", uz: "Manba", en: "Source" })}: `, el("b", {}, source)));
-    if (sphere) leadMeta.push(el("span", {}, `${tr({ ru: "РЎС„РµСЂР°", uz: "Soha", en: "Sphere" })}: `, el("b", {}, sphere)));
-    if (city) leadMeta.push(el("span", {}, `${tr({ ru: "Р“РѕСЂРѕРґ", uz: "Shahar", en: "City" })}: `, el("b", {}, city)));
+    if (sphere) leadMeta.push(el("span", {}, `${tr({ ru: "Сфера", uz: "Soha", en: "Sphere" })}: `, el("b", {}, sphere)));
+    if (city) leadMeta.push(el("span", {}, `${tr({ ru: "Город", uz: "Shahar", en: "City" })}: `, el("b", {}, city)));
     if (leadMeta.length) lines.push(el("div", { class: "cLine" }, ...leadMeta));
 
     const btnOpen = el("button", { class: "btn mini", type: "button", onClick: (e) => { e.stopPropagation(); openView(x.id); } }, t("open") || "Open");
@@ -6414,13 +6414,13 @@ App.renderCourses = async function (host, routeId) {
           phone2Inp
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_tg_group") || tr({ ru: "РЎСЃС‹Р»РєР° РЅР° РіСЂСѓРїРїСѓ", uz: "Guruh link", en: "Group link" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_tg_group") || tr({ ru: "Ссылка на группу", uz: "Guruh link", en: "Group link" })),
           tgInp
         ),
       ),
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, t("client_city") || tr({ ru: "Р“РѕСЂРѕРґ", uz: "Shahar", en: "City" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, t("client_city") || tr({ ru: "Город", uz: "Shahar", en: "City" })),
           citySel
         ),
         el("div", { class: "vcol gap8" },
@@ -6429,7 +6429,7 @@ App.renderCourses = async function (host, routeId) {
         ),
       ),
       el("div", { class: "vcol gap8" },
-        el("div", { class: "muted2", style: "font-size:12px" }, t("client_sphere") || tr({ ru: "РЎС„РµСЂР°", uz: "Soha", en: "Sphere" })),
+        el("div", { class: "muted2", style: "font-size:12px" }, t("client_sphere") || tr({ ru: "Сфера", uz: "Soha", en: "Sphere" })),
         sphereSel
       ),
       el("div", { class: "vcol gap8" },
@@ -6444,7 +6444,7 @@ App.renderCourses = async function (host, routeId) {
       noLeadHint.style.display = "none";
       createLeadToggle.textContent = createLeadMode
         ? tr({ ru: "Отменить создание", uz: "Bekor qilish", en: "Cancel creation" })
-        : (t("clients_create_lead") || tr({ ru: "РЎРѕР·РґР°С‚СЊ Р»РёРґ", uz: "Lead yaratish", en: "Create lead" }));
+        : (t("clients_create_lead") || tr({ ru: "Создать лид", uz: "Lead yaratish", en: "Create lead" }));
       createLeadToggle.style.display = createLeadMode ? "" : "none";
       if (createLeadMode) {
         selectedLead = null;
@@ -6487,7 +6487,7 @@ App.renderCourses = async function (host, routeId) {
         sug.style.display = "none";
         noLeadHint.style.display = "";
         createLeadToggle.style.display = "";
-        createLeadToggle.textContent = t("clients_create_lead") || tr({ ru: "РЎРѕР·РґР°С‚СЊ Р»РёРґ", uz: "Lead yaratish", en: "Create lead" });
+        createLeadToggle.textContent = t("clients_create_lead") || tr({ ru: "Создать лид", uz: "Lead yaratish", en: "Create lead" });
         return;
       }
 
@@ -6503,7 +6503,7 @@ App.renderCourses = async function (host, routeId) {
           sug.style.display = "none";
           pickChip.style.display = "";
           pickChip.innerHTML = "";
-          pickChip.appendChild(el("div", {}, tr({ ru: "Р’С‹Р±СЂР°РЅ:", uz: "Tanlandi:", en: "Selected:" }), " ", el("b", {}, leadLabel(l))));
+          pickChip.appendChild(el("div", {}, tr({ ru: "Выбран:", uz: "Tanlandi:", en: "Selected:" }), " ", el("b", {}, leadLabel(l))));
         } }, leadLabel(l)));
       }
       sug.style.display = "";
@@ -6542,18 +6542,18 @@ App.renderCourses = async function (host, routeId) {
 
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РЎСѓРјРјР° РєСѓСЂСЃР°", uz: "Kurs summasi", en: "Course price" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
           priceInp
         ),
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”Р°С‚Р° СЃС‚Р°СЂС‚Р°", uz: "Boshlanish sanasi", en: "Start date" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
           startInp
         ),
       ),
 
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" })),
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
           agreedInp
         ),
         el("div", { class: "vcol gap8" },
@@ -6659,18 +6659,18 @@ App.renderCourses = async function (host, routeId) {
 
             const parts = [];
 
-            // Р¤РРћ
+            // ФИО
             parts.push(el("span", {}, el("b", {}, x.lead_full_name || "-")));
 
-            // РўРµР»РµС„РѕРЅ
+            // Телефон
             if (x.lead_phone1) parts.push(el("span", {}, x.lead_phone1));
 
-            // РСЃС‚РѕС‡РЅРёРє / РЎС„РµСЂР° / Р“РѕСЂРѕРґ
+            // Источник / Сфера / Город
             if (source) parts.push(el("span", {}, `${tr({ru:"Источник",uz:"Manba",en:"Source"})}: `, el("b", {}, source)));
-            if (sphere) parts.push(el("span", {}, `${tr({ru:"РЎС„РµСЂР°",uz:"Soha",en:"Sphere"})}: `, el("b", {}, sphere)));
-            if (city)   parts.push(el("span", {}, `${tr({ru:"Р“РѕСЂРѕРґ",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
+            if (sphere) parts.push(el("span", {}, `${tr({ru:"Сфера",uz:"Soha",en:"Sphere"})}: `, el("b", {}, sphere)));
+            if (city)   parts.push(el("span", {}, `${tr({ru:"Город",uz:"Shahar",en:"City"})}: `, el("b", {}, city)));
 
-            // РљРѕРјРјРµРЅС‚ Р»РёРґР° (РІ РѕРґРЅРѕР№ СЃС‚СЂРѕРєРµ, РЅРѕ Р°РєРєСѓСЂР°С‚РЅРѕ РїРѕРґСЂРµР·Р°РµРј)
+            // Коммент лида (РІ одной строке, но аккуратно подрезаем)
             if (lcomm)  parts.push(el("span", { title: String(lcomm) }, `${tr({ru:"Комм.",uz:"Izoh",en:"Note"})}: `, el("b", {}, short(lcomm))));
 
             return el("div", { class: "cLine" }, ...parts);
@@ -6688,18 +6688,18 @@ App.renderCourses = async function (host, routeId) {
             el("div", {}, courseTypeNameById(x.course_type_id, x.course_type_name || "-"))
           ),
           el("div", { class: "vcol gap6" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”Р°С‚Р° СЃС‚Р°СЂС‚Р°", uz: "Boshlanish sanasi", en: "Start date" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
             el("div", {}, fmtDateOnly(x.course_start_date))
           ),
         ),
 
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap6" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РЎСѓРјРјР° РєСѓСЂСЃР°", uz: "Kurs summasi", en: "Course price" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
             el("div", {}, fmtMoney(x.course_price, x.currency))
           ),
           el("div", { class: "vcol gap6" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
             el("div", {}, x.agreed_amount != null ? fmtMoney(x.agreed_amount, x.currency) : "-")
           ),
         ),
@@ -6831,18 +6831,18 @@ App.renderCourses = async function (host, routeId) {
 
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "РЎСѓРјРјР° РєСѓСЂСЃР°", uz: "Kurs summasi", en: "Course price" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Сумма курса", uz: "Kurs summasi", en: "Course price" })),
             priceInp
           ),
           el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”Р°С‚Р° СЃС‚Р°СЂС‚Р°", uz: "Boshlanish sanasi", en: "Start date" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Дата старта", uz: "Boshlanish sanasi", en: "Start date" })),
             startInp
           ),
         ),
 
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" })),
+            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
             agreedInp
           ),
           el("div", { class: "vcol gap8" },
@@ -6950,7 +6950,7 @@ App.renderCoursePayments = async function(host, routeId){
     { key: "need_call", label: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" } },
     { key: "thinking",  label: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" } },
     { key: "enrolled",  label: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" } },
-    { key: "studying",  label: { ru: "РЈСЃРїРµС€РЅРѕ", uz: "Muvaffaqiyatli", en: "Success" } },
+    { key: "studying",  label: { ru: "Успешно", uz: "Muvaffaqiyatli", en: "Success" } },
     { key: "canceled",  label: { ru: "Отмена", uz: "Bekor", en: "Canceled" } },
   ];
   const stMap = new Map(statusCols.map(s => [String(s.key), tr(s.label)]));
@@ -7126,9 +7126,9 @@ App.renderCoursePayments = async function(host, routeId){
     ...courseTypes.map(ct => el("option", { value: String(ct.id) }, ct.name || ct.name_uz || ct.name_ru || ct.name_en || `#${ct.id}`))
   );
   const stageSel = el("select", { class: "sel" },
-    el("option", { value: "other" }, tr({ ru: "РЎС‚Р°С‚СѓСЃ: Р”СЂСѓРіРёРµ", uz: "Status: Boshqalar", en: "Status: Other" })),
-    el("option", { value: "studying" }, tr({ ru: "РЎС‚Р°С‚СѓСЃ: РЈСЃРїРµС€РЅРѕ", uz: "Status: Muvaffaqiyatli", en: "Status: Success" })),
-    el("option", { value: "enrolled" }, tr({ ru: "РЎС‚Р°С‚СѓСЃ: Р—Р°РїРёСЃР°РЅ", uz: "Status: Yozilgan", en: "Status: Enrolled" }))
+    el("option", { value: "other" }, tr({ ru: "Статус: Другие", uz: "Status: Boshqalar", en: "Status: Other" })),
+    el("option", { value: "studying" }, tr({ ru: "Статус: Успешно", uz: "Status: Muvaffaqiyatli", en: "Status: Success" })),
+    el("option", { value: "enrolled" }, tr({ ru: "Статус: Записан", uz: "Status: Yozilgan", en: "Status: Enrolled" }))
   );
   paySel.value = state.payType;
   stageSel.value = state.stage;
@@ -7140,9 +7140,9 @@ App.renderCoursePayments = async function(host, routeId){
     { key: "fio_phone", label: tr({ ru: "ФИО/номер", uz: "FIO/raqam", en: "Full name/phone" }) },
     { key: "course_type", label: tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" }) },
     { key: "start_date", label: tr({ ru: "Дата начала", uz: "Boshlanish", en: "Start date" }) },
-    { key: "status", label: tr({ ru: "РЎС‚Р°С‚СѓСЃ", uz: "Status", en: "Status" }) },
-    { key: "price", label: tr({ ru: "Р¦РµРЅР° РєСѓСЂСЃР°", uz: "Kurs narxi", en: "Course price" }) },
-    { key: "agreed", label: tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed" }) },
+    { key: "status", label: tr({ ru: "Статус", uz: "Status", en: "Status" }) },
+    { key: "price", label: tr({ ru: "Цена курса", uz: "Kurs narxi", en: "Course price" }) },
+    { key: "agreed", label: tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" }) },
     { key: "paid", label: tr({ ru: "Оплатил", uz: "To'lagan", en: "Paid" }) },
     { key: "debt", label: tr({ ru: "Долг", uz: "Qarz", en: "Debt" }) },
     { key: "comment", label: tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }) },
@@ -7201,7 +7201,7 @@ App.renderCoursePayments = async function(host, routeId){
     title: tr({ ru: "Изменить договоренность", uz: "Kelishuvni o'zgartirish", en: "Edit agreed amount" }),
     onClick: async () => {
       const initial = Number.isFinite(Number(x.agreed_amount)) ? x.agreed_amount : effectiveAgreed(x);
-      const res = await askEdit(tr({ ru: "Р”РѕРіРѕРІРѕСЂРµРЅРЅРѕСЃС‚СЊ", uz: "Kelishuv", en: "Agreed amount" }), initial, "number");
+      const res = await askEdit(tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed amount" }), initial, "number");
       if (!res.ok) return;
       try {
         await saveField(x.id, { agreed_amount: res.value });
@@ -7373,8 +7373,8 @@ App.renderCalls = async function(host, routeId){
 
   const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "Номер телефона", uz: "Telefon raqami", en: "Phone number" }) });
   const linkedSel = el("select", { class: "input" },
-    el("option", { value: "all" }, tr({ ru: "Р’СЃРµ", uz: "Barchasi", en: "All" })),
-    el("option", { value: "linked" }, tr({ ru: "Р•СЃС‚СЊ РІ Р±Р°Р·Рµ", uz: "Bazaga bog'langan", en: "Linked" })),
+    el("option", { value: "all" }, tr({ ru: "Все", uz: "Barchasi", en: "All" })),
+    el("option", { value: "linked" }, tr({ ru: "Есть РІ базе", uz: "Bazaga bog'langan", en: "Linked" })),
     el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
   );
   linkedSel.value = state.linked;
@@ -7746,7 +7746,7 @@ App.renderClients = async function(host, routeId){
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
-                  // РїРѕРєР° Projects СЌС‚Р°Рї РЅРµ Р·Р°РІРµСЂС€С‘РЅ - РїСЂРѕСЃС‚Рѕ РїРµСЂРµС…РѕРґРёРј С‚СѓРґР°
+                  // пока Projects этап не завершён - просто переходим туда
                   location.hash="#/projects";
                   Toast.show("Projects → (filter later)", "ok");
                 }}, t("clients_open"))
@@ -7769,10 +7769,10 @@ App.renderClients = async function(host, routeId){
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
-                  Modal.close(); // Р·Р°РєСЂС‹С‚СЊ РєР°СЂС‚РѕС‡РєСѓ РєРѕРјРїР°РЅРёРё
+                  Modal.close(); // закрыть карточку компании
                   setHash("/courses", {
-                    open: String(x.id),           // РѕС‚РєСЂС‹С‚СЊ РєРѕРЅРєСЂРµС‚РЅС‹Р№ РєСѓСЂСЃ
-                    company_id: String(c.id || "")// (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ) С„РёР»СЊС‚СЂ РїРѕ РєРѕРјРїР°РЅРёРё
+                    open: String(x.id),           // открыть конкретный курс
+                    company_id: String(c.id || "")// (опционально) фильтр по компании
                   });
                 }}, t("clients_open"))
               )
@@ -7900,6 +7900,7 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
+
 
 
 
