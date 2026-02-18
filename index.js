@@ -772,7 +772,7 @@ moizvonki_email: "MZ Email",
           type: "button",
           title: t("close"),
           onClick: () => this.close()
-        }, "вњ•")
+        }, "×")
       );
       const body = el("div", {
         class: "modalBody"
