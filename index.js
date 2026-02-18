@@ -52,6 +52,85 @@
     return Number.isInteger(n) && n > 0 ? n : null;
   }
 
+  const UZ_PHONE_PREFIX = "+998";
+  const UZ_PHONE_LOCAL_LEN = 9;
+
+  function onlyDigits(v) {
+    return String(v || "").replace(/\D/g, "");
+  }
+
+  function normalizeUzPhone(v) {
+    const d = onlyDigits(v);
+    if (!d) return "";
+    const local = d.slice(-UZ_PHONE_LOCAL_LEN);
+    return `${UZ_PHONE_PREFIX}${local}`;
+  }
+
+  function validateUzPhone(v, required = false) {
+    const d = onlyDigits(v);
+    if (!d) {
+      return required ? { ok: false, code: "required" } : { ok: true, value: "" };
+    }
+    if (d.length < UZ_PHONE_LOCAL_LEN) return { ok: false, code: "too_short" };
+    return { ok: true, value: `${UZ_PHONE_PREFIX}${d.slice(-UZ_PHONE_LOCAL_LEN)}` };
+  }
+
+  function phoneErrorText(code) {
+    const lang = (App && App.state && App.state.lang) || "ru";
+    const dict = {
+      required: {
+        ru: "Введите номер телефона",
+        uz: "Telefon raqamini kiriting",
+        en: "Enter phone number",
+      },
+      too_short: {
+        ru: "Номер слишком короткий",
+        uz: "Raqam juda qisqa",
+        en: "Phone number is too short",
+      },
+      duplicate: {
+        ru: "Этот номер уже есть в базе",
+        uz: "Bu raqam bazada allaqachon mavjud",
+        en: "This phone already exists",
+      },
+      invalid: {
+        ru: "Неверный формат номера",
+        uz: "Raqam formati noto'g'ri",
+        en: "Invalid phone format",
+      },
+    };
+    const row = dict[code] || dict.invalid;
+    return row[lang] || row.ru;
+  }
+
+  function bindUzPhoneInput(input) {
+    if (!input) return;
+    const applyMask = () => {
+      const v = String(input.value || "");
+      const d = onlyDigits(v);
+      if (!d) {
+        input.value = "";
+        return;
+      }
+      input.value = normalizeUzPhone(v);
+    };
+    input.addEventListener("focus", () => {
+      if (!String(input.value || "").trim()) input.value = UZ_PHONE_PREFIX;
+    });
+    input.addEventListener("input", applyMask);
+    input.addEventListener("paste", () => setTimeout(applyMask, 0));
+    input.addEventListener("blur", () => {
+      if (String(input.value || "").trim() === UZ_PHONE_PREFIX) input.value = "";
+    });
+  }
+
+  function setFieldError(errEl, msg, inputEl) {
+    if (!errEl) return;
+    errEl.textContent = msg || "";
+    errEl.style.display = msg ? "" : "none";
+    if (inputEl) inputEl.setAttribute("aria-invalid", msg ? "true" : "false");
+  }
+
   const LS = {
     get(k, def = null) {
       try {
@@ -4846,6 +4925,10 @@ App.renderProjects = async function (host, routeId) {
       const fullName    = el("input", { class: "input", placeholder: t("client_full_name") });
       const phone1      = el("input", { class: "input", placeholder: t("client_phone1"), inputmode: "tel" });
       const phone2      = el("input", { class: "input", placeholder: t("client_phone2"), inputmode: "tel" });
+      bindUzPhoneInput(phone1);
+      bindUzPhoneInput(phone2);
+      const phone1Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
+      const phone2Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
 
       const citySel = el("select", { class: "sel" },
         el("option", { value: "" }, "-"),
@@ -4876,8 +4959,8 @@ App.renderProjects = async function (host, routeId) {
           el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_full_name")), fullName),
         ),
         el("div", { class: "grid2" },
-          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")), phone1),
-          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")), phone2),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone1")), phone1, phone1Err),
+          el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2")), phone2, phone2Err),
         ),
         el("div", { class: "grid3" },
           el("div", { class: "vcol gap8" }, el("div", { class: "muted2", style:"font-size:12px" }, t("city")), citySel),
@@ -4891,12 +4974,24 @@ App.renderProjects = async function (host, routeId) {
         { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
         { label: t("save") || "Save", kind: "primary", onClick: async () => {
             try {
+              setFieldError(phone1Err, "", phone1);
+              setFieldError(phone2Err, "", phone2);
+              const v1 = validateUzPhone(phone1.value, true);
+              if (!v1.ok) {
+                setFieldError(phone1Err, phoneErrorText(v1.code), phone1);
+                return;
+              }
+              const v2 = validateUzPhone(phone2.value, false);
+              if (!v2.ok) {
+                setFieldError(phone2Err, phoneErrorText(v2.code), phone2);
+                return;
+              }
               const payload = {
                 type: "company",
                 company_name: (companyName.value || "").trim(),
                 full_name: (fullName.value || "").trim(),
-                phone1: (phone1.value || "").trim(),
-                phone2: (phone2.value || "").trim() || null,
+                phone1: v1.value,
+                phone2: v2.value || null,
                 city_id: citySel.value ? Number(citySel.value) : null,
                 source_id: sourceSel.value ? Number(sourceSel.value) : null,
                 sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
@@ -4912,6 +5007,10 @@ App.renderProjects = async function (host, routeId) {
 
               if (onDoneSelect) onDoneSelect(newId);
             } catch (e) {
+              const em = String(e?.message || "").toLowerCase();
+              if (em.includes("phone already exists") || em.includes("duplicate phone1")) {
+                setFieldError(phone1Err, phoneErrorText("duplicate"), phone1);
+              }
               Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
             }
           }
@@ -6362,6 +6461,8 @@ App.renderCourses = async function (host, routeId) {
 
     const fioInp = el("input", { class: "input", placeholder: tr({ ru: "ФИО (поиск)", uz: "FIO (qidiruv)", en: "Full name (search)" }) });
     const phoneInp = el("input", { class: "input", placeholder: tr({ ru: "Телефон (поиск)", uz: "Telefon (qidiruv)", en: "Phone (search)" }) });
+    bindUzPhoneInput(phoneInp);
+    const phone1Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
 
     const sug = el("div", { class: "cSug", style: "display:none" });
     const pickChip = el("div", { class: "cChip", style: "display:none" });
@@ -6391,6 +6492,8 @@ App.renderCourses = async function (host, routeId) {
 
     // lead extra fields (for creating from courses)
     const phone2Inp = el("input", { class: "input", placeholder: t("client_phone2") || "Extra phone", inputmode: "tel" });
+    bindUzPhoneInput(phone2Inp);
+    const phone2Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
     const tgInp = el("input", { class: "input", placeholder: t("client_tg_group") || "Group link" });
     const leadCommentInp = el("textarea", { class: "input", rows: 3, placeholder: t("client_comment") || "Comment..." });
     const citySel = el("select", { class: "input" });
@@ -6411,7 +6514,8 @@ App.renderCourses = async function (host, routeId) {
       el("div", { class: "grid2" },
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_phone2") || tr({ ru: "Доп. телефон", uz: "Qo'shimcha tel", en: "Extra phone" })),
-          phone2Inp
+          phone2Inp,
+          phone2Err
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_tg_group") || tr({ ru: "Ссылка на группу", uz: "Guruh link", en: "Group link" })),
@@ -6522,6 +6626,7 @@ App.renderCourses = async function (host, routeId) {
           el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Лид", uz: "Lead", en: "Lead" })),
           fioInp,
           phoneInp,
+          phone1Err,
           sug,
           pickChip,
           noLeadHint,
@@ -6572,18 +6677,26 @@ App.renderCourses = async function (host, routeId) {
       { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
       { label: t("save") || "Save", kind: "primary", onClick: async () => {
           try {
+            setFieldError(phone1Err, "", phoneInp);
+            setFieldError(phone2Err, "", phone2Inp);
             let leadClientId = null;
             if (createLeadMode) {
               const full_name = (fioInp.value || "").trim();
-              const phone1 = (phoneInp.value || "").trim();
-              if (!full_name || !phone1) {
+              const v1 = validateUzPhone(phoneInp.value, true);
+              const v2 = validateUzPhone(phone2Inp.value, false);
+              if (!full_name || !v1.ok) {
+                if (!v1.ok) setFieldError(phone1Err, phoneErrorText(v1.code), phoneInp);
                 Toast.show(`${t("toast_error")}: ${t("client_full_name")} / ${t("client_phone1")}`, "bad"); return;
+              }
+              if (!v2.ok) {
+                setFieldError(phone2Err, phoneErrorText(v2.code), phone2Inp);
+                return;
               }
               const payload = {
                 type: "lead",
                 full_name,
-                phone1,
-                phone2: (phone2Inp.value || "").trim() || null,
+                phone1: v1.value,
+                phone2: v2.value || null,
                 city_id: citySel.value ? Number(citySel.value) : null,
                 source_id: sourceSel.value ? Number(sourceSel.value) : null,
                 sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
@@ -6628,6 +6741,10 @@ App.renderCourses = async function (host, routeId) {
             if (newId) openView(newId);
             Toast.show(t("toast_saved") || "Saved", "ok");
           } catch (e) {
+            const em = String(e?.message || "").toLowerCase();
+            if (em.includes("phone already exists") || em.includes("duplicate phone1")) {
+              setFieldError(phone1Err, phoneErrorText("duplicate"), phoneInp);
+            }
             Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
           }
         }
@@ -7585,6 +7702,10 @@ App.renderClients = async function(host, routeId){
     const fullNameInp    = el("input",{class:"input",value:row?.full_name||"",placeholder:t("client_full_name")});
     const phone1Inp      = el("input",{class:"input",value:row?.phone1||"",placeholder:t("client_phone1"),inputmode:"tel"});
     const phone2Inp      = el("input",{class:"input",value:row?.phone2||"",placeholder:t("client_phone2"),inputmode:"tel"});
+    bindUzPhoneInput(phone1Inp);
+    bindUzPhoneInput(phone2Inp);
+    const phone1Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
+    const phone2Err = el("div", { class: "muted2", style: "display:none;color:#ff7a7a;font-size:12px" });
     const commentInp     = el("textarea",{class:"input",style:"min-height:84px",value:row?.comment||"",placeholder:t("client_comment")});
     const tgInp          = el("input",{class:"input",value:row?.tg_group_link||"",placeholder:t("client_tg_group")});
 
@@ -7629,10 +7750,10 @@ App.renderClients = async function(host, routeId){
 
       el("div",{class:"grid2"},
         el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_full_name")), fullNameInp),
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone1")), phone1Inp),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone1")), phone1Inp, phone1Err),
       ),
       el("div",{class:"grid2"},
-        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone2")), phone2Inp),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_phone2")), phone2Inp, phone2Err),
         el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("client_tg_group")), tgInp),
       ),
       el("div",{class:"grid2"},
@@ -7652,12 +7773,14 @@ App.renderClients = async function(host, routeId){
     Modal.open(title, body, [
       {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
       {label:t("save"),kind:"primary",onClick:async()=>{
+        setFieldError(phone1Err, "", phone1Inp);
+        setFieldError(phone2Err, "", phone2Inp);
         const payload={
           type,
           company_name: (type==="company") ? (companyNameInp.value||"").trim() : null,
           full_name: (fullNameInp.value||"").trim(),
-          phone1: (phone1Inp.value||"").trim(),
-          phone2: (phone2Inp.value||"").trim() || null,
+          phone1: "",
+          phone2: null,
           city_id: citySel.value ? Number(citySel.value) : null,
           source_id: sourceSel.value ? Number(sourceSel.value) : null,
           sphere_id: sphereSel.value ? Number(sphereSel.value) : null,
@@ -7665,6 +7788,19 @@ App.renderClients = async function(host, routeId){
           tg_group_link: (tgInp.value||"").trim() || null,
           company_id: (type==="lead" && companySel.value) ? Number(companySel.value) : null,
         };
+
+        const v1 = validateUzPhone(phone1Inp.value, true);
+        if (!v1.ok) {
+          setFieldError(phone1Err, phoneErrorText(v1.code), phone1Inp);
+          return;
+        }
+        const v2 = validateUzPhone(phone2Inp.value, false);
+        if (!v2.ok) {
+          setFieldError(phone2Err, phoneErrorText(v2.code), phone2Inp);
+          return;
+        }
+        payload.phone1 = v1.value;
+        payload.phone2 = v2.value || null;
 
         // minimal validation per UX
         if(type==="company" && !payload.company_name){
@@ -7697,6 +7833,10 @@ App.renderClients = async function(host, routeId){
           Modal.close();
           await loadList();
         }catch(e){
+          const em = String(e?.message || "").toLowerCase();
+          if (em.includes("phone already exists") || em.includes("duplicate phone1")) {
+            setFieldError(phone1Err, phoneErrorText("duplicate"), phone1Inp);
+          }
           Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
         }
       }},
