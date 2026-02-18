@@ -59,20 +59,28 @@
     return String(v || "").replace(/\D/g, "");
   }
 
-  function normalizeUzPhone(v) {
-    const d = onlyDigits(v);
+  function extractUzLocalDigits(v) {
+    let d = onlyDigits(v);
     if (!d) return "";
-    const local = d.slice(-UZ_PHONE_LOCAL_LEN);
+    // If number starts with Uzbekistan code, drop it before taking local part.
+    if (d.startsWith("998")) d = d.slice(3);
+    if (d.length > UZ_PHONE_LOCAL_LEN) d = d.slice(-UZ_PHONE_LOCAL_LEN);
+    return d;
+  }
+
+  function normalizeUzPhone(v, opts = {}) {
+    const local = extractUzLocalDigits(v);
+    if (!local) return opts.keepPrefix ? UZ_PHONE_PREFIX : "";
     return `${UZ_PHONE_PREFIX}${local}`;
   }
 
   function validateUzPhone(v, required = false) {
-    const d = onlyDigits(v);
-    if (!d) {
+    const local = extractUzLocalDigits(v);
+    if (!local) {
       return required ? { ok: false, code: "required" } : { ok: true, value: "" };
     }
-    if (d.length < UZ_PHONE_LOCAL_LEN) return { ok: false, code: "too_short" };
-    return { ok: true, value: `${UZ_PHONE_PREFIX}${d.slice(-UZ_PHONE_LOCAL_LEN)}` };
+    if (local.length < UZ_PHONE_LOCAL_LEN) return { ok: false, code: "too_short" };
+    return { ok: true, value: `${UZ_PHONE_PREFIX}${local}` };
   }
 
   function phoneErrorText(code) {
@@ -112,7 +120,7 @@
         input.value = "";
         return;
       }
-      input.value = normalizeUzPhone(v);
+      input.value = normalizeUzPhone(v, { keepPrefix: true });
     };
     input.addEventListener("focus", () => {
       if (!String(input.value || "").trim()) input.value = UZ_PHONE_PREFIX;
