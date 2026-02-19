@@ -7447,14 +7447,23 @@ function injectCallsStyles() {
     .callsPeriods{display:flex;gap:6px;flex-wrap:wrap}
     .callsFilters{display:grid;grid-template-columns:1fr 220px 220px;gap:8px}
     .callsList{display:flex;flex-direction:column;gap:8px}
-    .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:140px 90px 90px 1fr 1fr 1fr 180px;gap:10px;align-items:center}
+    .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:150px 100px 120px 150px 200px 220px 280px;gap:10px;align-items:center}
     .callMuted{font-size:12px;color:var(--muted2)}
     .callLink{color:var(--acc);text-decoration:none}
     .callBadge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--stroke);font-size:12px;font-weight:700}
     .callBadge.ok{color:#66e3a6;border-color:#2f7}
     .callBadge.bad{color:#ff8f8f;border-color:#d66}
     .callBadge.neutral{color:var(--muted2)}
-    .callActions{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+    .callActions{
+    display: grid;
+    gap: 6px;
+    align-items: center;
+    justify-content: space-around;
+    flex-direction: row;
+    grid-template-columns: 60px 130px 90px;
+    align-content: space-evenly;
+    justify-items: center;
+}
     @media (max-width: 1200px){
       .callsFilters{grid-template-columns:1fr 1fr}
       .callRow{grid-template-columns:1fr;gap:6px}
@@ -7642,24 +7651,23 @@ App.renderCalls = async function(host, routeId){
       listEl.appendChild(el("div", { class: "callRow" },
         el("div", {},
           el("div", { style: "font-weight:800" }, dt ? fmtDate(dt) : "-"),
-          el("div", { class: "callMuted" }, `#${x.db_call_id || "-"}`)
+          //el("div", { class: "callMuted" }, `#${x.db_call_id || "-"}`)
         ),
         el("div", {}, dirLabel(x)),
         el("div", {}, badgeByStatus(x)),
         el("div", {},
           el("div", { style: "font-weight:700" }, x.client_number || "-"),
-          el("div", { class: "callMuted" }, x.client_name || "-")
+          //el("div", { class: "callMuted" }, x.client_name || "-")
         ),
         el("div", {},
           el("div", { style: "font-weight:700" }, x.app_user_name || "-"),
-          el("div", { class: "callMuted" }, x.mz_user_email || "-")
+          //el("div", { class: "callMuted" }, x.mz_user_email || "-")
         ),
         el("div", {},
           el("div", { style: "font-weight:700" }, x.linked_client_name || tr({ ru: "Без связки", uz: "Bog'lanmagan", en: "Unlinked" })),
-          el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "-")
+          //el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "-")
         ),
         el("div", { class: "callActions" },
-          el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
           x.recording_url
             ? el("button", {
                 class: "btn mini ghost",
