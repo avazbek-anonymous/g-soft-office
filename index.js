@@ -7668,6 +7668,7 @@ App.renderCalls = async function(host, routeId){
           //el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "-")
         ),
         el("div", { class: "callActions" },
+          el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
           x.recording_url
             ? el("button", {
                 class: "btn mini ghost",
