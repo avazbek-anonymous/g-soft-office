@@ -7470,6 +7470,7 @@ function injectCallsStyles() {
     }
     @media (max-width: 760px){
       .callsFilters{grid-template-columns:1fr}
+      .callRow{align-items: center;flex-direction: column;}
     }
   `;
   document.head.appendChild(st);
