@@ -6383,6 +6383,14 @@ App.renderCourses = async function (host, routeId) {
           }, x.comment)
         );
       }
+      if (x.last_chat_message) {
+        lines.push(
+          el("div", {
+            class: "muted2",
+            style: "font-size:12px;margin-top:4px;white-space:pre-wrap"
+          }, `${tr({ ru: "Последнее", uz: "Oxirgisi", en: "Last" })}: ${String(x.last_chat_message)}`)
+        );
+      }
 
     }
 
@@ -7437,7 +7445,7 @@ function injectCallsStyles() {
   st.textContent = `
     .callsTop{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .callsPeriods{display:flex;gap:6px;flex-wrap:wrap}
-    .callsFilters{display:grid;grid-template-columns:1fr 220px 220px 220px;gap:8px}
+    .callsFilters{display:grid;grid-template-columns:1fr 220px 220px;gap:8px}
     .callsList{display:flex;flex-direction:column;gap:8px}
     .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:140px 90px 90px 1fr 1fr 1fr 180px;gap:10px;align-items:center}
     .callMuted{font-size:12px;color:var(--muted2)}
@@ -7446,6 +7454,7 @@ function injectCallsStyles() {
     .callBadge.ok{color:#66e3a6;border-color:#2f7}
     .callBadge.bad{color:#ff8f8f;border-color:#d66}
     .callBadge.neutral{color:var(--muted2)}
+    .callActions{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
     @media (max-width: 1200px){
       .callsFilters{grid-template-columns:1fr 1fr}
       .callRow{grid-template-columns:1fr;gap:6px}
@@ -7474,11 +7483,12 @@ App.renderCalls = async function(host, routeId){
   const query = App.state.current?.query || {};
   const state = {
     days: periods.includes(Number(query.days)) ? Number(query.days) : 7,
-    phone: String(query.phone || ""),
+    q: String(query.q || query.phone || ""),
     linked: ["all","linked","unlinked"].includes(String(query.linked || "")) ? String(query.linked) : "all",
     app_user_id: intId(query.app_user_id) || null,
     users: [],
     rows: [],
+    courseLeadByClientId: new Map(),
   };
 
   host.innerHTML = "";
@@ -7498,7 +7508,7 @@ App.renderCalls = async function(host, routeId){
     )
   );
 
-  const phoneInp = el("input", { class: "input", value: state.phone, placeholder: tr({ ru: "Номер телефона", uz: "Telefon raqami", en: "Phone number" }) });
+  const searchInp = el("input", { class: "input", value: state.q, placeholder: tr({ ru: "Поиск...", uz: "Qidiruv...", en: "Search..." }) });
   const linkedSel = el("select", { class: "input" },
     el("option", { value: "all" }, tr({ ru: "Все", uz: "Barchasi", en: "All" })),
     el("option", { value: "linked" }, tr({ ru: "Есть в базе", uz: "Bazaga bog'langan", en: "Linked" })),
@@ -7507,9 +7517,7 @@ App.renderCalls = async function(host, routeId){
   linkedSel.value = state.linked;
 
   const userSel = el("select", { class: "input" }, el("option", { value: "" }, tr({ ru: "Все сотрудники", uz: "Barcha xodimlar", en: "All users" })));
-  const applyBtn = el("button", { class: "btn", type: "button" }, t("search") || "Search");
-
-  const filters = el("div", { class: "callsFilters" }, phoneInp, linkedSel, userSel, applyBtn);
+  const filters = el("div", { class: "callsFilters" }, searchInp, linkedSel, userSel);
   top.appendChild(filters);
 
   const listWrap = el("div", { class: "card cardPad vcol gap8" },
@@ -7531,6 +7539,29 @@ App.renderCalls = async function(host, routeId){
     if (state.app_user_id) userSel.value = String(state.app_user_id);
   };
 
+  const loadCourseLeadLinks = async () => {
+    state.courseLeadByClientId = new Map();
+    try {
+      const r = await apiFetch("/api/course_leads");
+      if (App.state.routeId !== rid) return;
+      const rows = Array.isArray(r?.data) ? r.data : [];
+      const latestByClient = new Map();
+      for (const row of rows) {
+        const clientId = Number(row?.lead_client_id || 0);
+        if (!clientId) continue;
+        const prev = latestByClient.get(clientId);
+        if (!prev || Number(row?.updated_at || 0) > Number(prev?.updated_at || 0)) {
+          latestByClient.set(clientId, row);
+        }
+      }
+      for (const [clientId, row] of latestByClient.entries()) {
+        if (row?.id) state.courseLeadByClientId.set(Number(clientId), Number(row.id));
+      }
+    } catch {
+      state.courseLeadByClientId = new Map();
+    }
+  };
+
   const badgeByStatus = (x) => {
     if (x.status === "answered") return el("span", { class: "callBadge ok" }, tr({ ru: "Отвечен", uz: "Javob berilgan", en: "Answered" }));
     if (x.status === "missed") {
@@ -7546,15 +7577,68 @@ App.renderCalls = async function(host, routeId){
     ? tr({ ru: "Исходящий", uz: "Chiquvchi", en: "Outgoing" })
     : tr({ ru: "Входящий", uz: "Kiruvchi", en: "Incoming" });
 
+  const openCallRecording = (url, titleText) => {
+    if (!url) return;
+    const audio = el("audio", {
+      controls: "controls",
+      autoplay: "autoplay",
+      preload: "metadata",
+      src: String(url),
+      style: "width:100%"
+    });
+    const body = el("div", { class: "vcol gap10" },
+      el("div", { class: "muted2", style: "font-size:12px" }, titleText || tr({ ru: "Запись звонка", uz: "Qo'ng'iroq yozuvi", en: "Call recording" })),
+      audio
+    );
+    Modal.open(tr({ ru: "Прослушивание", uz: "Tinglash", en: "Playback" }), body, [
+      { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() }
+    ]);
+  };
+
+  const searchRows = (rows) => {
+    const q = String(state.q || "").trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((x) => {
+      const leadId = Number(x?.linked_client_id || 0) ? state.courseLeadByClientId.get(Number(x.linked_client_id)) : null;
+      const fields = [
+        x.db_call_id,
+        x.event_pbx_call_id,
+        x.direction_label,
+        dirLabel(x),
+        x.status,
+        x.client_number,
+        x.client_name,
+        x.app_user_name,
+        x.mz_user_email,
+        x.linked_client_name,
+        x.linked_client_type,
+        x.linked_client_id,
+        x.duration,
+        x.src_number,
+        x.src_id,
+        x.src_slot,
+        leadId ? `lead_${leadId}` : "",
+        (x.end_time || x.start_time) ? fmtDate(x.end_time || x.start_time) : "",
+      ]
+        .filter((v) => v !== null && v !== undefined)
+        .join(" ")
+        .toLowerCase();
+      return fields.includes(q);
+    });
+  };
+
   const render = () => {
+    const rows = searchRows(state.rows);
     listEl.innerHTML = "";
-    metaEl.textContent = `${tr({ ru: "Найдено", uz: "Topildi", en: "Found" })}: ${state.rows.length}`;
-    if (!state.rows.length) {
+    metaEl.textContent = `${tr({ ru: "Найдено", uz: "Topildi", en: "Found" })}: ${rows.length}`;
+    if (!rows.length) {
       listEl.appendChild(el("div", { class: "muted" }, t("no_data")));
       return;
     }
-    for (const x of state.rows) {
+    for (const x of rows) {
       const dt = x.end_time || x.start_time || 0;
+      const linkedClientId = Number(x.linked_client_id || 0);
+      const linkedLeadId = linkedClientId ? state.courseLeadByClientId.get(linkedClientId) : null;
       listEl.appendChild(el("div", { class: "callRow" },
         el("div", {},
           el("div", { style: "font-weight:800" }, dt ? fmtDate(dt) : "-"),
@@ -7574,11 +7658,29 @@ App.renderCalls = async function(host, routeId){
           el("div", { style: "font-weight:700" }, x.linked_client_name || tr({ ru: "Без связки", uz: "Bog'lanmagan", en: "Unlinked" })),
           el("div", { class: "callMuted" }, x.linked_client_id ? `#${x.linked_client_id}` : "-")
         ),
-        el("div", {},
+        el("div", { class: "callActions" },
           el("div", { style: "font-weight:800" }, `${Number(x.duration || 0)}s`),
           x.recording_url
-            ? el("a", { class: "callLink", href: x.recording_url, target: "_blank", rel: "noopener" }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
-            : el("div", { class: "callMuted" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" }))
+            ? el("button", {
+                class: "btn mini ghost",
+                type: "button",
+                onClick: () => openCallRecording(x.recording_url, `#${x.db_call_id || "-"}`)
+              }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
+            : el("div", { class: "callMuted" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" })),
+          linkedClientId
+            ? el("button", {
+                class: "btn mini ghost",
+                type: "button",
+                onClick: () => setHash("/clients", { open: String(linkedClientId) })
+              }, tr({ ru: "Карточка", uz: "Karta", en: "Card" }))
+            : null,
+          linkedLeadId
+            ? el("button", {
+                class: "btn mini ghost",
+                type: "button",
+                onClick: () => setHash("/courses", { open: String(linkedLeadId), chat: "1" })
+              }, tr({ ru: "Чат лида", uz: "Lead chati", en: "Lead chat" }))
+            : null
         )
       ));
     }
@@ -7587,13 +7689,12 @@ App.renderCalls = async function(host, routeId){
   const load = async () => {
     listEl.innerHTML = "";
     listEl.appendChild(el("div", { class: "muted" }, t("loading")));
-    state.phone = String(phoneInp.value || "").trim();
+    state.q = String(searchInp.value || "").trim();
     state.linked = String(linkedSel.value || "all");
     state.app_user_id = intId(userSel.value);
     try {
       const r = await API.calls.list({
         days: state.days,
-        phone: state.phone || null,
         linked: state.linked,
         app_user_id: state.app_user_id || null,
       });
@@ -7607,12 +7708,15 @@ App.renderCalls = async function(host, routeId){
     }
   };
 
-  applyBtn.onclick = load;
-  phoneInp.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+  searchInp.addEventListener("input", () => {
+    state.q = String(searchInp.value || "").trim();
+    render();
+  });
   linkedSel.addEventListener("change", load);
   userSel.addEventListener("change", load);
 
   await loadUsers();
+  await loadCourseLeadLinks();
   await load();
 };
 

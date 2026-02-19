@@ -1136,7 +1136,14 @@ async function queryCourseLeadsKanban(env, user, filters) {
       comp.company_name AS company_name,
 
       ct.name AS course_type_name,
-      cu.full_name AS created_by_name
+      cu.full_name AS created_by_name,
+      (
+        SELECT m.text
+        FROM lead_chat_messages m
+        WHERE m.lead_id = cl.id AND m.is_active = 1
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT 1
+      ) AS last_chat_message
     FROM course_leads cl
     JOIN clients lead ON lead.id = cl.lead_client_id
     LEFT JOIN clients comp ON comp.id = cl.company_id
