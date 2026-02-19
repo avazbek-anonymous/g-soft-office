@@ -7447,7 +7447,7 @@ function injectCallsStyles() {
     .callsPeriods{display:flex;gap:6px;flex-wrap:wrap}
     .callsFilters{display:grid;grid-template-columns:1fr 220px 220px;gap:8px}
     .callsList{display:flex;flex-direction:column;gap:8px}
-    .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:150px 100px 120px 150px 200px 220px 280px;gap:10px;align-items:center}
+    .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center}
     .callMuted{font-size:12px;color:var(--muted2)}
     .callLink{color:var(--acc);text-decoration:none}
     .callBadge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--stroke);font-size:12px;font-weight:700}
