@@ -7667,13 +7667,6 @@ App.renderCalls = async function(host, routeId){
                 onClick: () => openCallRecording(x.recording_url, `#${x.db_call_id || "-"}`)
               }, tr({ ru: "Слушать запись", uz: "Yozuvni tinglash", en: "Listen" }))
             : el("div", { class: "callMuted" }, tr({ ru: "Нет записи", uz: "Yozuv yo'q", en: "No recording" })),
-          linkedClientId
-            ? el("button", {
-                class: "btn mini ghost",
-                type: "button",
-                onClick: () => setHash("/clients", { open: String(linkedClientId) })
-              }, tr({ ru: "Карточка", uz: "Karta", en: "Card" }))
-            : null,
           linkedLeadId
             ? el("button", {
                 class: "btn mini ghost",
