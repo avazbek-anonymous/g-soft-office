@@ -11,6 +11,9 @@
  *   COOKIE_DOMAIN      optional, e.g. ".ofis.gekto.uz"
  *   TG_BOT_TOKEN       optional, Telegram bot token (for webhook replies)
  *   TG_WEBHOOK_SECRET  optional, secret token from Telegram setWebhook
+ *   ANALYSIS_SECRET    optional, shared secret for /api/analysis/lead
+ *   TG_ANALYSIS_CHAT_ID required for /api/analysis/lead (chat or group id)
+ *   TG_ANALYSIS_THREAD_ID optional, topic id inside forum group
  *   CALL_API           required for calls.list integration (Moi Zvonki API key)
  */
 
@@ -499,6 +502,26 @@ async function tgSendMessage(env, chatId, text, threadId) {
   await tgApiCall(env, "sendMessage", payload);
 }
 
+async function tgSendDocumentFromBase64(env, chatId, base64Data, fileName, caption, threadId) {
+  const token = String(env.TG_BOT_TOKEN || "").trim();
+  if (!token || !chatId || !base64Data) return { ok: false, error: "missing_token_chat_or_pdf" };
+  try {
+    const clean = String(base64Data).replace(/\s/g, "");
+    const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+    const fd = new FormData();
+    fd.append("chat_id", String(chatId));
+    if (threadId) fd.append("message_thread_id", String(threadId));
+    if (caption) fd.append("caption", String(caption));
+    fd.append("document", new Blob([bytes], { type: "application/pdf" }), fileName || "diagnostika.pdf");
+    const url = `https://api.telegram.org/bot${token}/sendDocument`;
+    const res = await fetch(url, { method: "POST", body: fd });
+    const body = await res.text();
+    return { ok: res.ok, status: res.status, body };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e) };
+  }
+}
+
 async function tgSetReaction(env, chatId, messageId, emoji = "🫡") {
   if (!chatId || !messageId) return;
   await tgApiCall(env, "setMessageReaction", {
@@ -592,6 +615,71 @@ async function handleTelegramWebhook(env, request) {
   await tgSetReaction(env, chatId, messageId, "🫡");
 
   return jsonResp({ ok: true, data: { id: taskId } }, 200);
+}
+
+async function handleAnalysisLead(env, request) {
+  const body = await readJson(request);
+  if (!body) return badRequest("Expected JSON");
+
+  const expectedSecret = String(env.ANALYSIS_SECRET || "").trim();
+  const gotSecret = str(body.secret);
+  if (expectedSecret && gotSecret !== expectedSecret) {
+    return forbidden("Invalid analysis secret");
+  }
+
+  const name = str(body.name);
+  const phone = str(body.phone);
+  const company = str(body.company);
+  const sector = str(body.sector);
+  const page = str(body.page);
+  const summary = str(body.summary);
+  const pdf = str(body.pdf);
+
+  if (!phone) return badRequest("phone_required");
+
+  const chatId = str(env.TG_ANALYSIS_CHAT_ID || env.TG_LEADS_CHAT_ID || "");
+  const threadId = str(env.TG_ANALYSIS_THREAD_ID || "");
+  if (!chatId) return badRequest("TG_ANALYSIS_CHAT_ID_missing");
+  if (!str(env.TG_BOT_TOKEN)) return badRequest("TG_BOT_TOKEN_missing");
+
+  const text =
+    "📩 Yangi diagnostika so'rovi\n" +
+    `👤 Ism: ${name || "-"}\n` +
+    `📞 Telefon: ${phone}\n` +
+    `🏢 Kompaniya: ${company || "-"}\n` +
+    `🧭 Sohasi: ${sector || "-"}\n` +
+    `📊 Natija: ${summary || "-"}\n` +
+    `🌐 Sahifa: ${page || "-"}`;
+
+  const msgPayload = { chat_id: String(chatId), text };
+  if (threadId) msgPayload.message_thread_id = String(threadId);
+  const msgRes = await tgApiCall(env, "sendMessage", msgPayload);
+  if (!msgRes || !/"ok"\s*:\s*true/.test(msgRes)) {
+    return jsonResp({ ok: false, error: "telegram_send_message_failed", raw: msgRes || null }, 502);
+  }
+
+  let pdfResult = { sent: false, skipped: true };
+  if (pdf) {
+    if (pdf.length > 12 * 1024 * 1024) {
+      pdfResult = { sent: false, skipped: true, error: "pdf_too_large_base64" };
+    } else {
+      const fileNameBase = (company || "diagnostika").replace(/[^\w\-]+/g, "_").slice(0, 40);
+      const docRes = await tgSendDocumentFromBase64(
+        env,
+        chatId,
+        pdf,
+        `diagnostika_${fileNameBase || "report"}.pdf`,
+        "📎 Biznes diagnostika PDF",
+        threadId || null
+      );
+      pdfResult = { sent: !!docRes.ok, skipped: false, status: docRes.status || null, error: docRes.error || null };
+      if (!docRes.ok) {
+        return jsonResp({ ok: false, error: "telegram_send_document_failed", pdf: pdfResult, raw: docRes.body || null }, 502);
+      }
+    }
+  }
+
+  return jsonResp({ ok: true, pdf: pdfResult }, 200);
 }
 
 /** normalize phone for stable duplicate checks */
@@ -2926,6 +3014,11 @@ export default {
     // Telegram webhook (public)
     if (apiRoot === "telegram" && segments[2] === "webhook" && request.method === "POST") {
       return withCors(await handleTelegramWebhook(env, request), env, origin);
+    }
+
+    // Analysis lead + PDF relay (public)
+    if (apiRoot === "analysis" && segments[2] === "lead" && request.method === "POST") {
+      return withCors(await handleAnalysisLead(env, request), env, origin);
     }
 
     // Auth required below
