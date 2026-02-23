@@ -497,7 +497,14 @@ function pemToUint8Array(pem) {
 }
 
 async function googleGetAccessToken(env) {
-  // Service-account mode only for /set calendar operations.
+  const oauthClientId = String(env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
+  const oauthClientSecret = String(env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
+  const oauthRefreshToken = String(env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim();
+
+  if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    return googleGetAccessTokenByRefreshToken_(env, oauthClientId, oauthClientSecret, oauthRefreshToken);
+  }
+
   return googleGetAccessTokenByServiceAccount_(env);
 }
 
