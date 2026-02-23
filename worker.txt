@@ -497,14 +497,7 @@ function pemToUint8Array(pem) {
 }
 
 async function googleGetAccessToken(env) {
-  const oauthClientId = String(env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
-  const oauthClientSecret = String(env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
-  const oauthRefreshToken = String(env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim();
-
-  if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
-    return googleGetAccessTokenByRefreshToken_(env, oauthClientId, oauthClientSecret, oauthRefreshToken);
-  }
-
+  // Service-account mode only for /set calendar operations.
   return googleGetAccessTokenByServiceAccount_(env);
 }
 
@@ -643,6 +636,12 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
       timeZone: GOOGLE_CALENDAR_TZ,
     },
   };
+  const attendeeEmails = Array.isArray(payload.attendeeEmails)
+    ? [...new Set(payload.attendeeEmails.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean))]
+    : [];
+  if (attendeeEmails.length) {
+    baseBody.attendees = attendeeEmails.map((email) => ({ email }));
+  }
 
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=none`;
   const headers = {
@@ -694,20 +693,102 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
 }
 
 async function handleTelegramSetCommand(env, msg, chatId, threadId) {
-  const payload = buildSetPayloadFromMessage(msg);
+  const attendeeEmails = await resolveSetAttendeeEmails(env, msg);
+  const payload = {
+    ...buildSetPayloadFromMessage(msg),
+    attendeeEmails,
+  };
   const event = await googleCreateCalendarEventWithMeet(env, payload);
   const link = googleExtractConferenceLink(event) || "-";
   const title = payload.title || "Vstrecha";
   const description = payload.description || "-";
   const when = formatTashkentDateTime(payload.startUtcSec);
+  const participants = attendeeEmails.length ? attendeeEmails.join(", ") : "-";
 
   const text =
     `Название: ${title}\n` +
     `Описание:\n${description}\n` +
     `Время: ${when}\n` +
+    `Участники: ${participants}\n` +
     `Ссылка на встречу: ${link}${link === "-" ? " (не удалось создать Meet для этого календаря/аккаунта)" : ""}`;
 
   await tgSendMessage(env, chatId, text, threadId);
+}
+
+function tgExtractMentionHintsSingle(msg) {
+  if (!msg) return [];
+  const out = [];
+  const text = String(msg.text || msg.caption || "");
+
+  for (const ent of tgGetEntities(msg)) {
+    if (ent?.type === "text_mention" && ent.user?.id) {
+      out.push({ telegramId: String(ent.user.id) });
+      continue;
+    }
+    if (ent?.type === "mention") {
+      const offset = Number(ent.offset);
+      const length = Number(ent.length);
+      if (!Number.isInteger(offset) || !Number.isInteger(length) || length <= 0) continue;
+      const mention = text.substring(offset, offset + length).trim();
+      if (mention) out.push({ username: mention });
+    }
+  }
+
+  const re = /(^|\s)@([a-zA-Z0-9_]+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    out.push({ username: `@${m[2]}` });
+  }
+  return out;
+}
+
+function tgCollectMentionHints(msg) {
+  const raw = [...tgExtractMentionHintsSingle(msg), ...tgExtractMentionHintsSingle(msg?.reply_to_message)];
+  const uniq = [];
+  const seen = new Set();
+  for (const h of raw) {
+    const key = h.telegramId ? `tg:${h.telegramId}` : `u:${String(h.username || "").toLowerCase()}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    uniq.push(h);
+  }
+  return uniq;
+}
+
+async function resolveSetAttendeeEmails(env, msg) {
+  const creatorTgId = msg?.from?.id ? String(msg.from.id) : "";
+  const creator = await findUserByTelegramId(env, creatorTgId);
+  if (!creator) {
+    throw new Error("Автор /set не найден в системе по telegram_id.");
+  }
+
+  const creatorEmail = String(creator.moizvonki_email || "").trim().toLowerCase();
+  if (!creatorEmail) {
+    throw new Error("У автора /set не заполнен moizvonki_email. Добавьте почту в Users.");
+  }
+
+  const emails = new Set([creatorEmail]);
+  const mentions = tgCollectMentionHints(msg);
+
+  for (const hint of mentions) {
+    let participant = null;
+    if (hint.telegramId) {
+      participant = await findUserByTelegramId(env, hint.telegramId);
+    } else if (hint.username) {
+      const tgId = await tgGetUserIdByUsername(env, hint.username);
+      if (tgId) participant = await findUserByTelegramId(env, tgId);
+    }
+    if (!participant) continue;
+
+    const email = String(participant.moizvonki_email || "").trim().toLowerCase();
+    if (!email) {
+      const label = participant.full_name || participant.login || hint.username || participant.telegram_id || "user";
+      throw new Error(`Для пользователя ${label} не заполнен moizvonki_email. Добавьте почту в системе.`);
+    }
+    emails.add(email);
+  }
+
+  return Array.from(emails);
 }
 
 function tgBuildMessageLink(msg) {
@@ -735,9 +816,10 @@ function tgBuildMessageLink(msg) {
 async function findUserByTelegramId(env, tgId) {
   const hasTg = await usersHasTelegramIdColumn(env);
   if (!hasTg) return null;
+  const hasMz = await usersHasMoizvonkiEmailColumn(env);
   if (!/^\d+$/.test(String(tgId || ""))) return null;
   return env.DB.prepare(
-    `SELECT id, full_name, login, role, telegram_id
+    `SELECT id, full_name, login, role, telegram_id${hasMz ? ", moizvonki_email" : ""}
      FROM users
      WHERE is_active=1 AND telegram_id=?
      LIMIT 1`
@@ -3397,4 +3479,3 @@ export default {
     return withCors(notFound(), env, origin);
   },
 };
-
