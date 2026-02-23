@@ -47,7 +47,7 @@ const GOOGLE_CALENDAR_ID_FALLBACK = "859cd788ddbe1d64654e924ec6ccc54a43ea7c9d899
 const CALL_PERIOD_DAYS = [7, 14, 30, 60, 90, 180, 365];
 const MZ_API_DOMAIN = "gekto.moizvonki.ru";
 const MZ_USER_NAME = "avazbekulugbekovi4@gmail.com";
-let _googleTokenCache = { accessToken: "", expAtSec: 0 };
+let _googleTokenCache = { accessToken: "", expAtSec: 0, source: "" };
 const CHAT_CALLS_LOOKBACK_DAYS = 3650; // show максимально полную историю звонков в чате
 
 function nowSec() {
@@ -497,15 +497,68 @@ function pemToUint8Array(pem) {
 }
 
 async function googleGetAccessToken(env) {
+  const oauthClientId = String(env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
+  const oauthClientSecret = String(env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
+  const oauthRefreshToken = String(env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim();
+
+  if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    return googleGetAccessTokenByRefreshToken_(env, oauthClientId, oauthClientSecret, oauthRefreshToken);
+  }
+
+  return googleGetAccessTokenByServiceAccount_(env);
+}
+
+async function googleGetAccessTokenByRefreshToken_(env, clientId, clientSecret, refreshToken) {
   const now = nowSec();
-  if (_googleTokenCache.accessToken && _googleTokenCache.expAtSec - 60 > now) {
+  if (
+    _googleTokenCache.source === "oauth_refresh_token" &&
+    _googleTokenCache.accessToken &&
+    _googleTokenCache.expAtSec - 60 > now
+  ) {
+    return _googleTokenCache.accessToken;
+  }
+
+  const body = new URLSearchParams();
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+  body.set("refresh_token", refreshToken);
+  body.set("grant_type", "refresh_token");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.access_token) {
+    throw new Error(`Google OAuth(refresh token) failed: ${res.status} ${JSON.stringify(data || {})}`);
+  }
+
+  _googleTokenCache = {
+    accessToken: String(data.access_token),
+    expAtSec: now + Number(data.expires_in || 3600),
+    source: "oauth_refresh_token",
+  };
+  return _googleTokenCache.accessToken;
+}
+
+async function googleGetAccessTokenByServiceAccount_(env) {
+  const now = nowSec();
+  if (
+    _googleTokenCache.source === "service_account" &&
+    _googleTokenCache.accessToken &&
+    _googleTokenCache.expAtSec - 60 > now
+  ) {
     return _googleTokenCache.accessToken;
   }
 
   const clientEmail = String(env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
   const privateKey = String(env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
   if (!clientEmail || !privateKey) {
-    throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY");
+    throw new Error(
+      "Missing OAuth config. Provide GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET/GOOGLE_OAUTH_REFRESH_TOKEN " +
+      "or GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
+    );
   }
 
   const keyData = pemToUint8Array(privateKey);
@@ -549,12 +602,13 @@ async function googleGetAccessToken(env) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.access_token) {
-    throw new Error(`Google OAuth failed: ${res.status} ${JSON.stringify(data || {})}`);
+    throw new Error(`Google OAuth(service account) failed: ${res.status} ${JSON.stringify(data || {})}`);
   }
 
   _googleTokenCache = {
     accessToken: String(data.access_token),
     expAtSec: now + Number(data.expires_in || 3600),
+    source: "service_account",
   };
   return _googleTokenCache.accessToken;
 }
