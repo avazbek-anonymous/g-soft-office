@@ -577,8 +577,7 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
 
   const token = await googleGetAccessToken(env);
   const reqId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-  const body = {
+  const baseBody = {
     summary: String(payload.title || "Vstrecha"),
     description: String(payload.description || ""),
     start: {
@@ -589,6 +588,17 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
       dateTime: new Date(Number(payload.endUtcSec) * 1000).toISOString(),
       timeZone: GOOGLE_CALENDAR_TZ,
     },
+  };
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=none`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  // 1) Try explicit Google Meet conference type
+  const bodyWithType = {
+    ...baseBody,
     conferenceData: {
       createRequest: {
         requestId: reqId,
@@ -596,22 +606,37 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
       },
     },
   };
+  let res = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodyWithType) });
+  let data = await res.json().catch(() => ({}));
+  if (res.ok) return data;
 
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=none`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  // 2) Fallback for calendars/accounts where explicit conference type is rejected
+  const errText = JSON.stringify(data || {});
+  const looksLikeConferenceTypeError =
+    res.status === 400 &&
+    /Invalid conference type value/i.test(errText);
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(`Google Calendar create failed: ${res.status} ${JSON.stringify(data || {})}`);
+  if (looksLikeConferenceTypeError) {
+    const bodyWithoutType = {
+      ...baseBody,
+      conferenceData: {
+        createRequest: {
+          requestId: `${reqId}_fallback`,
+        },
+      },
+    };
+    res = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodyWithoutType) });
+    data = await res.json().catch(() => ({}));
+    if (res.ok) return data;
   }
-  return data;
+
+  // 3) Last fallback: create event without conference, so /set still works
+  const plainUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`;
+  res = await fetch(plainUrl, { method: "POST", headers, body: JSON.stringify(baseBody) });
+  data = await res.json().catch(() => ({}));
+  if (res.ok) return data;
+
+  throw new Error(`Google Calendar create failed: ${res.status} ${JSON.stringify(data || {})}`);
 }
 
 async function handleTelegramSetCommand(env, msg, chatId, threadId) {
@@ -626,7 +651,7 @@ async function handleTelegramSetCommand(env, msg, chatId, threadId) {
     `Название: ${title}\n` +
     `Описание:\n${description}\n` +
     `Время: ${when}\n` +
-    `Ссылка на встречу: ${link}`;
+    `Ссылка на встречу: ${link}${link === "-" ? " (не удалось создать Meet для этого календаря/аккаунта)" : ""}`;
 
   await tgSendMessage(env, chatId, text, threadId);
 }
