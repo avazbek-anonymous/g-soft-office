@@ -214,6 +214,7 @@
       route_calendar: "Календарь",
       route_projects: "Проекты",
       route_courses: "Курсы",
+      route_chat: "Чат",
       route_clients: "Клиенты",
       route_calls: "Звонки",
       route_settings: "Настройки",
@@ -379,6 +380,7 @@ moizvonki_email: "MZ Email",
       route_calendar: "Kalendar",
       route_projects: "Loyihalar",
       route_courses: "Kurslar",
+      route_chat: "Chat",
       route_clients: "Mijozlar",
       route_calls: "Qo'ng'iroqlar",
       route_settings: "Sozlamalar",
@@ -542,6 +544,7 @@ moizvonki_email: "MZ Email",
       route_calendar: "Calendar",
       route_projects: "Projects",
       route_courses: "Courses",
+      route_chat: "Chat",
       route_clients: "Clients",
       route_calls: "Calls",
       route_settings: "Settings",
@@ -1005,6 +1008,33 @@ moizvonki_email: "MZ Email",
       apiFetch(`/api/course_leads/${leadId}/chat/tasks`, {
         method: "POST",
         body,
+      }),
+  },
+
+  botchat: {
+    chats: (q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.q) sp.set("q", String(q.q));
+      if (q.has_unread) sp.set("has_unread", "1");
+      const s = sp.toString();
+      return apiFetch(`/api/botchat/chats${s ? "?" + s : ""}`);
+    },
+    messages: (chatId, q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.page) sp.set("page", String(q.page));
+      if (q.page_size) sp.set("page_size", String(q.page_size));
+      const s = sp.toString();
+      return apiFetch(`/api/botchat/chats/${encodeURIComponent(String(chatId || ""))}/messages${s ? "?" + s : ""}`);
+    },
+    send: (chatId, text) =>
+      apiFetch(`/api/botchat/chats/${encodeURIComponent(String(chatId || ""))}/messages`, {
+        method: "POST",
+        body: { text },
+      }),
+    linkClient: (chatId, client_id) =>
+      apiFetch(`/api/botchat/chats/${encodeURIComponent(String(chatId || ""))}/link_client`, {
+        method: "POST",
+        body: { client_id },
       }),
   },
 
@@ -1739,6 +1769,12 @@ select option{
         roles: ["admin", "rop", "sale"]
       },
       {
+        path: "/chat",
+        key: "route_chat",
+        icon: "chat",
+        roles: ["admin", "rop", "sale"]
+      },
+      {
         path: "/course-payments",
         key: "route_course_payments",
         icon: "course_payments",
@@ -1778,6 +1814,7 @@ select option{
     if (path.startsWith("/calendar")) return t("route_calendar");
     if (path.startsWith("/projects")) return t("route_projects");
     if (path.startsWith("/courses")) return t("route_courses");
+    if (path.startsWith("/chat")) return t("route_chat");
     if (path.startsWith("/course-payments")) return t("route_course_payments");
     if (path.startsWith("/clients")) return t("route_clients");
     if (path.startsWith("/calls")) return t("route_calls");
@@ -2120,6 +2157,10 @@ select option{
       App.state.coursesTabsResizeCleanup();
       App.state.coursesTabsResizeCleanup = null;
     }
+    if (path !== "/chat" && typeof App.state.botchatCleanup === "function") {
+      App.state.botchatCleanup();
+      App.state.botchatCleanup = null;
+    }
     App.state.current = { path, query };
     App.state.routeId = (App.state.routeId || 0) + 1;
     const routeId = App.state.routeId;
@@ -2137,6 +2178,7 @@ select option{
     if (path === "/users") return App.renderUsers(host, routeId);
     if (path === "/settings") return App.renderSettings(host, routeId);
     if (path === "/courses") return App.renderCourses(host, routeId);
+    if (path === "/chat") return App.renderBotChat(host, routeId);
     if (path === "/course-payments") return App.renderCoursePayments(host, routeId);
     if (path === "/clients") return App.renderClients(host, routeId);
     if (path === "/calls") return App.renderCalls(host, routeId);
@@ -7436,6 +7478,395 @@ App.renderCoursePayments = async function(host, routeId){
   stageSel.addEventListener("change", () => { state.stage = stageSel.value || "other"; render(); });
 
   render();
+};
+
+function injectBotChatStyles() {
+  if (document.getElementById("botchat-styles")) return;
+  const st = document.createElement("style");
+  st.id = "botchat-styles";
+  st.textContent = `
+    .botchatPage{display:grid;grid-template-columns:340px 1fr;gap:10px;min-height:72vh}
+    .botchatLeft,.botchatRight{border:1px solid var(--stroke);border-radius:14px;background:rgba(255,255,255,.03);min-height:0}
+    .botchatLeft{display:flex;flex-direction:column;overflow:hidden}
+    .botchatFilters{padding:10px;border-bottom:1px solid var(--stroke);display:flex;flex-direction:column;gap:8px}
+    .botchatList{flex:1;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+    .botchatItem{border:1px solid var(--stroke);border-radius:12px;padding:8px;cursor:pointer;background:rgba(255,255,255,.03)}
+    .botchatItem:hover{background:rgba(255,255,255,.06)}
+    .botchatItem.active{border-color:var(--acc);background:rgba(255,255,255,.08)}
+    .botchatName{font-weight:800}
+    .botchatPreview{font-size:12px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .botchatMeta{margin-top:4px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted2);gap:8px}
+    .botchatUnread{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;padding:0 6px;border-radius:999px;background:var(--acc);color:#111;font-weight:900;font-size:11px}
+    .botchatRight{display:flex;flex-direction:column;overflow:hidden}
+    .botchatHead{padding:10px;border-bottom:1px solid var(--stroke);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .botchatFeed{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(180deg, rgba(8,24,34,.55), rgba(5,16,25,.8))}
+    .botchatMsg{max-width:78%;display:flex;flex-direction:column;gap:4px}
+    .botchatMsg.out{margin-left:auto}
+    .botchatMsgName{font-size:12px;color:var(--muted2);font-weight:700}
+    .botchatBubble{border-radius:14px;padding:8px 10px;border:1px solid rgba(255,255,255,.18);white-space:pre-wrap;word-break:break-word}
+    .botchatMsg.in .botchatBubble{background:#1d2b44}
+    .botchatMsg.out .botchatBubble{background:#1b3b34}
+    .botchatMsgTime{font-size:11px;color:var(--muted2);text-align:right}
+    .botchatComposer{padding:10px;border-top:1px solid var(--stroke);display:flex;gap:8px}
+    .botchatComposer .input{flex:1}
+    .botchatEmpty{height:100%;display:grid;place-items:center;color:var(--muted2)}
+    @media (max-width: 980px){
+      .botchatPage{grid-template-columns:1fr}
+      .botchatLeft{max-height:40vh}
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+App.renderBotChat = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
+  if (typeof App.state.botchatCleanup === "function") {
+    App.state.botchatCleanup();
+    App.state.botchatCleanup = null;
+  }
+  injectBotChatStyles();
+  const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
+  const role = App.state.user?.role || "";
+  if (!(role === "admin" || role === "rop" || role === "sale")) {
+    host.innerHTML = "";
+    host.appendChild(el("div", { class: "card cardPad vcol gap10" },
+      el("div", { style: "font-weight:900" }, "Forbidden"),
+      el("div", { class: "muted" }, "Only admin/sale/rop")
+    ));
+    return;
+  }
+
+  const query = App.state.current?.query || {};
+  const state = {
+    chats: [],
+    selectedChatId: String(query.chat_id || ""),
+    selectedChat: null,
+    messages: [],
+    q: "",
+    unreadOnly: false,
+    refs: null,
+    companies: [],
+  };
+
+  const chatDisplay = (row) => {
+    const full = `${String(row?.first_name || "").trim()} ${String(row?.last_name || "").trim()}`.trim();
+    if (full) return full;
+    if (row?.username) return String(row.username);
+    return String(row?.chat_id || "-");
+  };
+  const msgTime = (tsSec) => {
+    if (!tsSec) return "";
+    const d = new Date(Number(tsSec) * 1000);
+    return d.toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
+
+  const wrap = el("div", { class: "botchatPage" });
+  const left = el("div", { class: "botchatLeft" });
+  const right = el("div", { class: "botchatRight" });
+  wrap.append(left, right);
+  host.innerHTML = "";
+  host.appendChild(wrap);
+
+  const qInp = el("input", { class: "input", placeholder: tr({ ru: "Поиск чатов...", uz: "Chat qidirish...", en: "Search chats..." }) });
+  const unreadChk = el("input", { type: "checkbox" });
+  const refreshBtn = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Обновить", uz: "Yangilash", en: "Refresh" }));
+  const listEl = el("div", { class: "botchatList" }, el("div", { class: "muted" }, t("loading")));
+  left.append(
+    el("div", { class: "botchatFilters" },
+      qInp,
+      el("label", { class: "hrow gap8", style: "align-items:center" }, unreadChk, tr({ ru: "Только непрочитанные", uz: "Faqat o'qilmagan", en: "Only unread" })),
+      refreshBtn
+    ),
+    listEl
+  );
+
+  const headName = el("div", { style: "font-weight:900" }, tr({ ru: "Выберите чат", uz: "Chatni tanlang", en: "Select chat" }));
+  const headMeta = el("div", { class: "hrow gap8", style: "flex-wrap:wrap" });
+  const btnCreateLead = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Создать лид", uz: "Lead yaratish", en: "Create lead" }));
+  const btnCreateClient = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Создать клиента", uz: "Mijoz yaratish", en: "Create client" }));
+  const btnOpenClient = el("button", { class: "btn ghost", type: "button", style: "display:none" }, tr({ ru: "Открыть клиента", uz: "Mijozni ochish", en: "Open client" }));
+  const feedEl = el("div", { class: "botchatFeed" }, el("div", { class: "botchatEmpty" }, tr({ ru: "Выберите чат слева", uz: "Chapdan chat tanlang", en: "Select chat on the left" })));
+  const msgInp = el("textarea", { class: "input", rows: 2, placeholder: tr({ ru: "Сообщение...", uz: "Xabar...", en: "Message..." }) });
+  const sendBtn = el("button", { class: "btn", type: "button" }, tr({ ru: "Отправить", uz: "Yuborish", en: "Send" }));
+
+  right.append(
+    el("div", { class: "botchatHead" }, headName, el("div", { class: "hrow gap8", style: "flex-wrap:wrap" }, headMeta, btnCreateLead, btnCreateClient, btnOpenClient)),
+    feedEl,
+    el("div", { class: "botchatComposer" }, msgInp, sendBtn)
+  );
+
+  const loadRefs = async () => {
+    if (state.refs) return state.refs;
+    try {
+      const all = await apiFetch("/api/settings/all");
+      const data = all?.data || {};
+      state.refs = {
+        cities: Array.isArray(data.dict_cities) ? data.dict_cities : [],
+        sources: Array.isArray(data.dict_sources) ? data.dict_sources : [],
+        spheres: Array.isArray(data.dict_spheres) ? data.dict_spheres : [],
+      };
+    } catch {
+      state.refs = { cities: [], sources: [], spheres: [] };
+    }
+    try {
+      const c = await API.clients.list("company", "");
+      state.companies = Array.isArray(c?.data) ? c.data : [];
+    } catch {
+      state.companies = [];
+    }
+    return state.refs;
+  };
+
+  const renderFeed = () => {
+    feedEl.innerHTML = "";
+    if (!state.selectedChat) {
+      feedEl.appendChild(el("div", { class: "botchatEmpty" }, tr({ ru: "Выберите чат слева", uz: "Chapdan chat tanlang", en: "Select chat on the left" })));
+      return;
+    }
+    if (!state.messages.length) {
+      feedEl.appendChild(el("div", { class: "botchatEmpty" }, tr({ ru: "Нет сообщений", uz: "Xabarlar yo'q", en: "No messages" })));
+      return;
+    }
+    for (const m of state.messages) {
+      const isOut = String(m.direction || "") === "out";
+      const inName = [m.telegram_first_name, m.telegram_last_name].filter(Boolean).join(" ").trim() || m.telegram_username || chatDisplay(state.selectedChat);
+      const outName = m.staff_user_name || tr({ ru: "Оператор", uz: "Operator", en: "Operator" });
+      feedEl.appendChild(
+        el("div", { class: `botchatMsg ${isOut ? "out" : "in"}` },
+          el("div", { class: "botchatMsgName" }, isOut ? outName : inName),
+          el("div", { class: "botchatBubble" }, m.text || ""),
+          el("div", { class: "botchatMsgTime" }, msgTime(m.created_at))
+        )
+      );
+    }
+    feedEl.scrollTop = feedEl.scrollHeight;
+  };
+
+  const syncHead = () => {
+    const c = state.selectedChat;
+    if (!c) {
+      headName.textContent = tr({ ru: "Выберите чат", uz: "Chatni tanlang", en: "Select chat" });
+      headMeta.textContent = "";
+      btnOpenClient.style.display = "none";
+      return;
+    }
+    headName.textContent = chatDisplay(c);
+    const metaBits = [
+      c.username || "",
+      c.chat_id ? `id:${c.chat_id}` : "",
+      c.linked_client_name ? `${tr({ ru: "Клиент", uz: "Mijoz", en: "Client" })}: ${c.linked_client_name}` : "",
+    ].filter(Boolean);
+    headMeta.textContent = metaBits.join(" • ");
+    btnOpenClient.style.display = c.linked_client_id ? "" : "none";
+  };
+
+  const renderChats = () => {
+    listEl.innerHTML = "";
+    const q = String(state.q || "").trim().toLowerCase();
+    let rows = state.chats.slice();
+    if (state.unreadOnly) rows = rows.filter((x) => Number(x.unread_for_staff || 0) > 0);
+    if (q) {
+      rows = rows.filter((x) => {
+        const hay = [chatDisplay(x), x.username, x.last_message_text, x.chat_id, x.linked_client_name].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    if (!rows.length) {
+      listEl.appendChild(el("div", { class: "muted" }, t("no_data")));
+      return;
+    }
+    for (const c of rows) {
+      const item = el("button", {
+        class: `botchatItem ${String(c.chat_id) === String(state.selectedChatId) ? "active" : ""}`,
+        type: "button",
+        onClick: async () => {
+          state.selectedChatId = String(c.chat_id);
+          state.selectedChat = c;
+          setHash("/chat", { chat_id: String(c.chat_id) }, { silent: true });
+          syncHead();
+          renderChats();
+          await loadMessages();
+        }
+      },
+        el("div", { class: "botchatName" }, chatDisplay(c)),
+        el("div", { class: "botchatPreview" }, c.last_message_text || tr({ ru: "Нет сообщений", uz: "Xabar yo'q", en: "No messages" })),
+        el("div", { class: "botchatMeta" },
+          el("span", {}, msgTime(c.last_message_at)),
+          Number(c.unread_for_staff || 0) > 0 ? el("span", { class: "botchatUnread" }, String(c.unread_for_staff)) : el("span", {})
+        )
+      );
+      listEl.appendChild(item);
+    }
+  };
+
+  const loadMessages = async () => {
+    if (!state.selectedChatId) {
+      state.messages = [];
+      renderFeed();
+      return;
+    }
+    try {
+      const r = await API.botchat.messages(state.selectedChatId, { page: 1, page_size: 200 });
+      if (App.state.routeId !== rid) return;
+      state.messages = Array.isArray(r?.data?.items) ? r.data.items : [];
+      const fresh = state.chats.find((x) => String(x.chat_id) === String(state.selectedChatId));
+      if (fresh) {
+        fresh.unread_for_staff = 0;
+        state.selectedChat = fresh;
+      }
+      syncHead();
+      renderChats();
+      renderFeed();
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    }
+  };
+
+  const loadChats = async () => {
+    try {
+      const r = await API.botchat.chats({ q: state.q, has_unread: state.unreadOnly ? 1 : 0 });
+      if (App.state.routeId !== rid) return;
+      state.chats = Array.isArray(r?.data) ? r.data : [];
+      if (!state.selectedChatId && state.chats.length) state.selectedChatId = String(state.chats[0].chat_id);
+      state.selectedChat = state.chats.find((x) => String(x.chat_id) === String(state.selectedChatId)) || null;
+      syncHead();
+      renderChats();
+      await loadMessages();
+    } catch (e) {
+      listEl.innerHTML = "";
+      listEl.appendChild(el("div", { class: "muted" }, `${t("toast_error")}: ${e.message || "error"}`));
+    }
+  };
+
+  const openCreateClientModal = async (type) => {
+    const chat = state.selectedChat;
+    if (!chat) return;
+    const refs = await loadRefs();
+    const isLead = type === "lead";
+    const fullNameInp = el("input", { class: "input", value: chatDisplay(chat), placeholder: t("client_full_name") || "Full name" });
+    const phone1Inp = el("input", { class: "input", placeholder: t("client_phone1") || "Phone" });
+    const phone2Inp = el("input", { class: "input", placeholder: t("client_phone2") || "Phone 2" });
+    bindUzPhoneInput(phone1Inp);
+    bindUzPhoneInput(phone2Inp);
+    const companyNameInp = el("input", { class: "input", placeholder: t("client_company_name") || "Company name" });
+    const commentInp = el("textarea", { class: "input", rows: 3, placeholder: t("client_comment") || "Comment" });
+    const citySel = el("select", { class: "sel" }, el("option", { value: "" }, t("client_city")));
+    const sourceSel = el("select", { class: "sel" }, el("option", { value: "" }, t("client_source")));
+    const sphereSel = el("select", { class: "sel" }, el("option", { value: "" }, t("client_sphere")));
+    const companyLinkSel = el("select", { class: "sel" }, el("option", { value: "" }, t("client_link_company")));
+
+    for (const x of refs.cities || []) citySel.appendChild(el("option", { value: String(x.id) }, x.name_uz || x.name_ru || x.name_en || `#${x.id}`));
+    for (const x of refs.sources || []) sourceSel.appendChild(el("option", { value: String(x.id) }, x.name_uz || x.name_ru || x.name_en || `#${x.id}`));
+    for (const x of refs.spheres || []) sphereSel.appendChild(el("option", { value: String(x.id) }, x.name_uz || x.name_ru || x.name_en || `#${x.id}`));
+    for (const x of state.companies || []) companyLinkSel.appendChild(el("option", { value: String(x.id) }, x.company_name || x.full_name || `#${x.id}`));
+
+    const body = el("div", { class: "vcol gap8" },
+      !isLead ? companyNameInp : null,
+      fullNameInp,
+      phone1Inp,
+      phone2Inp,
+      citySel,
+      sourceSel,
+      sphereSel,
+      isLead ? companyLinkSel : null,
+      commentInp
+    );
+
+    Modal.open(
+      isLead ? (t("clients_create_lead") || "Create lead") : (t("clients_create_company") || "Create company"),
+      body,
+      [
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => Modal.close() },
+        {
+          label: t("save") || "Save",
+          kind: "primary",
+          onClick: async () => {
+            try {
+              const full_name = String(fullNameInp.value || "").trim();
+              const p1 = validateUzPhone(phone1Inp.value, true);
+              if (!full_name) throw new Error(t("client_full_name"));
+              if (!p1.ok) throw new Error(phoneErrorText(p1.code));
+              const p2 = validateUzPhone(phone2Inp.value, false);
+              if (!p2.ok) throw new Error(phoneErrorText(p2.code));
+              const payload = {
+                type: isLead ? "lead" : "company",
+                full_name,
+                phone1: p1.value,
+                phone2: p2.value || null,
+                company_name: isLead ? null : String(companyNameInp.value || "").trim() || null,
+                city_id: intId(citySel.value) || null,
+                source_id: intId(sourceSel.value) || null,
+                sphere_id: intId(sphereSel.value) || null,
+                company_id: isLead ? (intId(companyLinkSel.value) || null) : null,
+                comment: [String(commentInp.value || "").trim(), `TG chat: ${chat.chat_id}${chat.username ? ` (${chat.username})` : ""}`].filter(Boolean).join("\n"),
+              };
+              const res = await API.clients.create(payload);
+              const newId = Number(res?.data?.id || 0);
+              if (newId > 0) {
+                await API.botchat.linkClient(chat.chat_id, newId);
+              }
+              Modal.close();
+              await loadChats();
+              Toast.show(t("toast_saved") || "Saved", "ok");
+            } catch (e) {
+              Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  sendBtn.onclick = async () => {
+    if (!state.selectedChatId) return;
+    const txt = String(msgInp.value || "").trim();
+    if (!txt) return;
+    sendBtn.disabled = true;
+    try {
+      await API.botchat.send(state.selectedChatId, txt);
+      msgInp.value = "";
+      await loadMessages();
+      await loadChats();
+    } catch (e) {
+      Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  };
+  msgInp.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      await sendBtn.onclick();
+    }
+  });
+
+  btnCreateLead.onclick = async () => openCreateClientModal("lead");
+  btnCreateClient.onclick = async () => openCreateClientModal("company");
+  btnOpenClient.onclick = () => {
+    const clientId = intId(state.selectedChat?.linked_client_id);
+    if (!clientId) return;
+    setHash("/clients", { open: String(clientId) });
+  };
+  qInp.addEventListener("input", () => {
+    state.q = String(qInp.value || "");
+    renderChats();
+  });
+  unreadChk.addEventListener("change", async () => {
+    state.unreadOnly = !!unreadChk.checked;
+    await loadChats();
+  });
+  refreshBtn.onclick = async () => {
+    await loadChats();
+  };
+
+  const poll = setInterval(async () => {
+    if (App.state.routeId !== rid) return;
+    await loadChats();
+  }, 12000);
+
+  await loadChats();
+  if (App.state.routeId !== rid) return;
+  App.state.botchatCleanup = () => clearInterval(poll);
 };
 
 function injectCallsStyles() {
