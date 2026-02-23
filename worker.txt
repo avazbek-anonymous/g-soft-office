@@ -42,9 +42,12 @@ const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
 const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "review", "canceled"];
 const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
 const TG_DEFAULT_TIME_HHMM = "10:00";
+const GOOGLE_CALENDAR_TZ = "Asia/Tashkent";
+const GOOGLE_CALENDAR_ID_FALLBACK = "859cd788ddbe1d64654e924ec6ccc54a43ea7c9d899e24bde8356a03a428e626@group.calendar.google.com";
 const CALL_PERIOD_DAYS = [7, 14, 30, 60, 90, 180, 365];
 const MZ_API_DOMAIN = "gekto.moizvonki.ru";
 const MZ_USER_NAME = "avazbekulugbekovi4@gmail.com";
+let _googleTokenCache = { accessToken: "", expAtSec: 0 };
 const CHAT_CALLS_LOOKBACK_DAYS = 3650; // show максимально полную историю звонков в чате
 
 function nowSec() {
@@ -279,9 +282,12 @@ function tgGetEntities(msg) {
   ];
 }
 
-function tgIsTasksCommand(msg) {
+function tgIsCommand(msg, cmdName) {
   const fullText = String(msg?.text || msg?.caption || "");
   if (!fullText) return false;
+
+  const cmdNeedle = `/${String(cmdName || "").trim().toLowerCase()}`;
+  if (!cmdNeedle || cmdNeedle === "/") return false;
 
   for (const ent of tgGetEntities(msg)) {
     if (ent?.type !== "bot_command") continue;
@@ -289,19 +295,41 @@ function tgIsTasksCommand(msg) {
     const length = Number(ent.length);
     if (!Number.isInteger(offset) || !Number.isInteger(length) || length <= 0) continue;
     const cmdText = fullText.substring(offset, offset + length);
-    if (cmdText.split("@")[0].toLowerCase() === "/tasks") return true;
+    if (cmdText.split("@")[0].toLowerCase() === cmdNeedle) return true;
   }
 
-  return /(^|\s)\/tasks(?:@\w+)?(?=\s|$)/i.test(fullText);
+  const escaped = cmdNeedle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(^|\\s)${escaped}(?:@\\w+)?(?=\\s|$)`, "i");
+  return re.test(fullText);
 }
 
-function tgGetTaskSourceText(msg) {
+function tgIsTasksCommand(msg) {
+  return tgIsCommand(msg, "tasks");
+}
+
+function tgIsSetCommand(msg) {
+  return tgIsCommand(msg, "set");
+}
+
+function tgGetCommandSourceText(msg, commandName) {
   if (msg?.reply_to_message) {
     const rt = msg.reply_to_message.text || msg.reply_to_message.caption;
     if (rt) return String(rt);
   }
   const text = String(msg?.text || msg?.caption || "");
-  return text.replace(/\/tasks@[\w_]+/gi, "").replace(/\/tasks\b/gi, "").trim();
+  const safe = String(commandName || "").replace(/[^\w]/g, "");
+  if (!safe) return text.trim();
+  const cmdAt = new RegExp(`\\/${safe}@[\\w_]+`, "gi");
+  const cmd = new RegExp(`\\/${safe}\\b`, "gi");
+  return text.replace(cmdAt, "").replace(cmd, "").trim();
+}
+
+function tgGetTaskSourceText(msg) {
+  return tgGetCommandSourceText(msg, "tasks");
+}
+
+function tgGetSetSourceText(msg) {
+  return tgGetCommandSourceText(msg, "set");
 }
 
 function tgExtractMentionFromEntities(msg) {
@@ -411,6 +439,196 @@ function formatTashkentDateTime(tsSec) {
   const d = new Date((Number(tsSec) + TZ_OFFSET_MIN * 60) * 1000);
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+function tgGetGroupLabel(msg) {
+  const chat = msg?.chat || {};
+  if (chat.type === "private") {
+    if (chat.username) return `@${chat.username}`;
+    const full = [chat.first_name, chat.last_name].filter(Boolean).join(" ").trim();
+    return full || "Private chat";
+  }
+  if (chat.title) return String(chat.title);
+  if (chat.username) return `@${chat.username}`;
+  return String(chat.id || "Unknown group");
+}
+
+function buildSetPayloadFromMessage(msg) {
+  const sourceText = tgGetSetSourceText(msg);
+  const combinedText = `${msg?.text || msg?.caption || ""}\n${msg?.reply_to_message ? msg.reply_to_message.text || msg.reply_to_message.caption || "" : ""}`;
+  const startUtcSec = parseTaskDeadlineTashkent(combinedText);
+  const endUtcSec = Number(startUtcSec) + 60 * 60;
+
+  const cleaned = cleanTaskTextForDescription(sourceText);
+  const textForSplit = cleaned || sourceText || "Vstrecha";
+  const lines = String(textForSplit)
+    .split(/\r?\n/)
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+
+  const title = (lines[0] || "Vstrecha").slice(0, 240);
+  const descriptionCore = lines.length > 1 ? lines.slice(1).join("\n") : "";
+  const groupLine = `Group: ${tgGetGroupLabel(msg)}`;
+  const description = [descriptionCore, groupLine].filter(Boolean).join("\n\n").trim();
+
+  return {
+    title,
+    description,
+    startUtcSec,
+    endUtcSec,
+  };
+}
+
+function b64UrlFromString(str) {
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function pemToUint8Array(pem) {
+  const normalized = String(pem || "").replace(/\\n/g, "\n").trim();
+  const base64 = normalized
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  if (!base64) throw new Error("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is empty");
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function googleGetAccessToken(env) {
+  const now = nowSec();
+  if (_googleTokenCache.accessToken && _googleTokenCache.expAtSec - 60 > now) {
+    return _googleTokenCache.accessToken;
+  }
+
+  const clientEmail = String(env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
+  const privateKey = String(env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
+  if (!clientEmail || !privateKey) {
+    throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY");
+  }
+
+  const keyData = pemToUint8Array(privateKey);
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8",
+    keyData.buffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const iat = now;
+  const exp = now + 3600;
+  const headerPart = b64UrlFromString(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payloadPart = b64UrlFromString(
+    JSON.stringify({
+      iss: clientEmail,
+      scope: "https://www.googleapis.com/auth/calendar",
+      aud: "https://oauth2.googleapis.com/token",
+      iat,
+      exp,
+    })
+  );
+
+  const unsigned = `${headerPart}.${payloadPart}`;
+  const signature = await crypto.subtle.sign(
+    { name: "RSASSA-PKCS1-v1_5" },
+    cryptoKey,
+    new TextEncoder().encode(unsigned)
+  );
+  const signedJwt = `${unsigned}.${base64url(new Uint8Array(signature))}`;
+
+  const body = new URLSearchParams();
+  body.set("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer");
+  body.set("assertion", signedJwt);
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.access_token) {
+    throw new Error(`Google OAuth failed: ${res.status} ${JSON.stringify(data || {})}`);
+  }
+
+  _googleTokenCache = {
+    accessToken: String(data.access_token),
+    expAtSec: now + Number(data.expires_in || 3600),
+  };
+  return _googleTokenCache.accessToken;
+}
+
+function googleExtractConferenceLink(eventData) {
+  if (!eventData || typeof eventData !== "object") return null;
+  if (eventData.hangoutLink) return String(eventData.hangoutLink);
+  const points = Array.isArray(eventData?.conferenceData?.entryPoints)
+    ? eventData.conferenceData.entryPoints
+    : [];
+  const video = points.find((p) => p?.entryPointType === "video" && p?.uri);
+  if (video?.uri) return String(video.uri);
+  const first = points.find((p) => p?.uri);
+  return first?.uri ? String(first.uri) : null;
+}
+
+async function googleCreateCalendarEventWithMeet(env, payload) {
+  const calendarId = String(env.GOOGLE_CALENDAR_ID || GOOGLE_CALENDAR_ID_FALLBACK || "").trim();
+  if (!calendarId) throw new Error("Missing GOOGLE_CALENDAR_ID");
+
+  const token = await googleGetAccessToken(env);
+  const reqId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  const body = {
+    summary: String(payload.title || "Vstrecha"),
+    description: String(payload.description || ""),
+    start: {
+      dateTime: new Date(Number(payload.startUtcSec) * 1000).toISOString(),
+      timeZone: GOOGLE_CALENDAR_TZ,
+    },
+    end: {
+      dateTime: new Date(Number(payload.endUtcSec) * 1000).toISOString(),
+      timeZone: GOOGLE_CALENDAR_TZ,
+    },
+    conferenceData: {
+      createRequest: {
+        requestId: reqId,
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    },
+  };
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=none`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Google Calendar create failed: ${res.status} ${JSON.stringify(data || {})}`);
+  }
+  return data;
+}
+
+async function handleTelegramSetCommand(env, msg, chatId, threadId) {
+  const payload = buildSetPayloadFromMessage(msg);
+  const event = await googleCreateCalendarEventWithMeet(env, payload);
+  const link = googleExtractConferenceLink(event) || "-";
+  const title = payload.title || "Vstrecha";
+  const description = payload.description || "-";
+  const when = formatTashkentDateTime(payload.startUtcSec);
+
+  const text =
+    `Название: ${title}\n` +
+    `Описание:\n${description}\n` +
+    `Время: ${when}\n` +
+    `Ссылка на встречу: ${link}`;
+
+  await tgSendMessage(env, chatId, text, threadId);
 }
 
 function tgBuildMessageLink(msg) {
@@ -559,13 +777,26 @@ async function handleTelegramWebhook(env, request) {
   if (!update) return jsonResp({ ok: true }, 200);
   const msg = update.message;
   if (!msg) return jsonResp({ ok: true }, 200);
-  if (!tgIsTasksCommand(msg)) return jsonResp({ ok: true }, 200);
+  const isTasksCommand = tgIsTasksCommand(msg);
+  const isSetCommand = tgIsSetCommand(msg);
+  if (!isTasksCommand && !isSetCommand) return jsonResp({ ok: true }, 200);
 
   const chatId = msg.chat?.id;
   const messageId = msg.message_id;
   const threadId = msg.is_topic_message && msg.message_thread_id ? msg.message_thread_id : null;
 
   if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
+
+  if (isSetCommand) {
+    try {
+      await handleTelegramSetCommand(env, msg, chatId, threadId);
+      await tgSetReaction(env, chatId, messageId, "🫡");
+      return jsonResp({ ok: true, data: { command: "set" } }, 200);
+    } catch (e) {
+      await tgSendMessage(env, chatId, `Ошибка /set: ${String(e && e.message ? e.message : e)}`, threadId);
+      return jsonResp({ ok: true, error: "set_failed" }, 200);
+    }
+  }
 
   const creatorTgId = msg.from?.id ? String(msg.from.id) : "";
   const creator = await findUserByTelegramId(env, creatorTgId);
