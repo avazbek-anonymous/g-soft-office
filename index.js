@@ -2313,11 +2313,6 @@ select option{
           String(s.id),
           s?.[`name_${App.state.lang}`] || s?.name_uz || s?.name_ru || s?.name_en || s?.name || `#${s.id || ""}`
         ]));
-        const totalLeads = leads.length;
-        const totalCourses = leads.filter(x => {
-          const st = String(x.status || "");
-          return st === "enrolled" || st === "studying";
-        }).length;
         const adminIds = new Set(
           users
             .filter(u => String(u?.role || "").toLowerCase() === "admin")
@@ -2335,6 +2330,7 @@ select option{
         };
         const pieEl = el("div", { class: "mainDashPie" });
         const pieLegend = el("div", { class: "mainDashLegend" });
+        const courseSummaryWrap = el("div", { class: "vcol gap10" });
         const sourcesWrap = el("div", { class: "vcol gap8" });
         const projectStageWrap = el("div", { class: "vcol gap8" });
         const projectUserWrap = el("div", { class: "vcol gap8" });
@@ -2437,6 +2433,33 @@ select option{
             );
           }
         };
+        const renderCourseSummary = () => {
+          const filteredLeads = selectedType
+            ? leads.filter(x => String(x.course_type_id || "") === selectedType)
+            : leads;
+          const totalLeads = filteredLeads.length;
+          const totalCourses = filteredLeads.filter(x => {
+            const st = String(x.status || "");
+            return st === "enrolled" || st === "studying";
+          }).length;
+          courseSummaryWrap.innerHTML = "";
+          courseSummaryWrap.appendChild(
+            makeBar(
+              tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }),
+              totalLeads,
+              Math.max(totalLeads, 1)
+            )
+          );
+          courseSummaryWrap.appendChild(
+            makeBar(
+              tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }),
+              totalCourses,
+              Math.max(totalLeads, 1),
+              "rgba(96,165,250,.8)",
+              "rgba(34,211,238,.8)"
+            )
+          );
+        };
         const renderSources = () => {
           const filteredLeads = selectedType
             ? leads.filter(x => String(x.course_type_id || "") === selectedType)
@@ -2486,6 +2509,7 @@ select option{
         typeSel.addEventListener("change", () => {
           selectedType = typeSel.value || "";
           App.state.mainDashCourseTypeId = selectedType;
+          renderCourseSummary();
           renderLeadPie();
           renderSources();
         });
@@ -2497,6 +2521,7 @@ select option{
         });
         renderProjectStage();
         renderProjectUsers();
+        renderCourseSummary();
         renderLeadPie();
         renderSources();
 
@@ -2526,8 +2551,7 @@ select option{
             el("div", { class: "mainDashSectionGrid courses" },
               el("div", { class: "card cardPad vcol gap10 mainDashCard" },
                 el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
-                makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, Math.max(totalLeads, 1)),
-                makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, Math.max(totalLeads, 1), "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
+                courseSummaryWrap
               ),
               el("div", { class: "card cardPad vcol gap10 mainDashCard" },
                 el("div", { class: "mainDashTitle" }, tr({ ru: "Этапы лидов", uz: "Lid bosqichlari", en: "Lead stages" })),
@@ -7484,10 +7508,10 @@ App.renderCoursePayments = async function(host, routeId){
     const sumText = sums && moneyColumns.has(c.key) ? sums[c.key] : "";
     return el("th", {},
       el("div", { class: "cpThStack" },
-        moneyColumns.has(c.key)
+        el("button", { class: "cpSort", type: "button", onClick: () => { toggleSort(c.key); render(); } }, `${c.label} ${sortMark(c.key)}`.trim()),
+      moneyColumns.has(c.key)
           ? el("div", { class: "cpThSum", title: sumText || "-" }, `${tr({ ru: "Сумма", uz: "Jami", en: "Total" })}: ${sumText || "-"}`)
-          : null,
-        el("button", { class: "cpSort", type: "button", onClick: () => { toggleSort(c.key); render(); } }, `${c.label} ${sortMark(c.key)}`.trim())
+          : null
       )
     );
   };
@@ -8782,7 +8806,6 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
-
 
 
 
