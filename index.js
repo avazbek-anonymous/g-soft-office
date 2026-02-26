@@ -2264,41 +2264,55 @@ select option{
         const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
         const courseTypeLabel = (row) =>
           row?.[`name_${App.state.lang}`] || row?.name_uz || row?.name_ru || row?.name_en || row?.name || `#${row?.id || ""}`;
-        const makeBar = (label, value, max, colorA = "rgba(15,209,167,.8)", colorB = "rgba(255,208,90,.8)") => {
-          const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((value / max) * 100))) : 0;
+        const pctText = (value, total) => {
+          const pct = total > 0 ? (Number(value || 0) / total) * 100 : 0;
+          const rounded = Math.round(pct * 10) / 10;
+          return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+        };
+        const makeBar = (label, value, total, colorA = "rgba(15,209,167,.8)", colorB = "rgba(255,208,90,.8)") => {
+          const pct = total > 0 ? Math.max(0, Math.min(100, (Number(value || 0) / total) * 100)) : 0;
           return el("div", { class: "vcol gap8" },
             el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px" },
               el("div", { class: "mainDashSub" }, label),
-              el("div", { style: "font-weight:800" }, String(value))
+              el("div", { style: "font-weight:800", title: String(value || 0) }, pctText(value, total))
             ),
             el("div", { class: "liquidTrack" },
-              el("div", { class: "liquidFill", style: `--fill:${pct}%;background:linear-gradient(90deg, ${colorA}, ${colorB})` })
+              el("div", {
+                class: "liquidFill",
+                title: String(value || 0),
+                style: `--fill:${pct.toFixed(2)}%;background:linear-gradient(90deg, ${colorA}, ${colorB})`
+              })
             )
           );
         };
 
-        const [leadsRes, projectsRes, typeRes] = await Promise.all([
+        const [leadsRes, projectsRes, typeRes, sourceRes] = await Promise.all([
           apiFetch("/api/course_leads").catch(() => ({ data: [] })),
           API.projects.list({}).catch(() => ({ data: [] })),
           API.settings.dictList("course_types").catch(() => ({ data: [] })),
+          API.settings.dictList("sources").catch(() => ({ data: [] })),
         ]);
         if (App.state.routeId !== rid) return;
         const leads = Array.isArray(leadsRes?.data) ? leadsRes.data : [];
         const projects = Array.isArray(projectsRes?.data) ? projectsRes.data : [];
         const courseTypes = Array.isArray(typeRes?.data) ? typeRes.data : [];
+        const sources = Array.isArray(sourceRes?.data) ? sourceRes.data : [];
         let selectedType = String(App.state.mainDashCourseTypeId || "");
+        const sourceMap = new Map((sources || []).map(s => [
+          String(s.id),
+          s?.[`name_${App.state.lang}`] || s?.name_uz || s?.name_ru || s?.name_en || s?.name || `#${s.id || ""}`
+        ]));
         const projectCounts = {};
         for (const x of projects) {
           const k = String(x.status || "new");
           projectCounts[k] = (projectCounts[k] || 0) + 1;
         }
         const totalLeads = leads.length;
+        const totalProjects = projects.length;
         const totalCourses = leads.filter(x => {
           const st = String(x.status || "");
           return st === "enrolled" || st === "studying";
         }).length;
-        const barMax = Math.max(totalLeads, totalCourses, 1);
-        const projMax = Math.max(1, ...Object.values(projectCounts).map(v => Number(v) || 0));
 
         const pieStatuses = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
         const pieColors = {
@@ -2311,6 +2325,7 @@ select option{
         };
         const pieEl = el("div", { class: "mainDashPie" });
         const pieLegend = el("div", { class: "mainDashLegend" });
+        const sourcesWrap = el("div", { class: "vcol gap8" });
         const renderLeadPie = () => {
           const filteredLeads = selectedType
             ? leads.filter(x => String(x.course_type_id || "") === selectedType)
@@ -2338,14 +2353,44 @@ select option{
           pieLegend.innerHTML = "";
           for (const x of (piePairs.length ? piePairs : pieStatuses.map(k => ({ key: k, val: 0, color: pieColors[k] })))) {
             pieLegend.appendChild(
-              el("div", { class: "mainDashLegendItem" },
+              el("div", { class: "mainDashLegendItem", title: String(x.val || 0) },
                 el("div", { class: "hrow", style: "align-items:center;gap:8px" },
                   el("span", { class: "mainDashDot", style: `background:${x.color}` }),
                   el("span", {}, tr(statusLabels[x.key] || { ru: x.key, uz: x.key, en: x.key }))
                 ),
-                el("span", { class: "muted2" }, String(x.val))
+                el("span", { class: "muted2" }, pctText(x.val, pieTotal))
               )
             );
+          }
+        };
+        const renderSources = () => {
+          const filteredLeads = selectedType
+            ? leads.filter(x => String(x.course_type_id || "") === selectedType)
+            : leads;
+          const noneLabel = tr({ ru: "Без источника", uz: "Manbasiz", en: "No source" });
+          const counts = new Map();
+          for (const x of filteredLeads) {
+            const sid = String(x.lead_source_id || x.source_id || "");
+            const fallback = x.lead_source_name || x.source_name || x.lead_source || "";
+            const label = (sid && sourceMap.get(sid)) || fallback || noneLabel;
+            counts.set(label, (counts.get(label) || 0) + 1);
+          }
+          const total = filteredLeads.length;
+          const rows = Array.from(counts.entries()).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+          sourcesWrap.innerHTML = "";
+          if (!rows.length) {
+            sourcesWrap.appendChild(el("div", { class: "muted2" }, t("no_data")));
+            return;
+          }
+          for (let i = 0; i < rows.length; i += 1) {
+            const [label, value] = rows[i];
+            sourcesWrap.appendChild(makeBar(
+              label,
+              Number(value || 0),
+              Math.max(total, 1),
+              i % 2 ? "rgba(34,211,238,.85)" : "rgba(96,165,250,.85)",
+              i % 2 ? "rgba(52,211,153,.75)" : "rgba(255,208,90,.75)"
+            ));
           }
         };
         const typeSel = el("select", { class: "sel", style: "max-width:260px" },
@@ -2359,16 +2404,18 @@ select option{
           selectedType = typeSel.value || "";
           App.state.mainDashCourseTypeId = selectedType;
           renderLeadPie();
+          renderSources();
         });
         renderLeadPie();
+        renderSources();
 
         const dash = el("div", { class: "mainDashWrap vcol gap12", id: "mainDashWrap" },
           el("div", { class: "mainDashGrid" },
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
               el("div", { class: "mainDashTitle" }, tr({ ru: "Курсы", uz: "Kurslar", en: "Courses" })),
               el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
-              makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, barMax),
-              makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, barMax, "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
+              makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, Math.max(totalLeads, 1)),
+              makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, Math.max(totalLeads, 1), "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
             ),
             el("div", { class: "card cardPad vcol gap10 mainDashCard" },
               el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
@@ -2385,10 +2432,17 @@ select option{
                 .map(([k, v], i) => makeBar(
                   tr(projectStageLabels[k] || { ru: k, uz: k, en: k }),
                   Number(v || 0),
-                  projMax,
+                  Math.max(totalProjects, 1),
                   i % 2 ? "rgba(52,211,153,.85)" : "rgba(15,209,167,.85)",
                   i % 2 ? "rgba(163,230,53,.75)" : "rgba(255,208,90,.75)"
                 ))
+            ),
+            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+              el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
+                el("div", { class: "mainDashTitle" }, tr({ ru: "Источники лидов", uz: "Lid manbalari", en: "Lead sources" })),
+                el("div", { class: "mainDashSub" }, tr({ ru: "По фильтру курса", uz: "Kurs filtri bo'yicha", en: "By course filter" }))
+              ),
+              sourcesWrap
             )
           )
         );
@@ -7100,6 +7154,8 @@ App.renderCoursePayments = async function(host, routeId){
       .cpTable{width:100%;border-collapse:separate;border-spacing:0}
       .cpTable th,.cpTable td{padding:10px 12px;border-bottom:1px solid var(--stroke);vertical-align:top;text-align:left}
       .cpTable th{position:sticky;top:0;background:var(--bg2);z-index:1}
+      .cpThStack{display:flex;flex-direction:column;gap:4px}
+      .cpThSum{font-size:11px;line-height:1.2;color:var(--muted2);font-weight:700;white-space:nowrap}
       .cpSort{all:unset;cursor:pointer;font-weight:800;display:inline-flex;align-items:center;gap:6px}
       .cpMuted{font-size:12px;color:var(--muted2)}
       .cpNoData{padding:14px;color:var(--muted)}
@@ -7325,11 +7381,45 @@ App.renderCoursePayments = async function(host, routeId){
     { key: "comment", label: tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }) },
   ];
 
-  const mkSortTh = (c) => el("th", {},
-    el("button", { class: "cpSort", type: "button", onClick: () => { toggleSort(c.key); render(); } }, `${c.label} ${sortMark(c.key)}`.trim())
-  );
+  const moneyColumns = new Set(["price", "agreed", "paid"]);
+  const mkSortTh = (c, sums = null) => {
+    const sumText = sums && moneyColumns.has(c.key) ? sums[c.key] : "";
+    return el("th", {},
+      el("div", { class: "cpThStack" },
+        moneyColumns.has(c.key)
+          ? el("div", { class: "cpThSum", title: sumText || "-" }, `${tr({ ru: "Сумма", uz: "Jami", en: "Total" })}: ${sumText || "-"}`)
+          : null,
+        el("button", { class: "cpSort", type: "button", onClick: () => { toggleSort(c.key); render(); } }, `${c.label} ${sortMark(c.key)}`.trim())
+      )
+    );
+  };
 
-  const thead = el("thead", {}, el("tr", {}, ...columns.map(mkSortTh)));
+  const moneyTotalsText = (rows) => {
+    const bucket = { price: new Map(), agreed: new Map(), paid: new Map() };
+    const add = (map, amount, currency) => {
+      const n = Number(amount);
+      if (!Number.isFinite(n)) return;
+      const cur = String(currency || "UZS");
+      map.set(cur, (map.get(cur) || 0) + n);
+    };
+    const mapToText = (map) => {
+      const pairs = Array.from(map.entries()).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+      if (!pairs.length) return "-";
+      return pairs.map(([cur, amount]) => fmtMoney(amount, cur)).join(" + ");
+    };
+    for (const x of rows) {
+      add(bucket.price, x.course_price, x.currency);
+      add(bucket.agreed, effectiveAgreed(x), x.currency);
+      add(bucket.paid, x.paid_amount, x.currency);
+    }
+    return {
+      price: mapToText(bucket.price),
+      agreed: mapToText(bucket.agreed),
+      paid: mapToText(bucket.paid),
+    };
+  };
+
+  const thead = el("thead", {}, el("tr", {}, ...columns.map(c => mkSortTh(c, null))));
   const tbody = el("tbody", {});
   const table = el("table", { class: "cpTable" }, thead, tbody);
   const desktopWrap = el("div", { class: "card cpDesktop cpTableWrap" }, table);
@@ -7410,9 +7500,10 @@ App.renderCoursePayments = async function(host, routeId){
   function render(){
     const rows = rowsView();
     countEl.textContent = `${rows.length}`;
+    const sums = moneyTotalsText(rows);
 
     thead.innerHTML = "";
-    thead.appendChild(el("tr", {}, ...columns.map(mkSortTh)));
+    thead.appendChild(el("tr", {}, ...columns.map(c => mkSortTh(c, sums))));
     tbody.innerHTML = "";
     mobileWrap.innerHTML = "";
 
@@ -8593,10 +8684,6 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
-
-
-
-
 
 
 
