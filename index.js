@@ -1658,7 +1658,11 @@ select option{
 .calTaskMeta{font-size:11px;color:var(--muted2);display:flex;flex-direction:column;gap:2px}
 
 .mainDashWrap{--dash-tilt:0deg}
-.mainDashGrid{display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:12px}
+.mainDashSection{display:flex;flex-direction:column;gap:10px}
+.mainDashSectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.mainDashSectionGrid{display:grid;gap:12px}
+.mainDashSectionGrid.projects{grid-template-columns:1.2fr 1fr}
+.mainDashSectionGrid.courses{grid-template-columns:1.2fr 1fr 1.2fr}
 .mainDashCard{position:relative;overflow:hidden}
 .mainDashCard::before{content:"";position:absolute;inset:-40% -30% auto auto;width:220px;height:220px;background:radial-gradient(circle at center, rgba(15,209,167,.16), transparent 65%);transform:rotate(var(--dash-tilt));pointer-events:none}
 .mainDashTitle{font-weight:900;letter-spacing:.3px}
@@ -1672,7 +1676,9 @@ select option{
 .mainDashLegendItem{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
 .mainDashDot{width:10px;height:10px;border-radius:50%;display:inline-block}
 @keyframes dashFlow{from{transform:translateX(-35%)}to{transform:translateX(35%)}}
-@media (max-width:1200px){.mainDashGrid{grid-template-columns:1fr}}
+@media (max-width:1200px){
+  .mainDashSectionGrid.projects,.mainDashSectionGrid.courses{grid-template-columns:1fr}
+}
 
 .calTaskActions{display:flex;justify-content:flex-end}
 .calOpenBtn{padding:6px 8px;border-radius:10px;font-size:11px}
@@ -2286,33 +2292,37 @@ select option{
           );
         };
 
-        const [leadsRes, projectsRes, typeRes, sourceRes] = await Promise.all([
+        const [leadsRes, projectsRes, typeRes, sourceRes, svcRes, usersRes] = await Promise.all([
           apiFetch("/api/course_leads").catch(() => ({ data: [] })),
           API.projects.list({}).catch(() => ({ data: [] })),
           API.settings.dictList("course_types").catch(() => ({ data: [] })),
           API.settings.dictList("sources").catch(() => ({ data: [] })),
+          API.settings.dictList("service_types").catch(() => ({ data: [] })),
+          API.usersTryList().catch(() => []),
         ]);
         if (App.state.routeId !== rid) return;
         const leads = Array.isArray(leadsRes?.data) ? leadsRes.data : [];
         const projects = Array.isArray(projectsRes?.data) ? projectsRes.data : [];
         const courseTypes = Array.isArray(typeRes?.data) ? typeRes.data : [];
         const sources = Array.isArray(sourceRes?.data) ? sourceRes.data : [];
+        const serviceTypes = Array.isArray(svcRes?.data) ? svcRes.data : [];
+        const users = Array.isArray(usersRes) ? usersRes : [];
         let selectedType = String(App.state.mainDashCourseTypeId || "");
+        let selectedServiceType = String(App.state.mainDashServiceTypeId || "");
         const sourceMap = new Map((sources || []).map(s => [
           String(s.id),
           s?.[`name_${App.state.lang}`] || s?.name_uz || s?.name_ru || s?.name_en || s?.name || `#${s.id || ""}`
         ]));
-        const projectCounts = {};
-        for (const x of projects) {
-          const k = String(x.status || "new");
-          projectCounts[k] = (projectCounts[k] || 0) + 1;
-        }
         const totalLeads = leads.length;
-        const totalProjects = projects.length;
         const totalCourses = leads.filter(x => {
           const st = String(x.status || "");
           return st === "enrolled" || st === "studying";
         }).length;
+        const adminIds = new Set(
+          users
+            .filter(u => String(u?.role || "").toLowerCase() === "admin")
+            .map(u => String(u.id))
+        );
 
         const pieStatuses = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
         const pieColors = {
@@ -2326,6 +2336,70 @@ select option{
         const pieEl = el("div", { class: "mainDashPie" });
         const pieLegend = el("div", { class: "mainDashLegend" });
         const sourcesWrap = el("div", { class: "vcol gap8" });
+        const projectStageWrap = el("div", { class: "vcol gap8" });
+        const projectUserWrap = el("div", { class: "vcol gap8" });
+        const filteredProjects = () => (
+          selectedServiceType
+            ? projects.filter(x => String(x.service_type_id || "") === selectedServiceType)
+            : projects
+        );
+        const renderProjectStage = () => {
+          const list = filteredProjects();
+          const counts = {};
+          for (const x of list) {
+            const k = String(x.status || "new");
+            counts[k] = (counts[k] || 0) + 1;
+          }
+          const total = Math.max(list.length, 1);
+          const pairs = Object.entries(counts).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+          projectStageWrap.innerHTML = "";
+          if (!pairs.length) {
+            projectStageWrap.appendChild(el("div", { class: "muted2" }, t("no_data")));
+            return;
+          }
+          for (let i = 0; i < pairs.length; i += 1) {
+            const [k, v] = pairs[i];
+            projectStageWrap.appendChild(makeBar(
+              tr(projectStageLabels[k] || { ru: k, uz: k, en: k }),
+              Number(v || 0),
+              total,
+              i % 2 ? "rgba(52,211,153,.85)" : "rgba(15,209,167,.85)",
+              i % 2 ? "rgba(163,230,53,.75)" : "rgba(255,208,90,.75)"
+            ));
+          }
+        };
+        const renderProjectUsers = () => {
+          const list = filteredProjects();
+          const counts = new Map();
+          for (const x of list) {
+            const uid = String(x.pm_user_id || x.assignee_user_id || "");
+            const uname = String(x.pm_name || x.assignee_name || x.created_by_name || "").trim();
+            if (uid && adminIds.has(uid)) continue;
+            if (!uid && /^admin$/i.test(uname)) continue;
+            const key = uid ? `id:${uid}` : `name:${uname || "-"}`;
+            const label = uname || `#${uid || "-"}`;
+            const cur = counts.get(key);
+            if (cur) cur.val += 1;
+            else counts.set(key, { label, val: 1 });
+          }
+          const rows = Array.from(counts.values()).sort((a, b) => Number(b.val || 0) - Number(a.val || 0));
+          const total = Math.max(rows.reduce((s, x) => s + Number(x.val || 0), 0), 1);
+          projectUserWrap.innerHTML = "";
+          if (!rows.length) {
+            projectUserWrap.appendChild(el("div", { class: "muted2" }, t("no_data")));
+            return;
+          }
+          for (let i = 0; i < rows.length; i += 1) {
+            const row = rows[i];
+            projectUserWrap.appendChild(makeBar(
+              row.label,
+              Number(row.val || 0),
+              total,
+              i % 2 ? "rgba(96,165,250,.85)" : "rgba(34,211,238,.85)",
+              i % 2 ? "rgba(255,208,90,.75)" : "rgba(52,211,153,.75)"
+            ));
+          }
+        };
         const renderLeadPie = () => {
           const filteredLeads = selectedType
             ? leads.filter(x => String(x.course_type_id || "") === selectedType)
@@ -2393,6 +2467,15 @@ select option{
             ));
           }
         };
+        const serviceTypeLabel = (row) =>
+          row?.[`name_${App.state.lang}`] || row?.name_uz || row?.name_ru || row?.name_en || row?.name || `#${row?.id || ""}`;
+        const serviceSel = el("select", { class: "sel", style: "max-width:260px" },
+          el("option", { value: "" }, tr({ ru: "Тип услуги: Все", uz: "Xizmat turi: Barchasi", en: "Service type: All" })),
+          ...serviceTypes.map(st => el("option", {
+            value: String(st.id),
+            selected: selectedServiceType && String(st.id) === selectedServiceType ? "selected" : null
+          }, serviceTypeLabel(st)))
+        );
         const typeSel = el("select", { class: "sel", style: "max-width:260px" },
           el("option", { value: "" }, tr({ ru: "Тип курса: Все", uz: "Kurs turi: Barchasi", en: "Course type: All" })),
           ...courseTypes.map(ct => el("option", {
@@ -2406,43 +2489,58 @@ select option{
           renderLeadPie();
           renderSources();
         });
+        serviceSel.addEventListener("change", () => {
+          selectedServiceType = serviceSel.value || "";
+          App.state.mainDashServiceTypeId = selectedServiceType;
+          renderProjectStage();
+          renderProjectUsers();
+        });
+        renderProjectStage();
+        renderProjectUsers();
         renderLeadPie();
         renderSources();
 
         const dash = el("div", { class: "mainDashWrap vcol gap12", id: "mainDashWrap" },
-          el("div", { class: "mainDashGrid" },
-            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+          el("div", { class: "mainDashSection" },
+            el("div", { class: "mainDashSectionHead" },
+              el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты", uz: "Loyihalar", en: "Projects" })),
+              serviceSel
+            ),
+            el("div", { class: "mainDashSectionGrid projects" },
+              el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+                el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты по этапам", uz: "Loyihalar bosqichi", en: "Projects by stage" })),
+                projectStageWrap
+              ),
+              el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+                el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты по пользователям", uz: "Loyihalar foydalanuvchi bo'yicha", en: "Projects by user" })),
+                el("div", { class: "mainDashSub" }, tr({ ru: "Пользователи без admin", uz: "Adminsiz foydalanuvchilar", en: "Users without admin" })),
+                projectUserWrap
+              )
+            )
+          ),
+          el("div", { class: "mainDashSection" },
+            el("div", { class: "mainDashSectionHead" },
               el("div", { class: "mainDashTitle" }, tr({ ru: "Курсы", uz: "Kurslar", en: "Courses" })),
-              el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
-              makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, Math.max(totalLeads, 1)),
-              makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, Math.max(totalLeads, 1), "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
+              typeSel
             ),
-            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
-              el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
+            el("div", { class: "mainDashSectionGrid courses" },
+              el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+                el("div", { class: "mainDashSub" }, tr({ ru: "Лиды и активные курсы", uz: "Lidlar va aktiv kurslar", en: "Leads and active courses" })),
+                makeBar(tr({ ru: "Всего лидов", uz: "Jami lidlar", en: "Total leads" }), totalLeads, Math.max(totalLeads, 1)),
+                makeBar(tr({ ru: "Записан/Успешно", uz: "Yozilgan/Muvaffaqiyatli", en: "Enrolled/Success" }), totalCourses, Math.max(totalLeads, 1), "rgba(96,165,250,.8)", "rgba(34,211,238,.8)")
+              ),
+              el("div", { class: "card cardPad vcol gap10 mainDashCard" },
                 el("div", { class: "mainDashTitle" }, tr({ ru: "Этапы лидов", uz: "Lid bosqichlari", en: "Lead stages" })),
-                typeSel
+                pieEl,
+                pieLegend
               ),
-              pieEl,
-              pieLegend
-            ),
-            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
-              el("div", { class: "mainDashTitle" }, tr({ ru: "Проекты по этапам", uz: "Loyihalar bosqichi", en: "Projects by stage" })),
-              ...Object.entries(projectCounts)
-                .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
-                .map(([k, v], i) => makeBar(
-                  tr(projectStageLabels[k] || { ru: k, uz: k, en: k }),
-                  Number(v || 0),
-                  Math.max(totalProjects, 1),
-                  i % 2 ? "rgba(52,211,153,.85)" : "rgba(15,209,167,.85)",
-                  i % 2 ? "rgba(163,230,53,.75)" : "rgba(255,208,90,.75)"
-                ))
-            ),
-            el("div", { class: "card cardPad vcol gap10 mainDashCard" },
-              el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
-                el("div", { class: "mainDashTitle" }, tr({ ru: "Источники лидов", uz: "Lid manbalari", en: "Lead sources" })),
-                el("div", { class: "mainDashSub" }, tr({ ru: "По фильтру курса", uz: "Kurs filtri bo'yicha", en: "By course filter" }))
+              el("div", { class: "card cardPad vcol gap10 mainDashCard" },
+                el("div", { class: "hrow", style: "align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap" },
+                  el("div", { class: "mainDashTitle" }, tr({ ru: "Источники лидов", uz: "Lid manbalari", en: "Lead sources" })),
+                  el("div", { class: "mainDashSub" }, tr({ ru: "По фильтру курса", uz: "Kurs filtri bo'yicha", en: "By course filter" }))
+                ),
+                sourcesWrap
               ),
-              sourcesWrap
             )
           )
         );
@@ -8684,9 +8782,6 @@ App.renderClients = async function(host, routeId){
   window.GSOFT = App;
   start();
 })();
-
-
-
 
 
 
