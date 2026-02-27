@@ -8100,6 +8100,9 @@ function injectCallsStyles() {
     .callBadge.ok{color:#66e3a6;border-color:#2f7}
     .callBadge.bad{color:#ff8f8f;border-color:#d66}
     .callBadge.neutral{color:var(--muted2)}
+    .callsPager{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+    .callsPagerInfo{font-size:12px;color:var(--muted2);margin-right:auto}
+    .callsPager .btn[disabled]{opacity:.45;cursor:not-allowed}
     .callActions{
     display: grid;
     gap: 6px;
@@ -8126,6 +8129,7 @@ App.renderCalls = async function(host, routeId){
   const rid = routeId || App.state.routeId;
   injectCallsStyles();
   const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
+  const PAGE_SIZE = 50;
   const role = App.state.user?.role || "";
   if (!(role === "admin" || role === "rop")) {
     host.innerHTML = "";
@@ -8142,6 +8146,7 @@ App.renderCalls = async function(host, routeId){
     q: String(query.q || query.phone || ""),
     linked: ["all","linked","unlinked"].includes(String(query.linked || "")) ? String(query.linked) : "all",
     app_user_id: intId(query.app_user_id) || null,
+    page: Math.max(1, Number(query.page) || 1),
     users: [],
     rows: [],
     courseLeadByClientId: new Map(),
@@ -8157,6 +8162,7 @@ App.renderCalls = async function(host, routeId){
           type: "button",
           onClick: async () => {
             state.days = d;
+            state.page = 1;
             await load();
           }
         }, `${d}`))
@@ -8178,12 +8184,14 @@ App.renderCalls = async function(host, routeId){
 
   const listWrap = el("div", { class: "card cardPad vcol gap8" },
     el("div", { id: "callsMeta", class: "callMuted" }, ""),
-    el("div", { id: "callsList", class: "callsList" }, el("div", { class: "muted" }, t("loading")))
+    el("div", { id: "callsList", class: "callsList" }, el("div", { class: "muted" }, t("loading"))),
+    el("div", { id: "callsPager", class: "callsPager" })
   );
 
   host.append(top, listWrap);
   const metaEl = $("#callsMeta", host);
   const listEl = $("#callsList", host);
+  const pagerEl = $("#callsPager", host);
 
   const loadUsers = async () => {
     const users = await API.usersTryList();
@@ -8283,15 +8291,90 @@ App.renderCalls = async function(host, routeId){
     });
   };
 
+  const renderPager = (totalRows, pageRows) => {
+    pagerEl.innerHTML = "";
+    const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+    if (totalRows <= PAGE_SIZE) return;
+
+    const start = (state.page - 1) * PAGE_SIZE + 1;
+    const end = start + pageRows.length - 1;
+    pagerEl.appendChild(
+      el("div", { class: "callsPagerInfo" },
+        `${tr({ ru: "Показаны", uz: "Ko'rsatilgan", en: "Showing" })}: ${start}-${end} / ${totalRows}`
+      )
+    );
+
+    const btnPrev = el("button", {
+      class: "btn mini ghost",
+      type: "button",
+      disabled: state.page <= 1 ? "disabled" : null,
+      onClick: () => {
+        if (state.page <= 1) return;
+        state.page -= 1;
+        render();
+      }
+    }, tr({ ru: "Назад", uz: "Orqaga", en: "Prev" }));
+    pagerEl.appendChild(btnPrev);
+
+    const pageItems = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i += 1) pageItems.push(i);
+    } else {
+      pageItems.push(1);
+      const from = Math.max(2, state.page - 1);
+      const to = Math.min(totalPages - 1, state.page + 1);
+      if (from > 2) pageItems.push("...");
+      for (let i = from; i <= to; i += 1) pageItems.push(i);
+      if (to < totalPages - 1) pageItems.push("...");
+      pageItems.push(totalPages);
+    }
+
+    for (const item of pageItems) {
+      if (item === "...") {
+        pagerEl.appendChild(el("span", { class: "callMuted", style: "padding:0 4px" }, "..."));
+        continue;
+      }
+      pagerEl.appendChild(
+        el("button", {
+          class: `btn mini ${item === state.page ? "primary" : "ghost"}`,
+          type: "button",
+          onClick: () => {
+            if (item === state.page) return;
+            state.page = item;
+            render();
+          }
+        }, String(item))
+      );
+    }
+
+    const btnNext = el("button", {
+      class: "btn mini ghost",
+      type: "button",
+      disabled: state.page >= totalPages ? "disabled" : null,
+      onClick: () => {
+        if (state.page >= totalPages) return;
+        state.page += 1;
+        render();
+      }
+    }, tr({ ru: "Вперёд", uz: "Oldinga", en: "Next" }));
+    pagerEl.appendChild(btnNext);
+  };
+
   const render = () => {
     const rows = searchRows(state.rows);
+    const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (state.page > totalPages) state.page = totalPages;
+    if (state.page < 1) state.page = 1;
+    const start = (state.page - 1) * PAGE_SIZE;
+    const pageRows = rows.slice(start, start + PAGE_SIZE);
     listEl.innerHTML = "";
     metaEl.textContent = `${tr({ ru: "Найдено", uz: "Topildi", en: "Found" })}: ${rows.length}`;
     if (!rows.length) {
+      pagerEl.innerHTML = "";
       listEl.appendChild(el("div", { class: "muted" }, t("no_data")));
       return;
     }
-    for (const x of rows) {
+    for (const x of pageRows) {
       const dt = x.end_time || x.start_time || 0;
       const linkedClientId = Number(x.linked_client_id || 0);
       const linkedLeadId = linkedClientId ? state.courseLeadByClientId.get(linkedClientId) : null;
@@ -8333,10 +8416,12 @@ App.renderCalls = async function(host, routeId){
         )
       ));
     }
+    renderPager(rows.length, pageRows);
   };
 
   const load = async () => {
     listEl.innerHTML = "";
+    pagerEl.innerHTML = "";
     listEl.appendChild(el("div", { class: "muted" }, t("loading")));
     state.q = String(searchInp.value || "").trim();
     state.linked = String(linkedSel.value || "all");
@@ -8359,10 +8444,17 @@ App.renderCalls = async function(host, routeId){
 
   searchInp.addEventListener("input", () => {
     state.q = String(searchInp.value || "").trim();
+    state.page = 1;
     render();
   });
-  linkedSel.addEventListener("change", load);
-  userSel.addEventListener("change", load);
+  linkedSel.addEventListener("change", () => {
+    state.page = 1;
+    load();
+  });
+  userSel.addEventListener("change", () => {
+    state.page = 1;
+    load();
+  });
 
   await loadUsers();
   await loadCourseLeadLinks();
