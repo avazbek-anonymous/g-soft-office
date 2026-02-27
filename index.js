@@ -1322,13 +1322,15 @@ function applyTheme(){
   --text:rgba(255,255,255,.86); --muted:rgba(255,255,255,.62); --muted2:rgba(255,255,255,.48);
 }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%;overflow:hidden}
 body{
   margin:0; font-family:var(--sans); color:var(--text);
   background:
     radial-gradient(1100px 600px at 18% -10%, rgba(15,209,167,.22), transparent 55%),
     radial-gradient(900px 520px at 110% 25%, rgba(255,208,90,.14), transparent 50%),
     linear-gradient(180deg, var(--bg), var(--bg2));
+  background-attachment:fixed;
+  overflow:hidden;
 }
 button,input,select,textarea{font:inherit;color:inherit}
 input,select,textarea{
@@ -1341,8 +1343,8 @@ input,select,textarea{
 [data-theme="light"] input,[data-theme="light"] select,[data-theme="light"] textarea{background:rgba(10,10,10,.03)}
 input:focus,select:focus,textarea:focus,button:focus{box-shadow:var(--focus)}
 .muted{color:var(--muted)} .muted2{color:var(--muted2)}
-#app{min-height:100vh}
-.wrap{min-height:100vh;display:flex}
+#app{height:100%}
+.wrap{height:100%;min-height:100vh;display:flex;overflow:hidden}
 .sidebar{
   width:80px; padding:14px 10px;
   border-right:1px solid var(--stroke);
@@ -1383,7 +1385,7 @@ text-decoration:none;
   filter:var(--icon);
 }
 .icoWrap{display:inline-flex;align-items:center;justify-content:center}
-.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;height:100%;min-height:0}
 .topbar{
   position:sticky;top:0;z-index:20;
   display:flex;align-items:center;justify-content:space-between;
@@ -1469,9 +1471,9 @@ text-decoration:none;
 }
 
 /* Content should fill full height */
-.wrap{min-height:100vh}
-.main{min-height:100vh}
-.content{flex:1;overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.wrap{height:100%;min-height:100vh;overflow:hidden}
+.main{height:100%;min-height:0}
+.content{flex:1;min-height:0;overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
 /* Kanban should fill width nicely (no пустоты справа) */
 .kanbanWrap{
