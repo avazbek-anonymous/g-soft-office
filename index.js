@@ -8092,6 +8092,16 @@ function injectCallsStyles() {
     .callsTop{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .callsPeriods{display:flex;gap:6px;flex-wrap:wrap}
     .callsFilters{display:grid;grid-template-columns:1fr 220px 220px;gap:8px}
+    .callHead{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+      gap:10px;
+      padding:0 10px;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.2px;
+      color:var(--muted2);
+    }
     .callsList{display:flex;flex-direction:column;gap:8px}
     .callRow{border:1px solid var(--stroke);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center}
     .callMuted{font-size:12px;color:var(--muted2)}
@@ -8115,10 +8125,12 @@ function injectCallsStyles() {
 }
     @media (max-width: 1200px){
       .callsFilters{grid-template-columns:1fr 1fr}
+      .callHead{display:none}
       .callRow{grid-template-columns:1fr;gap:6px}
     }
     @media (max-width: 760px){
       .callsFilters{grid-template-columns:1fr}
+      .callHead{display:none}
       .callRow{display: flex;flex-direction: column;}
     }
   `;
@@ -8184,6 +8196,15 @@ App.renderCalls = async function(host, routeId){
 
   const listWrap = el("div", { class: "card cardPad vcol gap8" },
     el("div", { id: "callsMeta", class: "callMuted" }, ""),
+    el("div", { id: "callsHead", class: "callHead" },
+      el("div", {}, tr({ ru: "Дата/время", uz: "Sana/vaqt", en: "Date/time" })),
+      el("div", {}, tr({ ru: "Направление", uz: "Yo'nalish", en: "Direction" })),
+      el("div", {}, tr({ ru: "Статус", uz: "Holat", en: "Status" })),
+      el("div", {}, tr({ ru: "Номер", uz: "Raqam", en: "Number" })),
+      el("div", {}, tr({ ru: "Сотрудник", uz: "Xodim", en: "User" })),
+      el("div", {}, tr({ ru: "Клиент", uz: "Mijoz", en: "Client" })),
+      el("div", {}, tr({ ru: "Длительность / действия", uz: "Davomiylik / harakatlar", en: "Duration / actions" }))
+    ),
     el("div", { id: "callsList", class: "callsList" }, el("div", { class: "muted" }, t("loading"))),
     el("div", { id: "callsPager", class: "callsPager" })
   );
