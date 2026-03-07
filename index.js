@@ -8156,7 +8156,7 @@ App.renderCalls = async function(host, routeId){
   const state = {
     days: periods.includes(Number(query.days)) ? Number(query.days) : 7,
     q: String(query.q || query.phone || ""),
-    linked: ["all","linked","unlinked"].includes(String(query.linked || "")) ? String(query.linked) : "all",
+    linked: ["all","linked","unlinked","company"].includes(String(query.linked || "")) ? String(query.linked) : "all",
     app_user_id: intId(query.app_user_id) || null,
     page: Math.max(1, Number(query.page) || 1),
     users: [],
@@ -8186,7 +8186,8 @@ App.renderCalls = async function(host, routeId){
   const linkedSel = el("select", { class: "input" },
     el("option", { value: "all" }, tr({ ru: "Все", uz: "Barchasi", en: "All" })),
     el("option", { value: "linked" }, tr({ ru: "Есть в базе", uz: "Bazaga bog'langan", en: "Linked" })),
-    el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" }))
+    el("option", { value: "unlinked" }, tr({ ru: "Нет в базе", uz: "Bazaga bog'lanmagan", en: "Unlinked" })),
+    el("option", { value: "company" }, tr({ ru: "Компания", uz: "Kompaniya", en: "Company" }))
   );
   linkedSel.value = state.linked;
 
@@ -8312,6 +8313,13 @@ App.renderCalls = async function(host, routeId){
     });
   };
 
+  const filterRowsByLinkMode = (rows) => {
+    if (state.linked === "linked") return rows.filter((x) => Number(x.linked_client_id) > 0);
+    if (state.linked === "unlinked") return rows.filter((x) => !(Number(x.linked_client_id) > 0));
+    if (state.linked === "company") return rows.filter((x) => String(x.linked_client_type || "").toLowerCase() === "company");
+    return rows;
+  };
+
   const renderPager = (totalRows, pageRows) => {
     pagerEl.innerHTML = "";
     const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
@@ -8382,7 +8390,7 @@ App.renderCalls = async function(host, routeId){
   };
 
   const render = () => {
-    const rows = searchRows(state.rows);
+    const rows = searchRows(filterRowsByLinkMode(state.rows));
     const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     if (state.page > totalPages) state.page = totalPages;
     if (state.page < 1) state.page = 1;

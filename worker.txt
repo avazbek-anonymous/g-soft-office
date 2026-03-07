@@ -3059,7 +3059,7 @@ async function handleCalls(env, user, request, origin) {
 
   const url = new URL(request.url);
   const days = normalizeCallDays(url.searchParams.get("days") || 7);
-  const linked = String(url.searchParams.get("linked") || "all").toLowerCase(); // all|linked|unlinked
+  const linked = String(url.searchParams.get("linked") || "all").toLowerCase(); // all|linked|unlinked|company
   const appUserId = intId(url.searchParams.get("app_user_id"));
   const phoneQ = digitsOnly(url.searchParams.get("phone") || "");
 
@@ -3083,6 +3083,8 @@ async function handleCalls(env, user, request, origin) {
     items = items.filter((x) => Number(x.linked_client_id) > 0);
   } else if (linked === "unlinked") {
     items = items.filter((x) => !(Number(x.linked_client_id) > 0));
+  } else if (linked === "company") {
+    items = items.filter((x) => String(x.linked_client_type || "").toLowerCase() === "company");
   }
 
   return jsonResp(
