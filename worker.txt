@@ -311,6 +311,10 @@ function tgIsSetCommand(msg) {
   return tgIsCommand(msg, "set");
 }
 
+function tgIsDoCommand(msg) {
+  return tgIsCommand(msg, "do");
+}
+
 function tgGetCommandSourceText(msg, commandName) {
   if (msg?.reply_to_message) {
     const rt = msg.reply_to_message.text || msg.reply_to_message.caption;
@@ -330,6 +334,10 @@ function tgGetTaskSourceText(msg) {
 
 function tgGetSetSourceText(msg) {
   return tgGetCommandSourceText(msg, "set");
+}
+
+function tgGetDoSourceText(msg) {
+  return tgGetCommandSourceText(msg, "do");
 }
 
 function tgExtractMentionFromEntities(msg) {
@@ -453,8 +461,7 @@ function tgGetGroupLabel(msg) {
   return String(chat.id || "Unknown group");
 }
 
-function buildSetPayloadFromMessage(msg) {
-  const sourceText = tgGetSetSourceText(msg);
+function buildCalendarPayloadFromMessage(msg, sourceText) {
   const combinedText = `${msg?.text || msg?.caption || ""}\n${msg?.reply_to_message ? msg.reply_to_message.text || msg.reply_to_message.caption || "" : ""}`;
   const startUtcSec = parseTaskDeadlineTashkent(combinedText);
   const endUtcSec = Number(startUtcSec) + 60 * 60;
@@ -473,10 +480,19 @@ function buildSetPayloadFromMessage(msg) {
 
   return {
     title,
+    descriptionCore,
     description,
     startUtcSec,
     endUtcSec,
   };
+}
+
+function buildSetPayloadFromMessage(msg) {
+  return buildCalendarPayloadFromMessage(msg, tgGetSetSourceText(msg));
+}
+
+function buildDoPayloadFromMessage(msg) {
+  return buildCalendarPayloadFromMessage(msg, tgGetDoSourceText(msg));
 }
 
 function b64UrlFromString(str) {
@@ -699,6 +715,46 @@ async function googleCreateCalendarEventWithMeet(env, payload) {
   throw new Error(`Google Calendar create failed: ${res.status} ${JSON.stringify(data || {})}`);
 }
 
+async function googleCreateCalendarEventWithoutConference(env, payload) {
+  const calendarId = String(env.GOOGLE_CALENDAR_ID || GOOGLE_CALENDAR_ID_FALLBACK || "").trim();
+  if (!calendarId) throw new Error("Missing GOOGLE_CALENDAR_ID");
+
+  const token = await googleGetAccessToken(env);
+  const baseBody = {
+    summary: String(payload.title || "Vstrecha"),
+    description: String(payload.description || ""),
+    start: {
+      dateTime: new Date(Number(payload.startUtcSec) * 1000).toISOString(),
+      timeZone: GOOGLE_CALENDAR_TZ,
+    },
+    end: {
+      dateTime: new Date(Number(payload.endUtcSec) * 1000).toISOString(),
+      timeZone: GOOGLE_CALENDAR_TZ,
+    },
+  };
+  const attendeeEmails = Array.isArray(payload.attendeeEmails)
+    ? [...new Set(payload.attendeeEmails.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean))]
+    : [];
+  if (attendeeEmails.length) {
+    baseBody.attendees = attendeeEmails.map((email) => ({ email }));
+  }
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(baseBody),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Google Calendar create failed: ${res.status} ${JSON.stringify(data || {})}`);
+  }
+  return data;
+}
+
 async function handleTelegramSetCommand(env, msg, chatId, threadId) {
   const attendeeEmails = await resolveSetAttendeeEmails(env, msg);
   const payload = {
@@ -708,9 +764,20 @@ async function handleTelegramSetCommand(env, msg, chatId, threadId) {
   const event = await googleCreateCalendarEventWithMeet(env, payload);
   const link = googleExtractConferenceLink(event) || "-";
   const title = payload.title || "Vstrecha";
-  const description = payload.description || "-";
+  const description = String(payload.descriptionCore || "").trim();
   const when = formatTashkentDateTime(payload.startUtcSec);
-  const participants = attendeeEmails.length ? attendeeEmails.join(", ") : "-";
+
+  const replyLines = [`Название: ${title}`];
+  if (description) {
+    replyLines.push(`Описание:\n${description}`);
+  }
+  replyLines.push(`Время: ${when}`);
+  replyLines.push(
+    `Ссылка на встречу: ${link}${link === "-" ? " (не удалось создать Meet для этого календаря/аккаунта)" : ""}`
+  );
+  const replyText = replyLines.join("\n");
+  await tgSendMessage(env, chatId, replyText, threadId);
+  return;
 
   const text =
     `Название: ${title}\n` +
@@ -720,6 +787,15 @@ async function handleTelegramSetCommand(env, msg, chatId, threadId) {
     `Ссылка на встречу: ${link}${link === "-" ? " (не удалось создать Meet для этого календаря/аккаунта)" : ""}`;
 
   await tgSendMessage(env, chatId, text, threadId);
+}
+
+async function handleTelegramDoCommand(env, msg) {
+  const attendeeEmails = await resolveSetAttendeeEmails(env, msg);
+  const payload = {
+    ...buildDoPayloadFromMessage(msg),
+    attendeeEmails,
+  };
+  await googleCreateCalendarEventWithoutConference(env, payload);
 }
 
 function tgExtractMentionHintsSingle(msg) {
@@ -1125,6 +1201,7 @@ async function handleTelegramWebhook(env, request) {
   const isPrivateChat = String(msg?.chat?.type || "") === "private";
   const isTasksCommand = tgIsTasksCommand(msg);
   const isSetCommand = tgIsSetCommand(msg);
+  const isDoCommand = tgIsDoCommand(msg);
 
   if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
 
@@ -1136,7 +1213,18 @@ async function handleTelegramWebhook(env, request) {
     }
   }
 
-  if (!isTasksCommand && !isSetCommand) return jsonResp({ ok: true }, 200);
+  if (!isTasksCommand && !isSetCommand && !isDoCommand) return jsonResp({ ok: true }, 200);
+
+  if (isDoCommand) {
+    try {
+      await handleTelegramDoCommand(env, msg);
+      await tgSetReaction(env, chatId, messageId, "🫡");
+      return jsonResp({ ok: true, data: { command: "do" } }, 200);
+    } catch (e) {
+      console.error("Telegram /do failed", e);
+      return jsonResp({ ok: true, error: "do_failed" }, 200);
+    }
+  }
 
   if (isSetCommand) {
     try {
