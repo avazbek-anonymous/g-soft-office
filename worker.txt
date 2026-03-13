@@ -2105,6 +2105,7 @@ async function queryCourseLeadsKanban(env, user, filters) {
 
       lead.full_name AS lead_full_name,
       lead.phone1 AS lead_phone1,
+      lead.phone2 AS lead_phone2,
       lead.comment AS lead_comment,
       lead.city_id AS lead_city_id,
       lead.source_id AS lead_source_id,
@@ -3505,6 +3506,7 @@ async function handleCourseLeads(env, user, request, origin, segments) {
         cl.*,
         lead.full_name AS lead_full_name,
         lead.phone1 AS lead_phone1,
+        lead.phone2 AS lead_phone2,
         lead.comment AS lead_comment,
         lead.city_id AS lead_city_id,
         lead.source_id AS lead_source_id,

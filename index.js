@@ -155,6 +155,304 @@
     },
   };
 
+  const ZIP_CRC32_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let j = 0; j < 8; j++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function zipU16(n) {
+    const out = new Uint8Array(2);
+    new DataView(out.buffer).setUint16(0, Number(n) >>> 0, true);
+    return out;
+  }
+
+  function zipU32(n) {
+    const out = new Uint8Array(4);
+    new DataView(out.buffer).setUint32(0, Number(n) >>> 0, true);
+    return out;
+  }
+
+  function zipConcat(parts) {
+    let total = 0;
+    for (const part of parts) total += part.length;
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const part of parts) {
+      out.set(part, offset);
+      offset += part.length;
+    }
+    return out;
+  }
+
+  function zipUtf8(text) {
+    return new TextEncoder().encode(String(text == null ? "" : text));
+  }
+
+  function zipCrc32(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = ZIP_CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function xmlSafeText(text) {
+    return String(text == null ? "" : text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  }
+
+  function xmlEscape(text) {
+    return xmlSafeText(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function xlsxColName(index) {
+    let n = Number(index) || 1;
+    let out = "";
+    while (n > 0) {
+      const rem = (n - 1) % 26;
+      out = String.fromCharCode(65 + rem) + out;
+      n = Math.floor((n - 1) / 26);
+    }
+    return out || "A";
+  }
+
+  function xlsxCell(ref, text, styleId = 0) {
+    return `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(text)}</t></is></c>`;
+  }
+
+  function xlsxSheetName(name) {
+    const cleaned = String(name || "Courses").replace(/[\\/*?:[\]]/g, " ").trim();
+    return (cleaned || "Courses").slice(0, 31);
+  }
+
+  function xlsxFileName(name) {
+    const cleaned = String(name || "courses")
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яёузқғҳў \-_]+/gi, " ")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    return cleaned || "courses";
+  }
+
+  function buildWorkbookSheetXml(title, headers, rows) {
+    const colWidths = [24, 18, 18, 18, 34, 44, 18, 26];
+    const colsXml = colWidths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
+    const rowParts = [];
+    rowParts.push(`<row r="1" ht="24" customHeight="1">${xlsxCell("A1", title, 1)}</row>`);
+    rowParts.push(`<row r="3">${headers.map((h, i) => xlsxCell(`${xlsxColName(i + 1)}3`, h, 2)).join("")}</row>`);
+    rows.forEach((row, rowIndex) => {
+      const r = rowIndex + 4;
+      const cells = row.map((value, colIndex) => xlsxCell(`${xlsxColName(colIndex + 1)}${r}`, value, 0)).join("");
+      rowParts.push(`<row r="${r}">${cells}</row>`);
+    });
+    const lastRow = Math.max(3, rows.length + 3);
+    return [
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`,
+      `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`,
+      `<dimension ref="A1:H${lastRow}"/>`,
+      `<sheetViews><sheetView workbookViewId="0"/></sheetViews>`,
+      `<cols>${colsXml}</cols>`,
+      `<sheetData>${rowParts.join("")}</sheetData>`,
+      `<mergeCells count="1"><mergeCell ref="A1:H1"/></mergeCells>`,
+      `<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>`,
+      `</worksheet>`,
+    ].join("");
+  }
+
+  function buildSimpleXlsx({ title, sheetName, headers, rows }) {
+    const safeSheetName = xlsxSheetName(sheetName || title || "Courses");
+    const createdIso = new Date().toISOString();
+    const files = [
+      {
+        name: "[Content_Types].xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`,
+      },
+      {
+        name: "_rels/.rels",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`,
+      },
+      {
+        name: "docProps/app.xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>G-SOFT</Application>
+  <TitlesOfParts>
+    <vt:vector size="1" baseType="lpstr">
+      <vt:lpstr>${xmlEscape(safeSheetName)}</vt:lpstr>
+    </vt:vector>
+  </TitlesOfParts>
+</Properties>`,
+      },
+      {
+        name: "docProps/core.xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${xmlEscape(title || safeSheetName)}</dc:title>
+  <dc:creator>G-SOFT</dc:creator>
+  <cp:lastModifiedBy>G-SOFT</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${createdIso}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${createdIso}</dcterms:modified>
+</cp:coreProperties>`,
+      },
+      {
+        name: "xl/workbook.xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <bookViews>
+    <workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/>
+  </bookViews>
+  <sheets>
+    <sheet name="${xmlEscape(safeSheetName)}" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+      },
+      {
+        name: "xl/_rels/workbook.xml.rels",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+      },
+      {
+        name: "xl/styles.xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="3">
+    <font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="18"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="2">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+  </fills>
+  <borders count="1">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="3">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+  </cellXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0"/>
+  </cellStyles>
+</styleSheet>`,
+      },
+      {
+        name: "xl/worksheets/sheet1.xml",
+        data: buildWorkbookSheetXml(title || safeSheetName, headers || [], rows || []),
+      },
+    ];
+
+    const fileParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    for (const file of files) {
+      const nameBytes = zipUtf8(file.name);
+      const dataBytes = file.data instanceof Uint8Array ? file.data : zipUtf8(file.data);
+      const crc = zipCrc32(dataBytes);
+      const localHeader = zipConcat([
+        zipU32(0x04034B50),
+        zipU16(20),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU32(crc),
+        zipU32(dataBytes.length),
+        zipU32(dataBytes.length),
+        zipU16(nameBytes.length),
+        zipU16(0),
+        nameBytes,
+      ]);
+      fileParts.push(localHeader, dataBytes);
+
+      const centralHeader = zipConcat([
+        zipU32(0x02014B50),
+        zipU16(20),
+        zipU16(20),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU32(crc),
+        zipU32(dataBytes.length),
+        zipU32(dataBytes.length),
+        zipU16(nameBytes.length),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU16(0),
+        zipU32(0),
+        zipU32(offset),
+        nameBytes,
+      ]);
+      centralParts.push(centralHeader);
+      offset += localHeader.length + dataBytes.length;
+    }
+
+    const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+    const endRecord = zipConcat([
+      zipU32(0x06054B50),
+      zipU16(0),
+      zipU16(0),
+      zipU16(files.length),
+      zipU16(files.length),
+      zipU32(centralSize),
+      zipU32(offset),
+      zipU16(0),
+    ]);
+
+    return new Blob([...fileParts, ...centralParts, endRecord], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+  }
+
+  function downloadBlob(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   const DICT = {
     ru: {
       edit: "Редактировать",
@@ -5927,6 +6225,7 @@ App.renderCourses = async function (host, routeId) {
 
   const createBtn = el("button", { class: "btn primary", type: "button" }, t("create") || "Create");
   createBtn.onclick = () => openCreate();
+  const exportBtn = el("button", { class: "btn ghost", type: "button" }, tr({ ru: "Export", uz: "Export", en: "Export" }));
 
   const activeCourseTypes = courseTypes
     .filter(x => Number(x.is_active) === 1)
@@ -5957,7 +6256,7 @@ App.renderCourses = async function (host, routeId) {
       qInp,
       el("div", { style: "min-width:220px" }, companySel),
     ),
-    createBtn
+    el("div", { class: "hrow gap8", style: "flex-wrap:wrap" }, exportBtn, createBtn)
   );
 
   const toolbar = el("div", { class: "card cardPad vcol gap10" }, row, tabsRow);
@@ -6080,6 +6379,7 @@ App.renderCourses = async function (host, routeId) {
         statusLabel,
         x.lead_full_name,
         x.lead_phone1,
+        x.lead_phone2,
         x.company_name,
         courseTypeNameById(x.course_type_id, x.course_type_name || ""),
         source,
@@ -6088,6 +6388,7 @@ App.renderCourses = async function (host, routeId) {
         x.comment,
         x.cancel_reason,
         x.lead_comment,
+        x.last_chat_message,
         x.course_price,
         x.agreed_amount,
         x.paid_amount,
@@ -6097,6 +6398,53 @@ App.renderCourses = async function (host, routeId) {
       return s.includes(q);
     });
   };
+
+  const exportCoursesXlsx = () => {
+    const rows = filterRows();
+    if (!rows.length) {
+      Toast.show(t("no_data") || "No data", "bad");
+      return;
+    }
+
+    const headers = [
+      tr({ ru: "Имя", uz: "Ism", en: "Name" }),
+      tr({ ru: "Номер", uz: "Raqam", en: "Phone" }),
+      tr({ ru: "Доп номер", uz: "Qo'shimcha raqam", en: "Extra phone" }),
+      tr({ ru: "Источник", uz: "Manba", en: "Source" }),
+      tr({ ru: "Коммент", uz: "Izoh", en: "Comment" }),
+      tr({ ru: "Последнее", uz: "Oxirgisi", en: "Last" }),
+      tr({ ru: "Статус", uz: "Status", en: "Status" }),
+      tr({ ru: "Причина отмены", uz: "Bekor sababi", en: "Cancel reason" }),
+    ];
+
+    const exportRows = rows.map((x) => {
+      const source = refNameById(refs.sources, x.lead_source_id, x.lead_source_name || x.source_name || x.lead_source || "");
+      const statusLabel = tr(statusCols.find(s => s.key === x.status)?.label || { ru: x.status, uz: x.status, en: x.status });
+      return [
+        x.lead_full_name || "",
+        x.lead_phone1 || "",
+        x.lead_phone2 || "",
+        source || "",
+        x.lead_comment || "",
+        x.last_chat_message || "",
+        statusLabel || x.status || "",
+        String(x.status || "") === "canceled" ? (x.cancel_reason || "") : "",
+      ];
+    });
+
+    const courseTitle = selectedCourseTypeId
+      ? courseTypeNameById(selectedCourseTypeId, t("route_courses") || "Courses")
+      : (t("route_courses") || "Courses");
+    const blob = buildSimpleXlsx({
+      title: courseTitle,
+      sheetName: courseTitle,
+      headers,
+      rows: exportRows,
+    });
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(`${xlsxFileName(courseTitle)}_${dateStamp}.xlsx`, blob);
+  };
+  exportBtn.onclick = exportCoursesXlsx;
 
   const askCancelReason = () => new Promise((resolve) => {
     const inp = el("textarea", { class: "input", style: "min-height:110px", placeholder: t("reason") || "Reason..." });
