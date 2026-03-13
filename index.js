@@ -8973,7 +8973,7 @@ App.renderClients = async function(host, routeId){
     host.innerHTML="";
     host.appendChild(el("div",{class:"muted"}, t("loading")));
     try{
-      const r = await API.clients.list(state.tab, state.q);
+      const r = await API.clients.list(state.tab, "");
       if (App.state.routeId !== rid) return;
       state.list = r.data || [];
       render();
@@ -8984,6 +8984,38 @@ App.renderClients = async function(host, routeId){
         el("div",{class:"muted"}, e.message||"Error")
       ));
     }
+  };
+
+  const companyNameById = (id) => {
+    if (!id) return "";
+    const row = (state.companies || []).find((x) => Number(x.id) === Number(id));
+    return row ? (row.company_name || row.full_name || `#${row.id}`) : "";
+  };
+
+  const filterClients = (rows) => {
+    const q = String(state.q || "").trim().toLowerCase();
+    if (!q) return rows;
+    return (rows || []).filter((row) => {
+      const city = dictLabel(state.refs.cities, row.city_id);
+      const source = dictLabel(state.refs.sources, row.source_id);
+      const sphere = dictLabel(state.refs.spheres, row.sphere_id);
+      const linkedCompany = companyNameById(row.company_id);
+      const hay = [
+        row.id,
+        row.type,
+        row.company_name,
+        row.full_name,
+        row.phone1,
+        row.phone2,
+        row.comment,
+        row.tg_group_link,
+        city,
+        source,
+        sphere,
+        linkedCompany,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
   };
 
   const openUpsertModal = async (type, row=null)=>{
@@ -9124,6 +9156,7 @@ App.renderClients = async function(host, routeId){
           }
           Toast.show(t("toast_saved"),"ok");
           Modal.close();
+          await loadCompaniesForSelect();
           await loadList();
         }catch(e){
           const em = String(e?.message || "").toLowerCase();
@@ -9234,7 +9267,7 @@ App.renderClients = async function(host, routeId){
     );
 
     const qInp = el("input",{class:"input",value:state.q,placeholder:t("clients_search")});
-    qInp.addEventListener("keydown",(e)=>{ if(e.key==="Enter") loadList(); });
+    qInp.addEventListener("input",()=>{ state.q=qInp.value||""; render(); });
 
     const createBtn = (state.tab==="company")
       ? el("button",{class:"btn",type:"button",disabled:!canCreateCompany,onClick:()=>openUpsertModal("company",null)}, t("clients_create_company"))
@@ -9247,13 +9280,13 @@ App.renderClients = async function(host, routeId){
       ),
       el("div",{class:"cliFilters"},
         qInp,
-        el("button",{class:"btn",type:"button",onClick:()=>{state.q=qInp.value||""; loadList();}}, t("search")||"Search"),
         createBtn
       )
     );
 
-    const list = state.list.length
-      ? el("div",{class:"cliList"}, state.list.map(row=>{
+    const filteredList = filterClients(state.list);
+    const list = filteredList.length
+      ? el("div",{class:"cliList"}, filteredList.map(row=>{
           const title = (row.type==="company")
             ? (row.company_name || `#${row.id}`)
             : (row.full_name || `#${row.id}`);
@@ -9285,6 +9318,7 @@ App.renderClients = async function(host, routeId){
                 try{
                   await API.clients.del(row.id);
                   Toast.show(t("clients_deleted"),"ok");
+                  await loadCompaniesForSelect();
                   await loadList();
                 }catch(e){
                   Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
@@ -9300,6 +9334,7 @@ App.renderClients = async function(host, routeId){
     host.append(top, el("div",{class:"card cardPad"}, list));
   };
 
+  await loadCompaniesForSelect();
   await loadList();
 };
 

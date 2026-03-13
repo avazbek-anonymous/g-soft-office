@@ -2174,32 +2174,50 @@ async function queryClients(env, user, type, q) {
 
   let sql = `
     SELECT
-      id, type, company_name, full_name, phone1, phone2,
-      city_id, source_id, sphere_id, comment, tg_group_link, company_id,
-      is_active, created_by, created_at, updated_at
-    FROM clients
-    WHERE is_active = 1
+      c.id, c.type, c.company_name, c.full_name, c.phone1, c.phone2,
+      c.city_id, c.source_id, c.sphere_id, c.comment, c.tg_group_link, c.company_id,
+      c.is_active, c.created_by, c.created_at, c.updated_at
+    FROM clients c
+    LEFT JOIN dict_cities dc ON dc.id = c.city_id
+    LEFT JOIN dict_sources ds ON ds.id = c.source_id
+    LEFT JOIN dict_spheres dsp ON dsp.id = c.sphere_id
+    LEFT JOIN clients comp ON comp.id = c.company_id
+    WHERE c.is_active = 1
   `;
   const binds = [];
 
   if (type) {
-    sql += ` AND type = ?`;
+    sql += ` AND c.type = ?`;
     binds.push(type);
   }
 
   // RBAC: pm only companies already handled; sale/admin/rop ok
   if (q && q.trim()) {
     sql += ` AND (
-      lower(full_name) LIKE ? OR
-      lower(COALESCE(company_name,'')) LIKE ? OR
-      phone1 LIKE ? OR
-      COALESCE(phone2,'') LIKE ?
+      lower(COALESCE(c.full_name,'')) LIKE ? OR
+      lower(COALESCE(c.company_name,'')) LIKE ? OR
+      c.phone1 LIKE ? OR
+      COALESCE(c.phone2,'') LIKE ? OR
+      lower(COALESCE(c.comment,'')) LIKE ? OR
+      lower(COALESCE(c.tg_group_link,'')) LIKE ? OR
+      lower(COALESCE(dc.name_uz,'')) LIKE ? OR
+      lower(COALESCE(dc.name_ru,'')) LIKE ? OR
+      lower(COALESCE(dc.name_en,'')) LIKE ? OR
+      lower(COALESCE(ds.name_uz,'')) LIKE ? OR
+      lower(COALESCE(ds.name_ru,'')) LIKE ? OR
+      lower(COALESCE(ds.name_en,'')) LIKE ? OR
+      lower(COALESCE(dsp.name_uz,'')) LIKE ? OR
+      lower(COALESCE(dsp.name_ru,'')) LIKE ? OR
+      lower(COALESCE(dsp.name_en,'')) LIKE ? OR
+      lower(COALESCE(comp.company_name,'')) LIKE ? OR
+      lower(COALESCE(comp.full_name,'')) LIKE ?
     )`;
     const s = `%${q.trim().toLowerCase()}%`;
-    binds.push(s, s, `%${q.trim()}%`, `%${q.trim()}%`);
+    const p = `%${q.trim()}%`;
+    binds.push(s, s, p, p, s, s, s, s, s, s, s, s, s, s, s, s, s);
   }
 
-  sql += ` ORDER BY updated_at DESC LIMIT 500`;
+  sql += ` ORDER BY c.updated_at DESC LIMIT 500`;
 
   const res = await env.DB.prepare(sql).bind(...binds).all();
   return res.results || [];
