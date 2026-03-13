@@ -3439,13 +3439,26 @@ async function handleCourseLeads(env, user, request, origin, segments) {
   // POST /api/course_leads (create) -> status always 'new'
   if (method === "POST" && !id) {
     if (!body) return badRequest("Expected JSON");
-    const miss = requireFields(body, ["lead_client_id", "course_type_id"]);
+    const miss = requireFields(body, ["course_type_id"]);
     if (miss) return badRequest(`Missing: ${miss}`);
 
-    const lead_client_id = intId(body.lead_client_id);
     const company_id = body.company_id ? intId(body.company_id) : null;
+    const requestedLeadClientId = body.lead_client_id ? intId(body.lead_client_id) : null;
+    const lead_client_id = requestedLeadClientId || company_id;
     const course_type_id = intId(body.course_type_id);
     if (!lead_client_id || !course_type_id) return badRequest("Invalid ids");
+
+    const leadClient = await env.DB.prepare(`SELECT id, type FROM clients WHERE id=? AND is_active=1`)
+      .bind(lead_client_id)
+      .first();
+    if (!leadClient) return badRequest("lead_client_not_found");
+
+    if (company_id) {
+      const companyRow = await env.DB.prepare(`SELECT id, type FROM clients WHERE id=? AND is_active=1`)
+        .bind(company_id)
+        .first();
+      if (!companyRow || String(companyRow.type || "") !== "company") return badRequest("company_not_found");
+    }
 
     // Load course type to snapshot price/start_date/currency
     const ct = await env.DB.prepare(`SELECT id, start_date, price, currency FROM course_types WHERE id=? AND is_active=1`)
@@ -3531,12 +3544,31 @@ async function handleCourseLeads(env, user, request, origin, segments) {
   if (method === "PUT") {
     if (!body) return badRequest("Expected JSON");
 
+    const existing = await env.DB.prepare(`SELECT id, lead_client_id, company_id FROM course_leads WHERE id=? AND is_active=1`)
+      .bind(id)
+      .first();
+    if (!existing) return notFound();
+
     const allowed = pick(body, ["company_id", "course_type_id", "agreed_amount", "paid_amount", "comment"]);
     if (allowed.company_id !== undefined) allowed.company_id = allowed.company_id ? intId(allowed.company_id) : null;
     if (allowed.course_type_id !== undefined) allowed.course_type_id = allowed.course_type_id ? intId(allowed.course_type_id) : null;
     if (allowed.agreed_amount !== undefined) allowed.agreed_amount = allowed.agreed_amount == null ? null : Number(allowed.agreed_amount);
     if (allowed.paid_amount !== undefined) allowed.paid_amount = allowed.paid_amount == null ? null : Number(allowed.paid_amount);
     if (allowed.comment !== undefined) allowed.comment = allowed.comment ? String(allowed.comment).trim() : null;
+
+    if (allowed.company_id) {
+      const companyRow = await env.DB.prepare(`SELECT id, type FROM clients WHERE id=? AND is_active=1`)
+        .bind(allowed.company_id)
+        .first();
+      if (!companyRow || String(companyRow.type || "") !== "company") return badRequest("company_not_found");
+    }
+
+    const leadMatchesCurrentCompany =
+      Number(existing.lead_client_id || 0) > 0 &&
+      Number(existing.lead_client_id || 0) === Number(existing.company_id || 0);
+    if (allowed.company_id !== undefined && allowed.company_id && leadMatchesCurrentCompany) {
+      allowed.lead_client_id = allowed.company_id;
+    }
 
     // If course_type changed -> re-snapshot price/start_date/currency
     let extraSet = "";

@@ -5886,6 +5886,7 @@ App.renderCourses = async function (host, routeId) {
   const courseTypes = (ctRes && ctRes.data) ? ctRes.data : [];
   const companies = (companiesRes && companiesRes.data) ? companiesRes.data : [];
   const leads = (leadsRes && leadsRes.data) ? leadsRes.data : [];
+  const companyById = new Map(companies.map(x => [Number(x.id), x]));
 
   let refs = await loadDictCacheIfAny();
   if (App.state.routeId !== rid) return;
@@ -6713,6 +6714,7 @@ App.renderCourses = async function (host, routeId) {
         el("option", { value: String(c.id) }, companyLabel(c))
       )
     );
+    const companyOwnerHint = el("div", { class: "muted2", style: "font-size:12px;display:none;white-space:pre-wrap" });
 
     const type2 = el("select", { class: "sel" },
       el("option", { value: "" }, "-"),
@@ -6806,6 +6808,32 @@ App.renderCourses = async function (host, routeId) {
       startInp.value = toDateInput(ct.start_date);
     };
 
+    const getSelectedCompany = () => {
+      const id = company2.value ? Number(company2.value) : null;
+      return id ? (companyById.get(id) || null) : null;
+    };
+
+    const refreshCompanyOwnerHint = () => {
+      const company = getSelectedCompany();
+      if (!company) {
+        companyOwnerHint.style.display = "none";
+        companyOwnerHint.textContent = "";
+        return;
+      }
+      const ownerName = String(company.full_name || "").trim();
+      const ownerPhone = String(company.phone1 || "").trim();
+      const ownerText = [ownerName, ownerPhone].filter(Boolean).join(" • ")
+        || tr({ ru: "не заполнено", uz: "kiritilmagan", en: "not filled" });
+      companyOwnerHint.style.display = "";
+      companyOwnerHint.textContent =
+        `${tr({ ru: "Владелец", uz: "Egasi", en: "Owner" })}: ${ownerText}. ` +
+        tr({
+          ru: "Если лида не выбрать, будет использован владелец компании.",
+          uz: "Lead tanlanmasa, kompaniya egasi ishlatiladi.",
+          en: "If no lead is selected, the company owner will be used."
+        });
+    };
+
     const renderSuggest = () => {
       if (createLeadMode) { sug.style.display = "none"; return; }
       const q1 = String(fioInp.value || "").trim().toLowerCase();
@@ -6853,8 +6881,10 @@ App.renderCourses = async function (host, routeId) {
 
     fioInp.addEventListener("input", renderSuggest);
     phoneInp.addEventListener("input", renderSuggest);
+    company2.addEventListener("change", refreshCompanyOwnerHint);
     type2.addEventListener("change", refreshCourseSnapshot);
     refreshCourseSnapshot();
+    refreshCompanyOwnerHint();
 
     const body = el("div", { class: "vcol gap10" },
       el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Создание лида по курсу (статус всегда: Новый)", uz: "Kurs lead yaratish (status doim: Yangi)", en: "Create course lead (status is always: New)" })),
@@ -6872,7 +6902,8 @@ App.renderCourses = async function (host, routeId) {
         ),
         el("div", { class: "vcol gap8" },
           el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
-          company2
+          company2,
+          companyOwnerHint
         ),
       ),
 
@@ -6947,8 +6978,15 @@ App.renderCourses = async function (host, routeId) {
                 (res && res.data && (res.data.id || res.data.client_id)) ? (res.data.id || res.data.client_id) : null;
               if (!leadClientId) { Toast.show(tr({ ru: "Не удалось создать лида", uz: "Lead yaratilmadi", en: "Failed to create lead" }), "bad"); return; }
             } else {
-              if (!selectedLead || !selectedLead.id) { Toast.show(tr({ ru: "Выбери лида", uz: "Lead tanlang", en: "Select lead" }), "bad"); return; }
-              leadClientId = Number(selectedLead.id);
+              const selectedCompany = getSelectedCompany();
+              if (selectedLead && selectedLead.id) {
+                leadClientId = Number(selectedLead.id);
+              } else if (selectedCompany && selectedCompany.id) {
+                leadClientId = Number(selectedCompany.id);
+              } else {
+                Toast.show(tr({ ru: "Выбери лида или компанию", uz: "Lead yoki kompaniya tanlang", en: "Select lead or company" }), "bad");
+                return;
+              }
             }
             const course_type_id = type2.value ? Number(type2.value) : null;
             if (!course_type_id) { Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad"); return; }
@@ -7146,6 +7184,7 @@ App.renderCourses = async function (host, routeId) {
           el("option", { value: String(c.id), selected: (Number(x.company_id) === Number(c.id)) ? "selected" : null }, companyLabel(c))
         )
       );
+      const companyOwnerHint = el("div", { class: "muted2", style: "font-size:12px;white-space:pre-wrap;display:none" });
 
       const type2 = el("select", { class: "sel" },
         el("option", { value: "" }, "-"),
@@ -7167,8 +7206,24 @@ App.renderCourses = async function (host, routeId) {
         priceInp.value = fmtMoney(ct.price || 0, ct.currency || "UZS");
         startInp.value = toDateInput(ct.start_date);
       };
+      const refreshCompanyOwnerHint = () => {
+        const company = company2.value ? (companyById.get(Number(company2.value)) || null) : null;
+        if (!company) {
+          companyOwnerHint.style.display = "none";
+          companyOwnerHint.textContent = "";
+          return;
+        }
+        const ownerText = [String(company.full_name || "").trim(), String(company.phone1 || "").trim()]
+          .filter(Boolean)
+          .join(" • ")
+          || tr({ ru: "не заполнено", uz: "kiritilmagan", en: "not filled" });
+        companyOwnerHint.style.display = "";
+        companyOwnerHint.textContent = `${tr({ ru: "Владелец", uz: "Egasi", en: "Owner" })}: ${ownerText}`;
+      };
+      company2.addEventListener("change", refreshCompanyOwnerHint);
       type2.addEventListener("change", refreshCourseSnapshot);
       refreshCourseSnapshot();
+      refreshCompanyOwnerHint();
 
       const body = el("div", { class: "vcol gap10" },
         el("div", { class: "cChip" }, el("b", {}, `#${x.id}`), el("span", {}, x.lead_full_name || "-")),
@@ -7176,7 +7231,8 @@ App.renderCourses = async function (host, routeId) {
         el("div", { class: "grid2" },
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("client_company") || tr({ ru: "Компания", uz: "Kompaniya", en: "Company" })),
-            company2
+            company2,
+            companyOwnerHint
           ),
           el("div", { class: "vcol gap8" },
             el("div", { class: "muted2", style: "font-size:12px" }, t("course_types") || tr({ ru: "Тип курса", uz: "Kurs turi", en: "Course type" })),
