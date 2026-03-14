@@ -874,15 +874,6 @@ async function handleTelegramSetCommand(env, msg, chatId, threadId) {
   const replyText = replyLines.join("\n");
   await tgSendMessage(env, chatId, replyText, threadId);
   return;
-
-  const text =
-    `Название: ${title}\n` +
-    `Описание:\n${description}\n` +
-    `Время: ${when}\n` +
-    `Участники: ${participants}\n` +
-    `Ссылка на встречу: ${link}${link === "-" ? " (не удалось создать Meet для этого календаря/аккаунта)" : ""}`;
-
-  await tgSendMessage(env, chatId, text, threadId);
 }
 
 async function handleTelegramDoCommand(env, msg) {
