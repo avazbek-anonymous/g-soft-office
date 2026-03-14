@@ -40,7 +40,7 @@ const ROLES = ["admin", "pm", "fin", "sale", "rop"];
 
 const TASK_STATUSES = ["new", "pause", "in_progress", "done", "canceled"];
 const PROJECT_STATUSES = ["new", "tz_given", "offer_given", "in_progress", "later", "done", "review", "canceled"];
-const COURSE_STATUSES = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
+const COURSE_STATUSES = ["new", "need_call", "thinking", "waiting_pay", "enrolled", "studying", "canceled"];
 const TG_DEFAULT_TIME_HHMM = "10:00";
 const GOOGLE_CALENDAR_TZ = "Asia/Tashkent";
 const GOOGLE_CALENDAR_ID_FALLBACK = "859cd788ddbe1d64654e924ec6ccc54a43ea7c9d899e24bde8356a03a428e626@group.calendar.google.com";
@@ -315,8 +315,47 @@ function tgIsDoCommand(msg) {
   return tgIsCommand(msg, "do");
 }
 
+function tgGetIndexedCommandNumber(msg, cmdName) {
+  const fullText = String(msg?.text || msg?.caption || "");
+  if (!fullText) return null;
+
+  const safe = String(cmdName || "").trim().toLowerCase().replace(/[^\w]/g, "");
+  if (!safe) return null;
+
+  const extractNumber = (rawCmdText) => {
+    const normalized = String(rawCmdText || "").trim().toLowerCase().split("@")[0];
+    const m = normalized.match(new RegExp(`^\\/${safe}(\\d*)$`, "i"));
+    if (!m) return null;
+    if (!m[1]) return 0;
+    const n = Number(m[1]);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  };
+
+  for (const ent of tgGetEntities(msg)) {
+    if (ent?.type !== "bot_command") continue;
+    const offset = Number(ent.offset);
+    const length = Number(ent.length);
+    if (!Number.isInteger(offset) || !Number.isInteger(length) || length <= 0) continue;
+    const cmdText = fullText.substring(offset, offset + length);
+    const n = extractNumber(cmdText);
+    if (n !== null) return n;
+  }
+
+  const escaped = safe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(^|\\s)\\/${escaped}(\\d*)(?:@\\w+)?(?=\\s|$)`, "i");
+  const m = fullText.match(re);
+  if (!m) return null;
+  if (!m[2]) return 0;
+  const n = Number(m[2]);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+function tgGetKursCommandNumber(msg) {
+  return tgGetIndexedCommandNumber(msg, "kurs");
+}
+
 function tgIsKursCommand(msg) {
-  return tgIsCommand(msg, "kurs");
+  return tgGetKursCommandNumber(msg) !== null;
 }
 
 function tgIsKursPayCommand(msg) {
@@ -515,6 +554,7 @@ function tgCourseStatusLabelUz(status) {
   if (status === "new") return "Yangi";
   if (status === "need_call") return "Qo'ng'iroq kerak";
   if (status === "thinking") return "O'ylab ko'rmoqda";
+  if (status === "waiting_pay") return "To'lov kutilmoqda";
   if (status === "enrolled") return "Kursga yozildi";
   if (status === "studying") return "Muvaffaqiyatli";
   if (status === "canceled") return "Bekor";
@@ -830,14 +870,17 @@ async function handleTelegramDoCommand(env, msg) {
   await googleCreateCalendarEventWithoutConference(env, payload);
 }
 
-async function buildTelegramKursReport(env) {
+async function buildTelegramKursReport(env, courseOffset = 0) {
+  const safeOffset = Number.isInteger(courseOffset) && courseOffset >= 0 ? courseOffset : 0;
   const courseType = await env.DB.prepare(
     `SELECT id, name
      FROM course_types
      WHERE is_active=1
      ORDER BY COALESCE(sort, 1000) ASC, id ASC
-     LIMIT 1`
-  ).first();
+     LIMIT 1 OFFSET ?`
+  )
+    .bind(safeOffset)
+    .first();
 
   if (!courseType) {
     return { text: "Kurslar topilmadi.", parseMode: null };
@@ -1299,7 +1342,8 @@ async function handleTelegramWebhook(env, request) {
   const isTasksCommand = tgIsTasksCommand(msg);
   const isSetCommand = tgIsSetCommand(msg);
   const isDoCommand = tgIsDoCommand(msg);
-  const isKursCommand = tgIsKursCommand(msg);
+  const kursCommandNumber = tgGetKursCommandNumber(msg);
+  const isKursCommand = kursCommandNumber !== null;
   const isKursPayCommand = tgIsKursPayCommand(msg);
 
   if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
@@ -1318,9 +1362,9 @@ async function handleTelegramWebhook(env, request) {
 
   if (isKursCommand) {
     try {
-      const report = await buildTelegramKursReport(env);
+      const report = await buildTelegramKursReport(env, kursCommandNumber || 0);
       await tgSendMessage(env, chatId, report.text, threadId, report.parseMode);
-      return jsonResp({ ok: true, data: { command: "kurs" } }, 200);
+      return jsonResp({ ok: true, data: { command: "kurs", index: kursCommandNumber || 0 } }, 200);
     } catch (e) {
       console.error("Telegram /kurs failed", e);
       await tgSendMessage(env, chatId, `Ошибка /kurs: ${String(e && e.message ? e.message : e)}`, threadId);

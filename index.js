@@ -2553,6 +2553,7 @@ select option{
           new: { ru: "Новый", uz: "Yangi", en: "New" },
           need_call: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" },
           thinking: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" },
+          waiting_pay: { ru: "Оплата ожидается", uz: "To'lov kutilmoqda", en: "Waiting for pay" },
           enrolled: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" },
           studying: { ru: "Успешно", uz: "Muvaffaqiyatli", en: "Success" },
           canceled: { ru: "Отмена", uz: "Bekor", en: "Canceled" },
@@ -2619,11 +2620,12 @@ select option{
             .map(u => String(u.id))
         );
 
-        const pieStatuses = ["new", "need_call", "thinking", "enrolled", "studying", "canceled"];
+        const pieStatuses = ["new", "need_call", "thinking", "waiting_pay", "enrolled", "studying", "canceled"];
         const pieColors = {
           new: "#60a5fa",
           need_call: "#22d3ee",
           thinking: "#f59e0b",
+          waiting_pay: "#facc15",
           enrolled: "#34d399",
           studying: "#a3e635",
           canceled: "#f87171",
@@ -6142,6 +6144,7 @@ App.renderCourses = async function (host, routeId) {
     { key: "new",       label: { ru: "Новый",            uz: "Yangi",                 en: "New" } },
     { key: "need_call", label: { ru: "Нужно звонить",    uz: "Qo'ng'iroq kerak",      en: "Need call" } },
     { key: "thinking",  label: { ru: "Думает",           uz: "O'ylab ko'rmoqda",      en: "Thinking" } },
+    { key: "waiting_pay", label: { ru: "Оплата ожидается", uz: "To'lov kutilmoqda",   en: "Waiting for pay" } },
     { key: "enrolled",  label: { ru: "Записан",          uz: "Kursga yozildi",        en: "Enrolled" } },
     { key: "studying",  label: { ru: "Успешно",          uz: "Muvaffaqiyatli",        en: "Success" } },
     { key: "canceled",  label: { ru: "Отмена",           uz: "Otmen",                 en: "Canceled" } },
@@ -7468,6 +7471,7 @@ App.renderCourses = async function (host, routeId) {
             .map(s => {
               const baseLabel = tr(s.label) || s.key;
               const mark =
+                s.key === "waiting_pay" ? "🟡 " :
                 s.key === "enrolled" ? "🟢 " :
                 s.key === "studying" ? "🔵 " :
                 s.key === "canceled" ? "🔴 " : "";
@@ -7487,6 +7491,7 @@ App.renderCourses = async function (host, routeId) {
             .map(s => {
               const baseLabel = tr(s.label) || s.key;
               const dotColor =
+                s.key === "waiting_pay" ? "#facc15" :
                 s.key === "enrolled" ? "var(--ok)" :
                 s.key === "studying" ? "var(--accent2)" :
                 s.key === "canceled" ? "var(--danger)" : "";
@@ -7710,6 +7715,7 @@ App.renderCoursePayments = async function(host, routeId){
     { key: "new",       label: { ru: "Новый", uz: "Yangi", en: "New" } },
     { key: "need_call", label: { ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" } },
     { key: "thinking",  label: { ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" } },
+    { key: "waiting_pay", label: { ru: "Оплата ожидается", uz: "To'lov kutilmoqda", en: "Waiting for pay" } },
     { key: "enrolled",  label: { ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" } },
     { key: "studying",  label: { ru: "Успешно", uz: "Muvaffaqiyatli", en: "Success" } },
     { key: "canceled",  label: { ru: "Отмена", uz: "Bekor", en: "Canceled" } },
