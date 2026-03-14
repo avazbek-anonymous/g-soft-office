@@ -51,6 +51,7 @@ const CASH_MOVEMENT_TYPES = ["income", "expense"];
 const CASH_STATUSES = ["draft", "confirmed", "canceled"];
 const PAYMENT_METHOD_CURRENCY_MODES = ["ANY", "USD", "UZS"];
 const DEFAULT_USD_RATE = 12135;
+const TG_DEBT_MIN_UZS = 10000;
 let _googleTokenCache = { accessToken: "", expAtSec: 0, source: "" };
 const CHAT_CALLS_LOOKBACK_DAYS = 3650; // show максимально полную историю звонков в чате
 
@@ -364,6 +365,10 @@ function tgIsKursCommand(msg) {
 
 function tgIsKursPayCommand(msg) {
   return tgIsCommand(msg, "kurspay");
+}
+
+function tgIsDebtCommand(msg) {
+  return tgIsCommand(msg, "debt");
 }
 
 function tgGetCommandSourceText(msg, commandName) {
@@ -955,6 +960,91 @@ async function buildTelegramKursPayReport(env) {
   return { text: lines.join("\n"), parseMode: null };
 }
 
+async function buildTelegramDebtReport(env) {
+  await ensureCashSchema(env);
+
+  const incomeSql = cashObjectTotalUzsSql("course", "cl.id", "income");
+  const expenseSql = cashObjectTotalUzsSql("course", "cl.id", "expense");
+  const netSql = `(${incomeSql} - ${expenseSql})`;
+  const debtSql = `(${courseBaseAmountUzsSql("cl")} - ${netSql})`;
+
+  const rowsRes = await env.DB.prepare(
+    `SELECT
+       ct.id AS course_type_id,
+       ct.name AS course_type_name,
+       lead.full_name AS lead_full_name,
+       lead.phone1 AS lead_phone1,
+       ${courseBaseAmountUzsSql("cl")} AS agreed_amount_uzs,
+       ${netSql} AS paid_amount_uzs,
+       ${debtSql} AS debt_amount_uzs
+     FROM course_leads cl
+     JOIN course_types ct ON ct.id=cl.course_type_id
+     JOIN clients lead ON lead.id=cl.lead_client_id
+     WHERE cl.is_active=1
+       AND (${debtSql}) >= ?
+     ORDER BY COALESCE(ct.sort, 1000) ASC, ct.id ASC, (${debtSql}) DESC, lead.full_name COLLATE NOCASE ASC`
+  )
+    .bind(TG_DEBT_MIN_UZS)
+    .all();
+
+  const rows = rowsRes.results || [];
+  if (!rows.length) {
+    return { text: "Qarzdorlar topilmadi.", parseMode: null };
+  }
+
+  const groups = new Map();
+  for (const row of rows) {
+    const key = String(row.course_type_id || 0);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        courseTypeName: String(row.course_type_name || `#${row.course_type_id}`),
+        rows: [],
+      });
+    }
+    groups.get(key).rows.push(row);
+  }
+
+  const lines = [];
+  let used = 0;
+  let truncated = false;
+  const pushLine = (line) => {
+    const next = used + line.length + 1;
+    if (next > 3800) return false;
+    lines.push(line);
+    used = next;
+    return true;
+  };
+
+  for (const group of groups.values()) {
+    if (!pushLine(`<b>${tgEscapeHtml(group.courseTypeName)}</b>`)) { truncated = true; break; }
+    for (const row of group.rows) {
+      const leadName = tgEscapeHtml(String(row.lead_full_name || "-"));
+      const phone = tgEscapeHtml(String(row.lead_phone1 || "-"));
+      const agreed = formatTelegramMoney(row.agreed_amount_uzs || 0);
+      const paid = formatTelegramMoney(row.paid_amount_uzs || 0);
+      const debt = formatTelegramMoney(row.debt_amount_uzs || 0);
+      if (!pushLine(`${leadName} | ${phone} | ${agreed} | ${paid} | ${debt}`)) {
+        truncated = true;
+        break;
+      }
+    }
+    if (truncated) break;
+    if (lines.length && lines[lines.length - 1] !== "") {
+      if (!pushLine("")) { truncated = true; break; }
+    }
+  }
+
+  if (truncated) {
+    lines.push("...");
+  }
+
+  if (!lines.length) {
+    return { text: "Qarzdorlar topilmadi.", parseMode: null };
+  }
+
+  return { text: lines.join("\n").trim(), parseMode: "HTML" };
+}
+
 function tgExtractMentionHintsSingle(msg) {
   if (!msg) return [];
   const out = [];
@@ -1363,6 +1453,7 @@ async function handleTelegramWebhook(env, request) {
   const kursCommandNumber = tgGetKursCommandNumber(msg);
   const isKursCommand = kursCommandNumber !== null;
   const isKursPayCommand = tgIsKursPayCommand(msg);
+  const isDebtCommand = tgIsDebtCommand(msg);
 
   if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
 
@@ -1374,7 +1465,7 @@ async function handleTelegramWebhook(env, request) {
     }
   }
 
-  if (!isTasksCommand && !isSetCommand && !isDoCommand && !isKursCommand && !isKursPayCommand) {
+  if (!isTasksCommand && !isSetCommand && !isDoCommand && !isKursCommand && !isKursPayCommand && !isDebtCommand) {
     return jsonResp({ ok: true }, 200);
   }
 
@@ -1399,6 +1490,18 @@ async function handleTelegramWebhook(env, request) {
       console.error("Telegram /kurspay failed", e);
       await tgSendMessage(env, chatId, `Ошибка /kurspay: ${String(e && e.message ? e.message : e)}`, threadId);
       return jsonResp({ ok: true, error: "kurspay_failed" }, 200);
+    }
+  }
+
+  if (isDebtCommand) {
+    try {
+      const report = await buildTelegramDebtReport(env);
+      await tgSendMessage(env, chatId, report.text, threadId, report.parseMode);
+      return jsonResp({ ok: true, data: { command: "debt" } }, 200);
+    } catch (e) {
+      console.error("Telegram /debt failed", e);
+      await tgSendMessage(env, chatId, `Ошибка /debt: ${String(e && e.message ? e.message : e)}`, threadId);
+      return jsonResp({ ok: true, error: "debt_failed" }, 200);
     }
   }
 

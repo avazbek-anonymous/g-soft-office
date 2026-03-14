@@ -4760,6 +4760,8 @@ async function tryLoadThemeFromServer(){
 App.renderSettings = async function(host, routeId){
   const rid = routeId || App.state.routeId;
   injectSettingsStyles();
+  const lang = App.state.lang || "ru";
+  const tr = (o) => (o && (o[lang] || o.ru || o.uz || o.en)) || "";
 
   if((App.state.user?.role||"")!=="admin"){
     host.appendChild(el("div",{class:"card cardPad vcol gap10"},
@@ -6686,21 +6688,7 @@ App.renderCourses = async function (host, routeId) {
       if (cur && String(cur.status) === String(status)) return false;
 
       let extra = {};
-      let finalStatus = status;
-      if (status === "studying" || status === "canceled") {
-        const pick = await askCourseTypeForMove(cur?.course_type_id);
-        if (!pick || pick.canceled) return false;
-        if (!pick.keep && Number.isFinite(Number(pick.nextCourseTypeId)) && Number(pick.nextCourseTypeId) > 0) {
-          await apiFetch(`/api/course_leads/${id}`, {
-            method: "PUT",
-            body: { course_type_id: Number(pick.nextCourseTypeId) }
-          });
-          // Moving to another funnel (course type) always starts from "need_call"
-          finalStatus = "need_call";
-          delete extra.cancel_reason;
-        }
-      }
-      if (status === "canceled" && finalStatus === "canceled") {
+      if (status === "canceled") {
         const reason = await askCancelReason();
         if (!reason) return false;
         extra.cancel_reason = reason;
@@ -6708,7 +6696,7 @@ App.renderCourses = async function (host, routeId) {
 
       await apiFetch(`/api/course_leads/${id}/move`, {
         method: "POST",
-        body: { status: finalStatus, ...extra },
+        body: { status, ...extra },
       });
 
       await load();
@@ -8317,10 +8305,90 @@ App.renderCash = async function(host, routeId){
     return;
   }
 
+  if (!document.getElementById("cash-ui-styles")) {
+    const st = document.createElement("style");
+    st.id = "cash-ui-styles";
+    st.textContent = `
+      .cashToolbarTop{display:grid;grid-template-columns:minmax(220px,1.3fr) repeat(2,minmax(150px,.75fr)) minmax(220px,1fr) auto;gap:10px;align-items:stretch}
+      .cashPresetRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+      .cashPresetBtns{display:flex;flex-wrap:wrap;gap:8px}
+      .cashRangeBtn{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-inline:14px}
+      .cashRangeMain{font-weight:800}
+      .cashRangeSub{font-size:12px;color:var(--muted2)}
+      .cashTableWrap{overflow:auto;border:1px solid var(--stroke);border-radius:16px;background:rgba(255,255,255,.03)}
+      .cashTable{width:100%;min-width:1220px;border-collapse:collapse}
+      .cashTable th,.cashTable td{padding:12px 14px;border-bottom:1px solid var(--stroke);vertical-align:top;text-align:left}
+      .cashTable th{position:sticky;top:0;background:var(--bg2);z-index:1;font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted2)}
+      .cashTable tbody tr:hover{background:rgba(255,255,255,.03)}
+      .cashDesk{display:block}
+      .cashMob{display:none}
+      .cashAmountCell{font-weight:900;white-space:nowrap}
+      .cashCommentCell{max-width:280px;white-space:pre-wrap;word-break:break-word}
+      .cashRangeModal{min-width:min(900px,92vw)}
+      .cashRangeGrid{display:grid;grid-template-columns:repeat(2,minmax(280px,1fr));gap:14px}
+      .cashRangePicker{border:1px solid var(--stroke);border-radius:16px;background:rgba(255,255,255,.03);padding:12px}
+      .cashRangeHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+      .cashRangeTitle{font-weight:900}
+      .cashWeekdays,.cashDays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+      .cashWeekdays div{font-size:11px;color:var(--muted2);text-align:center;padding:4px 0}
+      .cashDay{min-height:38px;border:1px solid var(--stroke);border-radius:12px;background:transparent;cursor:pointer;font-weight:700}
+      .cashDay:hover{background:rgba(255,255,255,.06)}
+      .cashDay.is-outside{opacity:.36}
+      .cashDay.is-in-range{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
+      .cashDay.is-edge{background:var(--acc);color:#111;border-color:var(--acc)}
+      .cashLegend{display:flex;flex-wrap:wrap;gap:10px;color:var(--muted2);font-size:12px}
+      .cashLegendDot{display:inline-flex;width:10px;height:10px;border-radius:999px}
+      .cashSummaryLine{font-size:12px;color:var(--muted2)}
+      @media (max-width: 1080px){
+        .cashToolbarTop{grid-template-columns:1fr 1fr}
+      }
+      @media (max-width: 900px){
+        .cashDesk{display:none}
+        .cashMob{display:flex;flex-direction:column;gap:10px}
+        .cashToolbarTop{grid-template-columns:1fr}
+        .cashRangeModal{min-width:min(96vw,96vw)}
+        .cashRangeGrid{grid-template-columns:1fr}
+      }
+    `.trim();
+    document.head.appendChild(st);
+  }
+
   const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
+  const locale = App.state.lang === "uz" ? "uz-UZ" : App.state.lang === "en" ? "en-US" : "ru-RU";
   const today = new Date();
+  const atStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const toDateInput = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const parseDateInput = (value) => {
+    const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isFinite(d.getTime()) ? d : null;
+  };
+  const formatDateOnly = (value) => {
+    const d = parseDateInput(value);
+    return d ? d.toLocaleDateString(locale, { year: "numeric", month: "2-digit", day: "2-digit" }) : "-";
+  };
+  const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const startOfWeek = (d) => {
+    const x = atStartOfDay(d);
+    const shift = (x.getDay() + 6) % 7;
+    x.setDate(x.getDate() - shift);
+    return x;
+  };
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const compareIso = (a, b) => {
+    const da = parseDateInput(a);
+    const db = parseDateInput(b);
+    return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+  };
+  const rangeLabel = (from, to) => {
+    if (!from && !to) return tr({ ru: "Выберите период", uz: "Davrni tanlang", en: "Select period" });
+    if (from && to && from === to) return formatDateOnly(from);
+    if (from && to) return `${formatDateOnly(from)} - ${formatDateOnly(to)}`;
+    return from ? formatDateOnly(from) : formatDateOnly(to);
+  };
   const fmtCash = (v, cur="UZS") => {
     const n = Number(v);
     if (!Number.isFinite(n)) return "-";
@@ -8394,32 +8462,183 @@ App.renderCash = async function(host, routeId){
     el("option",{value:""}, tr({ru:"Тип курса: Все",uz:"Kurs turi: Barchasi",en:"Course type: All"})),
     ...courseTypes.map(ct => el("option",{value:String(ct.id)}, ct.name || ct.name_uz || ct.name_ru || ct.name_en || `#${ct.id}`))
   );
-  const fromInp = el("input",{class:"input",type:"date",value:state.dateFrom});
-  const toInp = el("input",{class:"input",type:"date",value:state.dateTo});
+  const rangeBtn = el("button",{class:"btn ghost cashRangeBtn",type:"button"});
   const createBtn = el("button",{class:"btn primary",type:"button"}, tr({ru:"Создать операцию",uz:"Operatsiya yaratish",en:"Create operation"}));
-  const listEl = el("div",{class:"vcol gap10"});
+  const summaryInfo = el("div",{class:"muted2",style:"font-size:12px"});
+  const deskWrap = el("div",{class:"cashDesk cashTableWrap"});
+  const mobWrap = el("div",{class:"cashMob"});
+  const listEl = el("div",{class:"vcol gap10"}, deskWrap, mobWrap);
+
+  const applyRange = async (from, to) => {
+    state.dateFrom = from || "";
+    state.dateTo = to || "";
+    syncRangeButton();
+    await load();
+  };
+  const presetToday = async () => {
+    const iso = toDateInput(today);
+    await applyRange(iso, iso);
+  };
+  const presetYesterday = async () => {
+    const d = addDays(today, -1);
+    const iso = toDateInput(d);
+    await applyRange(iso, iso);
+  };
+  const presetThisWeek = async () => {
+    await applyRange(toDateInput(startOfWeek(today)), toDateInput(today));
+  };
+  const presetThisMonth = async () => {
+    await applyRange(toDateInput(monthStart), toDateInput(today));
+  };
+  const syncRangeButton = () => {
+    rangeBtn.innerHTML = "";
+    rangeBtn.append(
+      el("div",{class:"vcol",style:"align-items:flex-start;min-width:0"},
+        el("div",{class:"cashRangeMain"}, rangeLabel(state.dateFrom, state.dateTo)),
+        el("div",{class:"cashRangeSub"}, tr({ru:"Период кассы",uz:"Kassa davri",en:"Cash period"}))
+      ),
+      el("div",{class:"muted2"}, "▾")
+    );
+  };
+  const openRangePicker = () => new Promise((resolve) => {
+    let draftFrom = state.dateFrom || toDateInput(today);
+    let draftTo = state.dateTo || draftFrom;
+    let hoverIso = "";
+    let monthCursor = startOfMonth(parseDateInput(draftFrom) || today);
+
+    const titleFmt = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" });
+    const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    const weekdays = Array.from({ length: 7 }, (_, i) => weekdayFmt.format(addDays(startOfWeek(new Date(2025, 0, 6)), i)));
+
+    const body = el("div",{class:"cashRangeModal vcol gap12"});
+    const presets = el("div",{class:"cashPresetBtns"});
+    const calendars = el("div",{class:"cashRangeGrid"});
+    const legend = el("div",{class:"cashLegend"},
+      el("span",{class:"hrow gap6",style:"align-items:center"}, el("span",{class:"cashLegendDot",style:"background:var(--acc)"}), tr({ru:"Границы периода",uz:"Davr chegarasi",en:"Range edge"})),
+      el("span",{class:"hrow gap6",style:"align-items:center"}, el("span",{class:"cashLegendDot",style:"background:rgba(255,255,255,.10)"}), tr({ru:"Промежуток",uz:"Oraliq",en:"Range"}))
+    );
+
+    const setPreset = (from, to) => {
+      draftFrom = from;
+      draftTo = to;
+      hoverIso = "";
+      monthCursor = startOfMonth(parseDateInput(from) || today);
+      renderPicker();
+    };
+
+    const normalizeDraftRange = () => {
+      if (draftFrom && draftTo && compareIso(draftFrom, draftTo) > 0) {
+        const tmp = draftFrom;
+        draftFrom = draftTo;
+        draftTo = tmp;
+      }
+    };
+    const currentRangeEnd = () => draftTo || hoverIso || draftFrom;
+    const isInRange = (iso) => {
+      const end = currentRangeEnd();
+      if (!draftFrom || !end) return false;
+      const start = compareIso(draftFrom, end) <= 0 ? draftFrom : end;
+      const finish = compareIso(draftFrom, end) <= 0 ? end : draftFrom;
+      return compareIso(iso, start) >= 0 && compareIso(iso, finish) <= 0;
+    };
+    const pickDay = (iso) => {
+      if (!draftFrom || (draftFrom && draftTo)) {
+        draftFrom = iso;
+        draftTo = "";
+        hoverIso = "";
+      } else if (compareIso(iso, draftFrom) < 0) {
+        draftTo = draftFrom;
+        draftFrom = iso;
+      } else {
+        draftTo = iso;
+      }
+      normalizeDraftRange();
+      renderPicker();
+    };
+    const buildMonth = (monthDate) => {
+      const monthStartDate = startOfMonth(monthDate);
+      const viewStart = startOfWeek(monthStartDate);
+      const wrap = el("div",{class:"cashRangePicker vcol gap10"});
+      wrap.append(
+        el("div",{class:"cashRangeHeader"},
+          el("button",{class:"btn ghost",type:"button",onClick:()=>{monthCursor=addMonths(monthCursor,-1);renderPicker();}}, "‹"),
+          el("div",{class:"cashRangeTitle"}, titleFmt.format(monthStartDate)),
+          el("button",{class:"btn ghost",type:"button",onClick:()=>{monthCursor=addMonths(monthCursor,1);renderPicker();}}, "›")
+        ),
+        el("div",{class:"cashWeekdays"}, ...weekdays.map((x) => el("div",{}, x))),
+        el("div",{class:"cashDays"},
+          ...Array.from({ length: 42 }, (_, idx) => {
+            const day = addDays(viewStart, idx);
+            const iso = toDateInput(day);
+            const outside = day.getMonth() !== monthStartDate.getMonth();
+            const isEdge = iso === draftFrom || iso === draftTo;
+            return el("button",{
+              class:`cashDay${outside ? " is-outside" : ""}${isInRange(iso) ? " is-in-range" : ""}${isEdge ? " is-edge" : ""}`,
+              type:"button",
+              onClick:()=>pickDay(iso),
+              onmouseenter:()=>{ if (draftFrom && !draftTo) { hoverIso = iso; renderPicker(); } }
+            }, String(day.getDate()));
+          })
+        )
+      );
+      return wrap;
+    };
+    const renderPicker = () => {
+      presets.innerHTML = "";
+      presets.append(
+        el("button",{class:"btn ghost",type:"button",onClick:()=>setPreset(toDateInput(today), toDateInput(today))}, tr({ru:"Сегодня",uz:"Bugun",en:"Today"})),
+        el("button",{class:"btn ghost",type:"button",onClick:()=>{const d=addDays(today,-1);setPreset(toDateInput(d), toDateInput(d));}}, tr({ru:"Вчера",uz:"Kecha",en:"Yesterday"})),
+        el("button",{class:"btn ghost",type:"button",onClick:()=>setPreset(toDateInput(startOfWeek(today)), toDateInput(today))}, tr({ru:"Эта неделя",uz:"Bu hafta",en:"This week"})),
+        el("button",{class:"btn ghost",type:"button",onClick:()=>setPreset(toDateInput(monthStart), toDateInput(today))}, tr({ru:"Этот месяц",uz:"Bu oy",en:"This month"}))
+      );
+      calendars.innerHTML = "";
+      calendars.append(buildMonth(monthCursor), buildMonth(addMonths(monthCursor, 1)));
+      body.innerHTML = "";
+      body.append(
+        el("div",{class:"vcol gap8"},
+          el("div",{class:"cashRangeMain"}, rangeLabel(draftFrom, draftTo || hoverIso || draftFrom)),
+          el("div",{class:"cashSummaryLine"}, tr({ru:"Первый клик задает начало, второй клик завершает диапазон.",uz:"Birinchi bosish boshlanishni, ikkinchisi davr oxirini belgilaydi.",en:"First click sets the start, second click finishes the range."}))
+        ),
+        presets,
+        calendars,
+        legend
+      );
+    };
+
+    renderPicker();
+    Modal.open(tr({ru:"Период кассы",uz:"Kassa davri",en:"Cash period"}), body, [
+      { label: t("cancel"), kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+      { label: t("save"), kind: "primary", onClick: () => {
+          const end = draftTo || draftFrom;
+          Modal.close();
+          resolve({ from: draftFrom, to: end });
+        }
+      }
+    ]);
+  });
 
   const toolbar = el("div",{class:"card cardPad vcol gap10"},
-    el("div",{class:"grid3"},
+    el("div",{class:"cashToolbarTop"},
       qInp,
       moveSel,
-      typeSel
-    ),
-    el("div",{class:"grid3"},
-      fromInp,
-      toInp,
+      typeSel,
+      rangeBtn,
       createBtn
     ),
-    el("div",{class:"hrow gap8",style:"flex-wrap:wrap"},
-      el("button",{class:"btn ghost",type:"button",onClick:()=>{state.dateFrom=toDateInput(today);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Сегодня",uz:"Bugun",en:"Today"})),
-      el("button",{class:"btn ghost",type:"button",onClick:()=>{const d=new Date(today);d.setDate(d.getDate()-1);state.dateFrom=toDateInput(d);state.dateTo=toDateInput(d);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Вчера",uz:"Kecha",en:"Yesterday"})),
-      el("button",{class:"btn ghost",type:"button",onClick:()=>{const d=new Date(today);const w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);state.dateFrom=toDateInput(d);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Эта неделя",uz:"Bu hafta",en:"This week"})),
-      el("button",{class:"btn ghost",type:"button",onClick:()=>{state.dateFrom=toDateInput(monthStart);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Этот месяц",uz:"Bu oy",en:"This month"})),
+    el("div",{class:"cashPresetRow"},
+      el("div",{class:"cashPresetBtns"},
+        el("button",{class:"btn ghost",type:"button",onClick:presetToday}, tr({ru:"Сегодня",uz:"Bugun",en:"Today"})),
+        el("button",{class:"btn ghost",type:"button",onClick:presetYesterday}, tr({ru:"Вчера",uz:"Kecha",en:"Yesterday"})),
+        el("button",{class:"btn ghost",type:"button",onClick:presetThisWeek}, tr({ru:"Эта неделя",uz:"Bu hafta",en:"This week"})),
+        el("button",{class:"btn ghost",type:"button",onClick:presetThisMonth}, tr({ru:"Этот месяц",uz:"Bu oy",en:"This month"}))
+      ),
+      summaryInfo
     )
   );
 
   host.innerHTML = "";
   host.append(toolbar, listEl);
+  syncRangeButton();
 
   const openEditor = async (item = null) => {
     let movementType = item?.movement_type || "income";
@@ -8604,12 +8823,51 @@ App.renderCash = async function(host, routeId){
   function render() {
     const q = String(state.q || "").trim().toLowerCase();
     const rows = !q ? state.rows : state.rows.filter(row => searchText(row).includes(q));
-    listEl.innerHTML = "";
+    summaryInfo.textContent = `${tr({ru:"Операций",uz:"Operatsiyalar",en:"Operations"})}: ${rows.length}`;
+    deskWrap.innerHTML = "";
+    mobWrap.innerHTML = "";
     if (!rows.length) {
-      listEl.appendChild(el("div",{class:"card cardPad muted"}, t("no_data")));
+      deskWrap.appendChild(el("div",{class:"card cardPad muted"}, t("no_data")));
+      mobWrap.appendChild(el("div",{class:"card cardPad muted"}, t("no_data")));
       return;
     }
-    rows.forEach(row => listEl.appendChild(el("div",{class:"card cardPad vcol gap10"},
+
+    const headers = [
+      tr({ru:"Дата",uz:"Sana",en:"Date"}),
+      ...(role === "admin" ? [tr({ru:"Изменение",uz:"O'zgartirish",en:"Updated"})] : []),
+      tr({ru:"Контрагент",uz:"Kontragent",en:"Counterparty"}),
+      tr({ru:"Статья",uz:"Modda",en:"Category"}),
+      tr({ru:"Объект",uz:"Obyekt",en:"Object"}),
+      tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"}),
+      tr({ru:"Валюта",uz:"Valyuta",en:"Currency"}),
+      tr({ru:"Курс",uz:"Kurs",en:"Rate"}),
+      tr({ru:"Сумма",uz:"Summa",en:"Amount"}),
+      tr({ru:"Коммент",uz:"Izoh",en:"Comment"}),
+      tr({ru:"Автор",uz:"Muallif",en:"Author"}),
+      tr({ru:"Действия",uz:"Amallar",en:"Actions"}),
+    ];
+    const table = el("table",{class:"cashTable"},
+      el("thead",{}, el("tr",{}, ...headers.map((h) => el("th",{}, h)))),
+      el("tbody",{},
+        ...rows.map((row) => el("tr",{},
+          el("td",{}, rowDateText(row)),
+          ...(role === "admin" ? [el("td",{}, rowChangedText(row))] : []),
+          el("td",{}, rowCounterparty(row)),
+          el("td",{}, rowArticle(row)),
+          el("td",{}, rowObject(row)),
+          el("td",{}, rowPaymentMethod(row)),
+          el("td",{}, row.currency || "UZS"),
+          el("td",{}, fmtCash(row.rate, row.currency === "USD" ? "UZS" : row.currency || "UZS")),
+          el("td",{class:"cashAmountCell"}, fmtCash(row.amount, row.currency || "UZS")),
+          el("td",{class:"cashCommentCell"}, row.comment || "-"),
+          el("td",{}, row.created_by_name || "-"),
+          el("td",{}, actionRow(row))
+        ))
+      )
+    );
+    deskWrap.appendChild(table);
+
+    rows.forEach(row => mobWrap.appendChild(el("div",{class:"card cardPad vcol gap10"},
       el("div",{style:"display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap"},
         el("div",{class:"vcol gap6"},
           el("div",{style:"font-weight:900;font-size:18px"}, fmtCash(row.amount, row.currency || "UZS")),
@@ -8672,8 +8930,11 @@ App.renderCash = async function(host, routeId){
   qInp.addEventListener("input",()=>{state.q=qInp.value||"";render();});
   moveSel.addEventListener("change",()=>{state.movement=moveSel.value||"all";load();});
   typeSel.addEventListener("change",()=>{state.courseTypeId=typeSel.value||"";load();});
-  fromInp.addEventListener("change",()=>{state.dateFrom=fromInp.value||"";load();});
-  toInp.addEventListener("change",()=>{state.dateTo=toInp.value||"";load();});
+  rangeBtn.onclick = async () => {
+    const picked = await openRangePicker();
+    if (!picked) return;
+    await applyRange(picked.from, picked.to);
+  };
   createBtn.onclick = () => openEditor(null);
 
   await load();
