@@ -315,6 +315,14 @@ function tgIsDoCommand(msg) {
   return tgIsCommand(msg, "do");
 }
 
+function tgIsKursCommand(msg) {
+  return tgIsCommand(msg, "kurs");
+}
+
+function tgIsKursPayCommand(msg) {
+  return tgIsCommand(msg, "kurspay");
+}
+
 function tgGetCommandSourceText(msg, commandName) {
   if (msg?.reply_to_message) {
     const rt = msg.reply_to_message.text || msg.reply_to_message.caption;
@@ -493,6 +501,30 @@ function buildSetPayloadFromMessage(msg) {
 
 function buildDoPayloadFromMessage(msg) {
   return buildCalendarPayloadFromMessage(msg, tgGetDoSourceText(msg));
+}
+
+function tgEscapeHtml(v) {
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tgCourseStatusLabelUz(status) {
+  if (status === "new") return "Yangi";
+  if (status === "need_call") return "Qo'ng'iroq kerak";
+  if (status === "thinking") return "O'ylab ko'rmoqda";
+  if (status === "enrolled") return "Kursga yozildi";
+  if (status === "studying") return "Muvaffaqiyatli";
+  if (status === "canceled") return "Bekor";
+  return String(status || "-");
+}
+
+function formatTelegramMoney(v) {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function b64UrlFromString(str) {
@@ -798,6 +830,70 @@ async function handleTelegramDoCommand(env, msg) {
   await googleCreateCalendarEventWithoutConference(env, payload);
 }
 
+async function buildTelegramKursReport(env) {
+  const courseType = await env.DB.prepare(
+    `SELECT id, name
+     FROM course_types
+     WHERE is_active=1
+     ORDER BY COALESCE(sort, 1000) ASC, id ASC
+     LIMIT 1`
+  ).first();
+
+  if (!courseType) {
+    return { text: "Kurslar topilmadi.", parseMode: null };
+  }
+
+  const countsRes = await env.DB.prepare(
+    `SELECT status, COUNT(*) AS qty
+     FROM course_leads
+     WHERE is_active=1 AND course_type_id=?
+     GROUP BY status`
+  )
+    .bind(courseType.id)
+    .all();
+
+  const counts = new Map();
+  for (const row of countsRes.results || []) {
+    counts.set(String(row.status || ""), Number(row.qty || 0));
+  }
+
+  const lines = [`<b>${tgEscapeHtml(courseType.name || `#${courseType.id}`)}</b>`, ""];
+  for (const status of COURSE_STATUSES) {
+    lines.push(`${tgCourseStatusLabelUz(status)} - ${counts.get(status) || 0}`);
+  }
+
+  return { text: lines.join("\n"), parseMode: "HTML" };
+}
+
+async function buildTelegramKursPayReport(env) {
+  const rows = await env.DB.prepare(
+    `SELECT
+       ct.id,
+       ct.name,
+       COALESCE(SUM(CASE WHEN cl.is_active=1 AND COALESCE(cl.paid_amount, 0) > 100 THEN 1 ELSE 0 END), 0) AS paid_leads_count,
+       COALESCE(SUM(CASE WHEN cl.is_active=1 AND COALESCE(cl.paid_amount, 0) > 100 THEN COALESCE(cl.paid_amount, 0) ELSE 0 END), 0) AS total_paid_amount
+     FROM course_types ct
+     LEFT JOIN course_leads cl ON cl.course_type_id = ct.id
+     WHERE ct.is_active=1
+     GROUP BY ct.id, ct.name, COALESCE(ct.sort, 1000)
+     ORDER BY COALESCE(ct.sort, 1000) ASC, ct.id ASC`
+  ).all();
+
+  const items = rows.results || [];
+  if (!items.length) {
+    return { text: "Kurslar topilmadi.", parseMode: null };
+  }
+
+  const lines = items.map((row) => {
+    const name = String(row.name || `#${row.id}`);
+    const count = Number(row.paid_leads_count || 0);
+    const total = formatTelegramMoney(row.total_paid_amount || 0);
+    return `${name} - ${count} - ${total}`;
+  });
+
+  return { text: lines.join("\n"), parseMode: null };
+}
+
 function tgExtractMentionHintsSingle(msg) {
   if (!msg) return [];
   const out = [];
@@ -957,10 +1053,11 @@ async function tgGetUserIdByUsername(env, username) {
   }
 }
 
-async function tgSendMessage(env, chatId, text, threadId) {
+async function tgSendMessage(env, chatId, text, threadId, parseMode = null) {
   if (!chatId || !text) return;
   const payload = { chat_id: chatId, text: String(text) };
   if (threadId) payload.message_thread_id = threadId;
+  if (parseMode) payload.parse_mode = String(parseMode);
   await tgApiCall(env, "sendMessage", payload);
 }
 
@@ -1202,6 +1299,8 @@ async function handleTelegramWebhook(env, request) {
   const isTasksCommand = tgIsTasksCommand(msg);
   const isSetCommand = tgIsSetCommand(msg);
   const isDoCommand = tgIsDoCommand(msg);
+  const isKursCommand = tgIsKursCommand(msg);
+  const isKursPayCommand = tgIsKursPayCommand(msg);
 
   if (tgAlreadyProcessed(chatId, messageId)) return jsonResp({ ok: true, duplicate: true }, 200);
 
@@ -1213,7 +1312,33 @@ async function handleTelegramWebhook(env, request) {
     }
   }
 
-  if (!isTasksCommand && !isSetCommand && !isDoCommand) return jsonResp({ ok: true }, 200);
+  if (!isTasksCommand && !isSetCommand && !isDoCommand && !isKursCommand && !isKursPayCommand) {
+    return jsonResp({ ok: true }, 200);
+  }
+
+  if (isKursCommand) {
+    try {
+      const report = await buildTelegramKursReport(env);
+      await tgSendMessage(env, chatId, report.text, threadId, report.parseMode);
+      return jsonResp({ ok: true, data: { command: "kurs" } }, 200);
+    } catch (e) {
+      console.error("Telegram /kurs failed", e);
+      await tgSendMessage(env, chatId, `Ошибка /kurs: ${String(e && e.message ? e.message : e)}`, threadId);
+      return jsonResp({ ok: true, error: "kurs_failed" }, 200);
+    }
+  }
+
+  if (isKursPayCommand) {
+    try {
+      const report = await buildTelegramKursPayReport(env);
+      await tgSendMessage(env, chatId, report.text, threadId, report.parseMode);
+      return jsonResp({ ok: true, data: { command: "kurspay" } }, 200);
+    } catch (e) {
+      console.error("Telegram /kurspay failed", e);
+      await tgSendMessage(env, chatId, `Ошибка /kurspay: ${String(e && e.message ? e.message : e)}`, threadId);
+      return jsonResp({ ok: true, error: "kurspay_failed" }, 200);
+    }
+  }
 
   if (isDoCommand) {
     try {
