@@ -1,0 +1,55 @@
+CREATE TABLE IF NOT EXISTS dict_cities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name_ru TEXT NOT NULL,
+  name_uz TEXT NOT NULL,
+  name_en TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 1000,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+  updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+);
+
+CREATE TABLE IF NOT EXISTS dict_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name_ru TEXT NOT NULL,
+  name_uz TEXT NOT NULL,
+  name_en TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 1000,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+  updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+);
+
+CREATE TABLE IF NOT EXISTS dict_spheres (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name_ru TEXT NOT NULL,
+  name_uz TEXT NOT NULL,
+  name_en TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 1000,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+  updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+);
+
+CREATE TABLE IF NOT EXISTS course_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  start_date INTEGER,
+  price REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'UZS',
+  sort INTEGER NOT NULL DEFAULT 1000,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+  updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+);
+
+CREATE TABLE IF NOT EXISTS service_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name_ru TEXT NOT NULL,
+  name_uz TEXT NOT NULL,
+  name_en TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 1000,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+  updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+);

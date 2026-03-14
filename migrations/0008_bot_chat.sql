@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS bot_chats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL UNIQUE,
+  chat_type TEXT,
+  username TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  language_code TEXT,
+  is_bot INTEGER DEFAULT 0,
+  is_premium INTEGER DEFAULT 0,
+  linked_client_id INTEGER,
+  linked_client_type TEXT,
+  started_at INTEGER,
+  last_message_at INTEGER,
+  last_message_text TEXT,
+  last_message_direction TEXT,
+  last_message_telegram_user_id TEXT,
+  unread_for_staff INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bot_chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  text TEXT,
+  telegram_message_id INTEGER,
+  telegram_user_id TEXT,
+  telegram_username TEXT,
+  telegram_first_name TEXT,
+  telegram_last_name TEXT,
+  staff_user_id INTEGER,
+  staff_user_name TEXT,
+  payload_json TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
