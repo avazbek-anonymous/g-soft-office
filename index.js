@@ -557,6 +557,9 @@ settings_spheres:"Сферы",
 settings_sources:"Источники",
 settings_service_types:"Типы услуг",
 settings_course_types:"Типы курсов",
+settings_cash_income_categories:"Статьи прихода",
+settings_cash_expense_categories:"Статьи расхода",
+settings_payment_methods:"Способы оплаты",
 
 field_name:"Название",
 field_name_ru:"Название (RU)",
@@ -722,6 +725,9 @@ settings_spheres:"Soha",
 settings_sources:"Manbalar",
 settings_service_types:"Xizmat turlari",
 settings_course_types:"Kurs turlari",
+settings_cash_income_categories:"Kirim moddalari",
+settings_cash_expense_categories:"Chiqim moddalari",
+settings_payment_methods:"To'lov usullari",
 
 field_name:"Nomi",
 field_name_ru:"Nomi (RU)",
@@ -886,6 +892,9 @@ settings_spheres:"Spheres",
 settings_sources:"Sources",
 settings_service_types:"Service types",
 settings_course_types:"Course types",
+settings_cash_income_categories:"Income categories",
+settings_cash_expense_categories:"Expense categories",
+settings_payment_methods:"Payment methods",
 
 field_name:"Name",
 field_name_ru:"Name (RU)",
@@ -950,8 +959,11 @@ moizvonki_email: "MZ Email",
     }
   };
   DICT.ru.route_course_payments = "Оплаты курсов";
+  DICT.ru.route_cash = "Касса";
   DICT.uz.route_course_payments = "Kurs to'lovlari";
+  DICT.uz.route_cash = "Kassa";
   DICT.en.route_course_payments = "Course payments";
+  DICT.en.route_cash = "Cash";
   DICT.ru.main_today = DICT.ru.main_today || DICT.ru.calendar_today || "Сегодня";
   DICT.uz.main_today = DICT.uz.main_today || DICT.uz.calendar_today || "Bugun";
   DICT.en.main_today = DICT.en.main_today || DICT.en.calendar_today || "Today";
@@ -1014,6 +1026,7 @@ moizvonki_email: "MZ Email",
   projects: `<img src="./icons/projects.svg" class="ico" alt="">`,
   courses: `<img src="./icons/courses.svg" class="ico" alt="">`,
   course_payments: `<img src="./icons/payment.svg" class="ico" alt="">`,
+  cash: `<img src="./icons/payment.svg" class="ico" alt="">`,
   clients: `<img src="./icons/clients.svg" class="ico" alt="">`,
   phone: `<img src="./icons/call.svg" class="ico" alt="">`,
   settings: `<img src="./icons/settings.svg" class="ico" alt="">`,
@@ -1309,6 +1322,14 @@ moizvonki_email: "MZ Email",
       }),
   },
 
+  courseLeads: {
+    duplicate: (id, body) =>
+      apiFetch(`/api/course_leads/${id}/duplicate`, {
+        method: "POST",
+        body,
+      }),
+  },
+
   botchat: {
     chats: (q = {}) => {
       const sp = new URLSearchParams();
@@ -1424,6 +1445,28 @@ moizvonki_email: "MZ Email",
       apiFetch(`/api/settings/${kind}/${id}/delete`, {
         method: "POST",
       }),
+  },
+  cash: {
+    list: (q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.movement_type) sp.set("movement_type", String(q.movement_type));
+      if (q.course_type_id) sp.set("course_type_id", String(q.course_type_id));
+      if (q.date_from) sp.set("date_from", String(q.date_from));
+      if (q.date_to) sp.set("date_to", String(q.date_to));
+      const s = sp.toString();
+      return apiFetch(`/api/cash${s ? "?" + s : ""}`);
+    },
+    get: (id) => apiFetch(`/api/cash/${id}`),
+    create: (body) => apiFetch("/api/cash", { method: "POST", body }),
+    update: (id, body) => apiFetch(`/api/cash/${id}`, { method: "PUT", body }),
+    confirm: (id) => apiFetch(`/api/cash/${id}/confirm`, { method: "POST" }),
+    toggleCancel: (id) => apiFetch(`/api/cash/${id}/toggle_cancel`, { method: "POST" }),
+    objectSummary: (object_type, object_id) => {
+      const sp = new URLSearchParams();
+      if (object_type) sp.set("object_type", String(object_type));
+      if (object_id) sp.set("object_id", String(object_id));
+      return apiFetch(`/api/cash/object_summary?${sp.toString()}`);
+    },
   },
   clients: {
   list: (type, q="") => {
@@ -2081,9 +2124,9 @@ select option{
         roles: ["admin", "rop", "sale"]
       },
       {
-        path: "/course-payments",
-        key: "route_course_payments",
-        icon: "course_payments",
+        path: "/cash",
+        key: "route_cash",
+        icon: "cash",
         roles: ["admin", "rop", "sale"]
       },
       {
@@ -2121,7 +2164,8 @@ select option{
     if (path.startsWith("/projects")) return t("route_projects");
     if (path.startsWith("/courses")) return t("route_courses");
     if (path.startsWith("/chat")) return t("route_chat");
-    if (path.startsWith("/course-payments")) return t("route_course_payments");
+    if (path.startsWith("/cash")) return t("route_cash");
+    if (path.startsWith("/course-payments")) return t("route_cash");
     if (path.startsWith("/clients")) return t("route_clients");
     if (path.startsWith("/calls")) return t("route_calls");
     if (path.startsWith("/settings")) return t("route_settings");
@@ -2485,7 +2529,8 @@ select option{
     if (path === "/settings") return App.renderSettings(host, routeId);
     if (path === "/courses") return App.renderCourses(host, routeId);
     if (path === "/chat") return App.renderBotChat(host, routeId);
-    if (path === "/course-payments") return App.renderCoursePayments(host, routeId);
+    if (path === "/cash") return App.renderCash(host, routeId);
+    if (path === "/course-payments") return App.renderCash(host, routeId);
     if (path === "/clients") return App.renderClients(host, routeId);
     if (path === "/calls") return App.renderCalls(host, routeId);
     if (path === "/projects") return App.renderProjects(host, routeId);
@@ -4726,17 +4771,21 @@ App.renderSettings = async function(host, routeId){
 
   const state={
     themeCfg: normalizeThemeCfg(App.state.themeCfg),
-    cities:[], spheres:[], sources:[], service_types:[], course_types:[]
+    cities:[], spheres:[], sources:[], service_types:[], course_types:[],
+    cash_income_categories:[], cash_expense_categories:[], payment_methods:[]
   };
 
   const loadAll = async ()=>{
-    const [themeR,citiesR,spheresR,sourcesR,serviceR,courseR] = await Promise.all([
+    const [themeR,citiesR,spheresR,sourcesR,serviceR,courseR,incomeR,expenseR,paymentMethodsR] = await Promise.all([
       API.settings.themeGet(),
       API.settings.dictList("cities"),
       API.settings.dictList("spheres"),
       API.settings.dictList("sources"),
       API.settings.dictList("service_types"),
       API.settings.dictList("course_types"),
+      API.settings.dictList("cash_income_categories"),
+      API.settings.dictList("cash_expense_categories"),
+      API.settings.dictList("payment_methods"),
     ]);
     state.themeCfg = normalizeThemeCfg(themeR?.data?.value || null);
     state.cities = citiesR?.data || [];
@@ -4744,6 +4793,9 @@ App.renderSettings = async function(host, routeId){
     state.sources = sourcesR?.data || [];
     state.service_types = serviceR?.data || [];
     state.course_types = courseR?.data || [];
+    state.cash_income_categories = incomeR?.data || [];
+    state.cash_expense_categories = expenseR?.data || [];
+    state.payment_methods = paymentMethodsR?.data || [];
     App.state.themeCfg = state.themeCfg;
     applyTheme();
   };
@@ -4809,7 +4861,7 @@ App.renderSettings = async function(host, routeId){
     ]);
   };
 
-  const openDictModal = (kind, is3lang, item)=>{
+  const openDictModal = (kind, mode, item)=>{
     const isEdit=!!item;
     const title = `${t(isEdit?"btn_update":"btn_add")}: ${kind}`;
 
@@ -4818,7 +4870,7 @@ App.renderSettings = async function(host, routeId){
     activeInp.checked = item ? (Number(item.is_active)!==0) : true;
 
     const fields=[];
-    if(is3lang){
+    if(mode === "3lang"){
       const ru=el("input",{value:item?.name_ru||"",placeholder:"RU"});
       const uz=el("input",{value:item?.name_uz||"",placeholder:"UZ"});
       const en=el("input",{value:item?.name_en||"",placeholder:"EN"});
@@ -4845,6 +4897,58 @@ App.renderSettings = async function(host, routeId){
             name_ru:(ru.value||"").trim(),
             name_uz:(uz.value||"").trim(),
             name_en:(en.value||"").trim(),
+            sort:Number(sortInp.value||1000),
+            is_active: activeInp.checked ? 1 : 0,
+          };
+          if(!payload.name_ru||!payload.name_uz||!payload.name_en){
+            Toast.show(`${t("toast_error")}: ${t("field_name")}`,"bad"); return;
+          }
+          try{
+            if(isEdit) await API.settings.dictUpdate(kind,item.id,payload);
+            else await API.settings.dictCreate(kind,payload);
+            Toast.show(t("toast_saved"),"ok");
+            Modal.close();
+            await reload();
+          }catch(e){
+            Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad");
+          }
+        }},
+      ]);
+      return;
+    }
+
+    if (mode === "payment_method") {
+      const ru=el("input",{value:item?.name_ru||"",placeholder:"RU"});
+      const uz=el("input",{value:item?.name_uz||"",placeholder:"UZ"});
+      const en=el("input",{value:item?.name_en||"",placeholder:"EN"});
+      const currencyModeSel = el("select", { class: "sel" },
+        el("option", { value: "ANY" }, tr({ ru: "Любая", uz: "Ixtiyoriy", en: "Any" })),
+        el("option", { value: "UZS" }, "UZS"),
+        el("option", { value: "USD" }, "USD")
+      );
+      currencyModeSel.value = item?.currency_mode || "ANY";
+
+      const body=el("div",{class:"vcol gap12"},
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_ru")), ru),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_uz")), uz),
+        el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_name_en")), en),
+        el("div",{class:"grid2"},
+          el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"}, tr({ ru: "Валюта", uz: "Valyuta", en: "Currency" })), currencyModeSel),
+          el("label",{class:"vcol gap8"}, el("span",{class:"muted2",style:"font-size:12px"},t("field_sort")), sortInp),
+        ),
+        el("label",{class:"hrow gap10",style:"align-items:center; justify-content:space-between"},
+          el("span",{class:"muted2",style:"font-size:12px"},t("field_active")), activeInp
+        )
+      );
+
+      Modal.open(title, body, [
+        {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
+        {label:t("save"),kind:"primary",onClick:async()=>{
+          const payload={
+            name_ru:(ru.value||"").trim(),
+            name_uz:(uz.value||"").trim(),
+            name_en:(en.value||"").trim(),
+            currency_mode:String(currencyModeSel.value || "ANY"),
             sort:Number(sortInp.value||1000),
             is_active: activeInp.checked ? 1 : 0,
           };
@@ -4915,22 +5019,24 @@ App.renderSettings = async function(host, routeId){
     ]);
   };
 
-  const dictCard = (titleKey, kind, list, is3lang)=>{
+  const dictCard = (titleKey, kind, list, mode)=>{
     const head=el("div",{class:"khead"},
       el("div",{class:"ttl"}, t(titleKey)),
       el("div",{class:"hrow gap8",style:"align-items:center"},
         el("div",{class:"muted2",style:"font-size:12px"}, String(list.length)),
-        el("button",{class:"iconBtn",type:"button",title:t("create"),onClick:()=>openDictModal(kind,is3lang,null)},
+        el("button",{class:"iconBtn",type:"button",title:t("create"),onClick:()=>openDictModal(kind,mode,null)},
           el("span",{class:"icoWrap",html:ICONS.plus})
         )
       )
     );
 
     const rows = list.length ? list.map(item=>{
-      const title = is3lang ? langLabel3(item) : (item.name || `#${item.id}`);
-      const sub = is3lang
+      const title = mode === "3lang" || mode === "payment_method" ? langLabel3(item) : (item.name || `#${item.id}`);
+      const sub = mode === "3lang"
         ? `RU: ${item.name_ru || "-"} • UZ: ${item.name_uz || "-"} • EN: ${item.name_en || "-"}`
-        : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"-"} • ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
+        : mode === "payment_method"
+          ? `RU: ${item.name_ru || "-"} • UZ: ${item.name_uz || "-"} • EN: ${item.name_en || "-"} • ${tr({ ru: "Валюта", uz: "Valyuta", en: "Currency" })}: ${item.currency_mode || "ANY"}`
+          : `${t("field_start_date")}: ${item.start_date?fmtDate(item.start_date).split(",")[0]:"-"} • ${t("field_price")}: ${item.price||0} ${item.currency||"UZS"}`;
 
       return el("div",{class:"rowLine"},
         el("div",{class:"rowMain"},
@@ -4938,7 +5044,7 @@ App.renderSettings = async function(host, routeId){
           el("div",{class:"rowSub"}, sub, ` • sort:${item.sort ?? 1000}`, ` • ${Number(item.is_active)!==0 ? "active" : "off"}`)
         ),
         el("div",{class:"rowActions"},
-          el("button",{class:"iconBtn miniIcon",type:"button",title:t("settings_edit"),onClick:()=>openDictModal(kind,is3lang,item)},
+          el("button",{class:"iconBtn miniIcon",type:"button",title:t("settings_edit"),onClick:()=>openDictModal(kind,mode,item)},
             el("span",{class:"icoWrap",html:ICONS.edit})
           ),
           el("button",{class:"iconBtn miniIcon",type:"button",title:t("delete"),onClick:async()=>{
@@ -4977,11 +5083,14 @@ App.renderSettings = async function(host, routeId){
     );
 
     const grid=el("div",{class:"setGrid"},
-      dictCard("settings_cities","cities",state.cities,true),
-      dictCard("settings_spheres","spheres",state.spheres,true),
-      dictCard("settings_sources","sources",state.sources,true),
-      dictCard("settings_service_types","service_types",state.service_types,true),
-      dictCard("settings_course_types","course_types",state.course_types,false),
+      dictCard("settings_cities","cities",state.cities,"3lang"),
+      dictCard("settings_spheres","spheres",state.spheres,"3lang"),
+      dictCard("settings_sources","sources",state.sources,"3lang"),
+      dictCard("settings_service_types","service_types",state.service_types,"3lang"),
+      dictCard("settings_course_types","course_types",state.course_types,"course_type"),
+      dictCard("settings_cash_income_categories","cash_income_categories",state.cash_income_categories,"3lang"),
+      dictCard("settings_cash_expense_categories","cash_expense_categories",state.cash_expense_categories,"3lang"),
+      dictCard("settings_payment_methods","payment_methods",state.payment_methods,"payment_method"),
       el("div") // чтобы сетка ровно выглядела
     );
 
@@ -5955,6 +6064,8 @@ pmSel.addEventListener("change", () => {
       p.meeting_at ? el("div", { class: "pLine" }, tr({ru:"Встреча:",uz:"Uchrashuv:",en:"Meeting:"}), el("b", {}, fmtDate(p.meeting_at))) : null,
       p.deadline_at ? el("div", { class: "pLine" }, tr({ru:"Дедлайн:",uz:"Deadline:",en:"Deadline:"}), el("b", {}, fmtDate(p.deadline_at))) : null,
       (isAdmin && p.amount != null) ? el("div", { class: "pLine" }, tr({ru:"Сумма:",uz:"Summa:",en:"Amount:"}), el("b", {}, fmtAmount(p.amount, p.currency))) : null,
+      (p.cash_net_total_uzs != null) ? el("div", { class: "pLine" }, tr({ru:"Оплата:",uz:"To'lov:",en:"Paid:"}), el("b", {}, fmtAmount(p.cash_net_total_uzs, "UZS"))) : null,
+      (p.cash_debt_uzs != null) ? el("div", { class: "pLine" }, tr({ru:"Долг:",uz:"Qarz:",en:"Debt:"}), el("b", {}, fmtAmount(p.cash_debt_uzs, "UZS"))) : null,
       p.pm_name ? el("div", { class: "pLine" }, "PM:", el("b", {}, p.pm_name)) : null,
       (p.status === "canceled") ? el("div", { class: "pLine" }, tr({ru:"Причина отмены:",uz:"Bekor sababi:",en:"Cancel reason:"}), el("b", {}, p.cancel_reason || "-")) : null,
       p.comment ? el("div", { class: "muted2", style: "white-space:pre-wrap;margin-top:6px" }, p.comment) : null,
@@ -6394,7 +6505,8 @@ App.renderCourses = async function (host, routeId) {
         x.last_chat_message,
         x.course_price,
         x.agreed_amount,
-        x.paid_amount,
+        x.cash_net_total_uzs,
+        x.cash_debt_uzs,
         x.currency,
         x.course_start_date ? fmtDateOnly(x.course_start_date) : "",
       ].filter(Boolean).join(" ").toLowerCase();
@@ -6494,20 +6606,74 @@ App.renderCourses = async function (host, routeId) {
     );
   });
 
-  const askPaidAmount = (titleObj) => new Promise((resolve) => {
-    const inp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
-    Modal.open(tr(titleObj),
+  const askCourseDuplicate = (currentCourseTypeId) => new Promise((resolve) => {
+    const choices = activeCourseTypes.filter(ct => Number(ct.id) !== Number(currentCourseTypeId || 0));
+    if (!choices.length) {
+      resolve({ canceled: true });
+      return;
+    }
+    const sel = el("select", { class: "input" },
+      el("option", { value: "" }, tr({ ru: "Выберите тип курса", uz: "Kurs turini tanlang", en: "Select course type" })),
+      ...choices.map(ct => el("option", { value: String(ct.id) }, courseTypeLabel(ct)))
+    );
+    const agreedInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
+    const hint = el("div", { class: "muted2", style: "font-size:12px" }, "");
+    const syncHint = () => {
+      const row = ctById.get(Number(sel.value || 0));
+      if (!row) {
+        agreedInp.placeholder = "";
+        hint.textContent = tr({ ru: "Выберите новый тип курса.", uz: "Yangi kurs turini tanlang.", en: "Select a new course type." });
+        return;
+      }
+      const price = Number(row.price || 0);
+      agreedInp.placeholder = price > 0 ? String(price) : "";
+      hint.textContent = price > 0
+        ? tr({
+            ru: `Цена выбранного курса: ${fmtMoney(price, row.currency || "UZS")}. Договоренность для нового курса вводится отдельно и не копируется.`,
+            uz: `Tanlangan kurs narxi: ${fmtMoney(price, row.currency || "UZS")}. Yangi kurs uchun kelishuv alohida kiritiladi va nusxalanmaydi.`,
+            en: `Selected course price: ${fmtMoney(price, row.currency || "UZS")}. The agreed amount for the new course is entered separately and is not copied.`
+          })
+        : tr({
+            ru: "Договоренность для нового курса вводится отдельно и не копируется.",
+            uz: "Yangi kurs uchun kelishuv alohida kiritiladi va nusxalanmaydi.",
+            en: "The agreed amount for the new course is entered separately and is not copied."
+          });
+    };
+    sel.addEventListener("change", syncHint);
+    syncHint();
+    Modal.open(tr({ ru: "Дубликат курса", uz: "Kurs nusxasi", en: "Duplicate course" }),
       el("div", { class: "vcol gap10" },
-        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Укажи сумму оплаты:", uz: "To'lov summasini kiriting:", en: "Enter paid amount:" })),
-        inp
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({
+          ru: "Выберите новый тип курса. Договоренность нового курса вводится отдельно.",
+          uz: "Yangi kurs turini tanlang. Yangi kurs kelishuvi alohida kiritiladi.",
+          en: "Select a new course type. The new course agreed amount is entered separately."
+        })),
+        sel,
+        agreedInp,
+        hint
       ),
       [
-        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve(null); } },
+        { label: t("cancel") || "Cancel", kind: "ghost", onClick: () => { Modal.close(); resolve({ canceled: true }); } },
         { label: t("save") || "Save", kind: "primary", onClick: () => {
-            const v = (inp.value || "").trim();
-            const n = Number(v);
-            if (!v || !Number.isFinite(n)) { Toast.show(tr({ ru: "Сумма обязательна", uz: "Summa majburiy", en: "Amount required" }), "bad"); return; }
-            Modal.close(); resolve(n);
+            const courseTypeId = Number(sel.value || 0);
+            if (!courseTypeId) {
+              Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad");
+              return;
+            }
+            const rawAgreed = (agreedInp.value || "").trim();
+            if (rawAgreed) {
+              const n = Number(rawAgreed);
+              if (!Number.isFinite(n)) {
+                Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto'g'ri", en: "Invalid agreed amount" }), "bad");
+                return;
+              }
+            }
+            Modal.close();
+            resolve({
+              canceled: false,
+              course_type_id: courseTypeId,
+              agreed_amount: rawAgreed === "" ? null : Number(rawAgreed),
+            });
           }
         }
       ]
@@ -6554,6 +6720,25 @@ App.renderCourses = async function (host, routeId) {
     }
   };
 
+  const duplicateCourseLead = async (row) => {
+    const source = row || {};
+    const pick = await askCourseDuplicate(source.course_type_id);
+    if (!pick || pick.canceled) return null;
+    const res = await API.courseLeads.duplicate(source.id, {
+      course_type_id: pick.course_type_id,
+      agreed_amount: pick.agreed_amount,
+    });
+    const newId = Number(res?.data?.id || 0) || null;
+    if (pick.course_type_id) {
+      selectedCourseTypeId = Number(pick.course_type_id);
+      renderTypeTabs();
+    }
+    await load();
+    if (newId) openView(newId);
+    Toast.show(t("toast_saved") || "Saved", "ok");
+    return newId;
+  };
+
   const chatRoleLabel = (roleName) => {
     if (roleName === "admin") return "admin";
     if (roleName === "rop") return "rop";
@@ -6576,6 +6761,12 @@ App.renderCourses = async function (host, routeId) {
     if (status === "in_progress") return { icon: ">", text: "in_progress", className: "run" };
     if (status === "pause") return { icon: "||", text: "pause", className: "pause" };
     return { icon: ".", text: "new", className: "new" };
+  };
+  const chatCourseLabel = (row) => {
+    const courseType = row?.course_type_name || courseTypeNameById(row?.course_type_id, "");
+    if (!courseType) return "";
+    const courseId = Number(row?.course_lead_id || 0);
+    return courseId > 0 ? `#${courseId} • ${courseType}` : courseType;
   };
 
   const openRecordingPlayer = (url, titleText) => {
@@ -6684,8 +6875,10 @@ App.renderCourses = async function (host, routeId) {
       }
       for (const row of rows) {
         const st = taskStatusVisual(row.task_status);
+        const courseLabel = chatCourseLabel(row);
         pinnedEl.appendChild(
           el("div", { class: "chatPinnedItem" },
+            courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em" }, courseLabel) : null,
             el("div", { style: "font-weight:800" }, `#${row.task_id} ${row.task_title || ""}`),
             el("div", { class: "muted2", style: "font-size:12px" }, row.text || row.task_description || ""),
             el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center;font-size:12px" },
@@ -6747,8 +6940,10 @@ App.renderCourses = async function (host, routeId) {
 
         if (row.item_type === "task") {
           const st = taskStatusVisual(row.task_status);
+          const courseLabel = chatCourseLabel(row);
           feedEl.appendChild(
             el("div", { class: "chatTaskRow" },
+              courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px" }, courseLabel) : null,
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
                 el("div", { style: "font-weight:800" }, `${tr({ ru: "Задача", uz: "Vazifa", en: "Task" })} #${row.task_id}`),
                 el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
@@ -6785,8 +6980,10 @@ App.renderCourses = async function (host, routeId) {
         }
 
         const mine = Number(row.user_id) === Number(App.state.user?.id);
+        const courseLabel = chatCourseLabel(row);
         feedEl.appendChild(
           el("div", { class: `chatMsg ${mine ? "me" : ""}` },
+            courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px" }, courseLabel) : null,
             el("div", { class: "chatMsgName" }, `${row.user_name || "-"} ${chatRoleLabel(row.user_role) ? `(${chatRoleLabel(row.user_role)})` : ""}`),
             el("div", { class: "chatBubble" }, row.text || ""),
             el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
@@ -6944,7 +7141,8 @@ App.renderCourses = async function (host, routeId) {
       const nums = [];
       if (x.course_start_date) nums.push(el("span", {}, `${tr({ ru: "Старт", uz: "Start", en: "Start" })}: `, el("b", {}, fmtDateOnly(x.course_start_date))));
       if (x.agreed_amount != null) nums.push(el("span", {}, `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: `, el("b", {}, fmtMoney(x.agreed_amount, x.currency))));
-      if (x.paid_amount != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To'lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.paid_amount, x.currency))));
+      if (x.cash_net_total_uzs != null) nums.push(el("span", {}, `${tr({ ru: "Опл.", uz: "To'lov", en: "Paid" })}: `, el("b", {}, fmtMoney(x.cash_net_total_uzs, "UZS"))));
+      if (x.cash_debt_uzs != null) nums.push(el("span", {}, `${tr({ ru: "Долг", uz: "Qarz", en: "Debt" })}: `, el("b", {}, fmtMoney(x.cash_debt_uzs, "UZS"))));
       if (nums.length) lines.push(el("div", { class: "cLine" }, ...nums));
             // Коммент курса (course_lead.comment) - показываем на карточке
       if (x.comment) {
@@ -7078,7 +7276,6 @@ App.renderCourses = async function (host, routeId) {
     const startInp = el("input", { class: "input", type: "date", disabled: true });
 
     const agreedInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
-    const paidInp = el("input", { class: "input", type: "number", step: "0.01", placeholder: "0" });
     const commentInp = el("textarea", { class: "input", rows: 4, placeholder: t("comment") || "Comment..." });
 
     // lead extra fields (for creating from courses)
@@ -7276,15 +7473,9 @@ App.renderCourses = async function (host, routeId) {
         ),
       ),
 
-      el("div", { class: "grid2" },
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
-          agreedInp
-        ),
-        el("div", { class: "vcol gap8" },
-          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
-          paidInp
-        ),
+      el("div", { class: "vcol gap8" },
+        el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
+        agreedInp
       ),
 
       el("div", { class: "vcol gap8" },
@@ -7343,9 +7534,7 @@ App.renderCourses = async function (host, routeId) {
             if (!course_type_id) { Toast.show(tr({ ru: "Выбери тип курса", uz: "Kurs turini tanlang", en: "Select course type" }), "bad"); return; }
 
             let agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
-            const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
             if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto'g'ri", en: "Invalid agreed amount" }), "bad"); return; }
-            if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To'lov noto'g'ri", en: "Invalid paid amount" }), "bad"); return; }
             const ctRow = ctById.get(Number(course_type_id));
             const ctPrice = Number(ctRow?.price);
             if ((agreed_amount == null || agreed_amount === 0) && Number.isFinite(ctPrice) && ctPrice > 0) {
@@ -7357,7 +7546,6 @@ App.renderCourses = async function (host, routeId) {
               company_id: company2.value ? Number(company2.value) : null,
               course_type_id,
               agreed_amount,
-              paid_amount,
               comment: (commentInp.value || "").trim() || null,
             };
 
@@ -7450,7 +7638,12 @@ App.renderCourses = async function (host, routeId) {
 
         el("div", { class: "vcol gap6" },
           el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
-          el("div", {}, x.paid_amount != null ? fmtMoney(x.paid_amount, x.currency) : "-")
+          el("div", {}, x.cash_net_total_uzs != null ? fmtMoney(x.cash_net_total_uzs, "UZS") : "-")
+        ),
+
+        el("div", { class: "vcol gap6" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Долг", uz: "Qarz", en: "Debt" })),
+          el("div", {}, x.cash_debt_uzs != null ? fmtMoney(x.cash_debt_uzs, "UZS") : "-")
         ),
 
         x.comment ? el("div", { class: "vcol gap6" },
@@ -7514,10 +7707,26 @@ App.renderCourses = async function (host, routeId) {
 
       Modal.open(t("route_courses"), body, [
         ...(isMobile ? [{ label: "Chat", kind: "ghost", onClick: () => { Modal.close(); openCourseChat(id); } }] : []),
+        ...(isMobile ? [{ label: tr({ ru: "Дубликат", uz: "Nusxa", en: "Duplicate" }), kind: "ghost", onClick: async () => {
+          Modal.close();
+          try {
+            await duplicateCourseLead(x);
+          } catch (e) {
+            Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+          }
+        } }] : []),
         ...(isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
         ...mobileStatusActionsColored,
         { label: t("close") || "Close", kind: "ghost", onClick: () => Modal.close() },
         ...(!isMobile ? [{ label: "Chat", kind: "ghost", onClick: () => { Modal.close(); openCourseChat(id); } }] : []),
+        ...(!isMobile ? [{ label: tr({ ru: "Дубликат", uz: "Nusxa", en: "Duplicate" }), kind: "ghost", onClick: async () => {
+          Modal.close();
+          try {
+            await duplicateCourseLead(x);
+          } catch (e) {
+            Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+          }
+        } }] : []),
         ...(!isMobile ? [{ label: t("edit") || "Edit", kind: "primary", onClick: () => { Modal.close(); openEdit(id); } }] : []),
       ]);
     } catch (e) {
@@ -7550,7 +7759,6 @@ App.renderCourses = async function (host, routeId) {
       const startInp = el("input", { class: "input", type: "date", disabled: true });
 
       const agreedInp = el("input", { class: "input", type: "number", step: "0.01", value: (x.agreed_amount == null ? "" : String(x.agreed_amount)) });
-      const paidInp = el("input", { class: "input", type: "number", step: "0.01", value: (x.paid_amount == null ? "" : String(x.paid_amount)) });
       const commentInp = el("textarea", { class: "input", rows: 4 }, x.comment || "");
 
       const refreshCourseSnapshot = () => {
@@ -7604,15 +7812,9 @@ App.renderCourses = async function (host, routeId) {
           ),
         ),
 
-        el("div", { class: "grid2" },
-          el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
-            agreedInp
-          ),
-          el("div", { class: "vcol gap8" },
-            el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })),
-            paidInp
-          ),
+        el("div", { class: "vcol gap8" },
+          el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Договоренность", uz: "Kelishuv", en: "Agreed" })),
+          agreedInp
         ),
 
         el("div", { class: "vcol gap8" },
@@ -7626,15 +7828,12 @@ App.renderCourses = async function (host, routeId) {
         { label: t("save") || "Save", kind: "primary", onClick: async () => {
             try {
               const agreed_amount = (agreedInp.value || "").trim() === "" ? null : Number(agreedInp.value);
-              const paid_amount = (paidInp.value || "").trim() === "" ? null : Number(paidInp.value);
               if (agreed_amount != null && !Number.isFinite(agreed_amount)) { Toast.show(tr({ ru: "Неверная договоренность", uz: "Kelishuv noto'g'ri", en: "Invalid agreed amount" }), "bad"); return; }
-              if (paid_amount != null && !Number.isFinite(paid_amount)) { Toast.show(tr({ ru: "Неверная оплата", uz: "To'lov noto'g'ri", en: "Invalid paid amount" }), "bad"); return; }
 
               const body = {
                 company_id: company2.value ? Number(company2.value) : null,
                 course_type_id: type2.value ? Number(type2.value) : null,
                 agreed_amount,
-                paid_amount,
                 comment: (commentInp.value || "").trim() || null,
               };
 
@@ -7664,6 +7863,7 @@ App.renderCourses = async function (host, routeId) {
 
 
 App.renderCoursePayments = async function(host, routeId){
+  return App.renderCash(host, routeId);
   const rid = routeId || App.state.routeId;
   const role = App.state.user?.role || "";
   const canAccess = role === "admin" || role === "rop" || role === "sale";
@@ -8103,6 +8303,380 @@ App.renderCoursePayments = async function(host, routeId){
   stageSel.addEventListener("change", () => { state.stage = stageSel.value || "other"; render(); });
 
   render();
+};
+
+App.renderCash = async function(host, routeId){
+  const rid = routeId || App.state.routeId;
+  const role = App.state.user?.role || "";
+  if (!["admin","rop","sale"].includes(role)) {
+    host.innerHTML = "";
+    host.appendChild(el("div",{class:"card cardPad vcol gap10"},
+      el("div",{style:"font-weight:900"}, t("route_cash")),
+      el("div",{class:"muted"},"No access")
+    ));
+    return;
+  }
+
+  const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
+  const today = new Date();
+  const toDateInput = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const fmtCash = (v, cur="UZS") => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "-";
+    return `${n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2})} ${cur}`;
+  };
+  const dateToSec = (value, end=false) => {
+    if (!value) return null;
+    const d = new Date(`${value}T00:00:00`);
+    if (!Number.isFinite(d.getTime())) return null;
+    if (end) d.setHours(23,59,59,999);
+    return Math.floor(d.getTime()/1000);
+  };
+  const rowArticle = (row) => row.movement_type === "expense"
+    ? (row.expense_category_name_uz || row.expense_category_name_ru || row.expense_category_name_en || "-")
+    : (row.income_category_name_uz || row.income_category_name_ru || row.income_category_name_en || "-");
+  const rowCounterparty = (row) => row.counterparty_company_name || row.counterparty_full_name || tr({ru:"Без контрагента",uz:"Kontragentsiz",en:"No counterparty"});
+  const rowObject = (row) => {
+    if (row.object_type === "project") return `#${row.object_id} ${row.project_service_name_uz || row.project_service_name_ru || row.project_service_name_en || ""}`.trim();
+    if (row.object_type === "course") return `#${row.object_id} ${row.course_type_name || "-"}`.trim();
+    return "-";
+  };
+  const rowPaymentMethod = (row) => row.payment_method_name_uz || row.payment_method_name_ru || row.payment_method_name_en || "-";
+  const searchText = (row) => [
+    row.id, row.created_by_name, row.comment, rowArticle(row), rowCounterparty(row), rowObject(row), rowPaymentMethod(row), row.course_type_name
+  ].filter(Boolean).join(" ").toLowerCase();
+  const rowDateText = (row) => fmtDate(row.created_at);
+  const rowChangedText = (row) => fmtDate(row.updated_at || row.created_at);
+  const statusText = (row) => row.status === "confirmed"
+    ? tr({ru:"Подтверждено",uz:"Tasdiqlangan",en:"Confirmed"})
+    : row.status === "canceled"
+      ? tr({ru:"Отменено",uz:"Bekor qilingan",en:"Canceled"})
+      : tr({ru:"Черновик",uz:"Qoralama",en:"Draft"});
+
+  host.innerHTML = "";
+  host.appendChild(el("div",{class:"muted"}, t("loading")));
+
+  const [incomeRes, expenseRes, methodsRes, courseTypesRes, companiesRes, leadsRes] = await Promise.all([
+    API.settings.dictList("cash_income_categories").catch(()=>({data:[]})),
+    API.settings.dictList("cash_expense_categories").catch(()=>({data:[]})),
+    API.settings.dictList("payment_methods").catch(()=>({data:[]})),
+    API.settings.dictList("course_types").catch(()=>({data:[]})),
+    API.clients.list("company","").catch(()=>({data:[]})),
+    API.clients.list("lead","").catch(()=>({data:[]})),
+  ]);
+  if (App.state.routeId !== rid) return;
+
+  const incomeCategories = incomeRes?.data || [];
+  const expenseCategories = expenseRes?.data || [];
+  const paymentMethods = methodsRes?.data || [];
+  const paymentMethodById = new Map(paymentMethods.map(x => [Number(x.id), x]));
+  const courseTypes = courseTypesRes?.data || [];
+  const companies = companiesRes?.data || [];
+  const leads = leadsRes?.data || [];
+
+  const state = {
+    rows: [],
+    q: "",
+    movement: "all",
+    courseTypeId: "",
+    dateFrom: toDateInput(monthStart),
+    dateTo: toDateInput(today),
+  };
+
+  const qInp = el("input",{class:"input",placeholder:t("search")||"Search..."});
+  const moveSel = el("select",{class:"sel"},
+    el("option",{value:"all"}, tr({ru:"Все / движения",uz:"Barchasi / harakat",en:"All / movement"})),
+    el("option",{value:"income"}, tr({ru:"Приход",uz:"Kirim",en:"Income"})),
+    el("option",{value:"expense"}, tr({ru:"Расход",uz:"Chiqim",en:"Expense"})),
+  );
+  const typeSel = el("select",{class:"sel"},
+    el("option",{value:""}, tr({ru:"Тип курса: Все",uz:"Kurs turi: Barchasi",en:"Course type: All"})),
+    ...courseTypes.map(ct => el("option",{value:String(ct.id)}, ct.name || ct.name_uz || ct.name_ru || ct.name_en || `#${ct.id}`))
+  );
+  const fromInp = el("input",{class:"input",type:"date",value:state.dateFrom});
+  const toInp = el("input",{class:"input",type:"date",value:state.dateTo});
+  const createBtn = el("button",{class:"btn primary",type:"button"}, tr({ru:"Создать операцию",uz:"Operatsiya yaratish",en:"Create operation"}));
+  const listEl = el("div",{class:"vcol gap10"});
+
+  const toolbar = el("div",{class:"card cardPad vcol gap10"},
+    el("div",{class:"grid3"},
+      qInp,
+      moveSel,
+      typeSel
+    ),
+    el("div",{class:"grid3"},
+      fromInp,
+      toInp,
+      createBtn
+    ),
+    el("div",{class:"hrow gap8",style:"flex-wrap:wrap"},
+      el("button",{class:"btn ghost",type:"button",onClick:()=>{state.dateFrom=toDateInput(today);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Сегодня",uz:"Bugun",en:"Today"})),
+      el("button",{class:"btn ghost",type:"button",onClick:()=>{const d=new Date(today);d.setDate(d.getDate()-1);state.dateFrom=toDateInput(d);state.dateTo=toDateInput(d);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Вчера",uz:"Kecha",en:"Yesterday"})),
+      el("button",{class:"btn ghost",type:"button",onClick:()=>{const d=new Date(today);const w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);state.dateFrom=toDateInput(d);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Эта неделя",uz:"Bu hafta",en:"This week"})),
+      el("button",{class:"btn ghost",type:"button",onClick:()=>{state.dateFrom=toDateInput(monthStart);state.dateTo=toDateInput(today);fromInp.value=state.dateFrom;toInp.value=state.dateTo;load();}}, tr({ru:"Этот месяц",uz:"Bu oy",en:"This month"})),
+    )
+  );
+
+  host.innerHTML = "";
+  host.append(toolbar, listEl);
+
+  const openEditor = async (item = null) => {
+    let movementType = item?.movement_type || "income";
+    let categoryId = item?.category_id ? String(item.category_id) : "";
+    let counterpartyKind = item?.counterparty_type || "company";
+    let counterpartyId = item?.counterparty_client_id ? Number(item.counterparty_client_id) : null;
+    let objectType = item?.object_type || null;
+    let objectId = item?.object_id ? Number(item.object_id) : null;
+    let paymentMethodId = item?.payment_method_id ? String(item.payment_method_id) : "";
+    let currency = item?.currency || "UZS";
+    let rate = item?.rate != null ? String(item.rate) : "1";
+    let selectedClientData = null;
+
+    const movementWrap = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const categorySel = el("select",{class:"sel"});
+    const counterpartyTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const clientSearchInp = el("input",{class:"input",placeholder:tr({ru:"Поиск контрагента",uz:"Kontragent qidirish",en:"Search counterparty"})});
+    const clientSel = el("select",{class:"sel"});
+    const objectTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const objectSel = el("select",{class:"sel"});
+    const summaryBox = el("div",{class:"card cardPad vcol gap6",style:"display:none"});
+    const methodSel = el("select",{class:"sel"});
+    const currencyBtn = el("button",{class:"btn ghost",type:"button"});
+    const rateInp = el("input",{class:"input",type:"number",step:"0.01",value:rate});
+    const amountInp = el("input",{class:"input",type:"number",step:"0.01",value:item?.amount == null ? "" : String(item.amount)});
+    const commentInp = el("textarea",{class:"input",rows:4}, item?.comment || "");
+
+    const clientOptions = () => (counterpartyKind === "lead" ? leads : companies).filter(x => Number(x.is_active)!==0);
+    const clientName = (row) => !row ? "-" : (counterpartyKind === "lead" ? `${row.full_name || `#${row.id}`}${row.phone1 ? ` • ${row.phone1}` : ""}` : `${row.company_name || row.full_name || `#${row.id}`}${row.phone1 ? ` • ${row.phone1}` : ""}`);
+    const fillMovement = () => {
+      movementWrap.innerHTML = "";
+      ["income","expense"].forEach(kind => movementWrap.appendChild(el("button",{class:`btn ${movementType===kind?"primary":"ghost"}`,type:"button",onClick:()=>{movementType=kind;fillMovement();fillCategories();}}, movementType===kind ? `${movementType===kind && kind==="income" ? "▲ " : movementType===kind && kind==="expense" ? "▼ " : ""}${kind==="income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}` : (kind==="income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})))));
+    };
+    const fillCategories = () => {
+      const src = movementType === "expense" ? expenseCategories : incomeCategories;
+      categorySel.innerHTML = "";
+      categorySel.appendChild(el("option",{value:""}, tr({ru:"Выберите статью",uz:"Moddani tanlang",en:"Select category"})));
+      src.forEach(row => categorySel.appendChild(el("option",{value:String(row.id)}, row[`name_${App.state.lang}`] || row.name_uz || row.name_ru || row.name_en || `#${row.id}`)));
+      categorySel.value = categoryId;
+    };
+    const fillCounterpartyTabs = () => {
+      counterpartyTabs.innerHTML = "";
+      ["company","lead"].forEach(kind => counterpartyTabs.appendChild(el("button",{class:`btn ${counterpartyKind===kind?"primary":"ghost"}`,type:"button",onClick:async()=>{counterpartyKind=kind;counterpartyId=null;objectType=null;objectId=null;selectedClientData=null;fillCounterpartyTabs();fillClients();fillObjectTabs();await fillObjects();}}, kind==="company" ? tr({ru:"Компания",uz:"Kompaniya",en:"Company"}) : tr({ru:"Лид",uz:"Lead",en:"Lead"}))));
+    };
+    const fillClients = () => {
+      const q = String(clientSearchInp.value || "").trim().toLowerCase();
+      const rows = clientOptions().filter(row => clientName(row).toLowerCase().includes(q));
+      clientSel.innerHTML = "";
+      clientSel.appendChild(el("option",{value:""}, tr({ru:"Выберите контрагента",uz:"Kontragentni tanlang",en:"Select counterparty"})));
+      rows.forEach(row => clientSel.appendChild(el("option",{value:String(row.id)}, clientName(row))));
+      clientSel.value = counterpartyId ? String(counterpartyId) : "";
+    };
+    const fillObjectTabs = () => {
+      const projects = selectedClientData?.projects || [];
+      const courses = selectedClientData?.course_leads || [];
+      const opts = [];
+      if (projects.length) opts.push("project");
+      if (courses.length) opts.push("course");
+      if (!opts.includes(objectType)) objectType = opts[0] || null;
+      objectTabs.innerHTML = "";
+      opts.forEach(kind => objectTabs.appendChild(el("button",{class:`btn ${objectType===kind?"primary":"ghost"}`,type:"button",onClick:async()=>{objectType=kind;objectId=null;fillObjectTabs();await fillObjects();}}, kind==="project" ? tr({ru:"Проект",uz:"Loyiha",en:"Project"}) : tr({ru:"Курс",uz:"Kurs",en:"Course"}))));
+    };
+    const refreshSummary = async () => {
+      summaryBox.style.display = "none";
+      summaryBox.innerHTML = "";
+      if (!objectType || !objectId) return;
+      const r = await API.cash.objectSummary(objectType, objectId).catch(()=>null);
+      const s = r?.data;
+      if (!s) return;
+      summaryBox.style.display = "";
+      summaryBox.append(
+        el("div",{class:"muted2",style:"font-size:12px"}, "Debt / Qarz / Debt"),
+        el("div",{style:"font-weight:900;font-size:20px"}, fmtCash(s.debt_uzs, "UZS")),
+        el("div",{class:"muted2",style:"font-size:12px"}, `${tr({ru:"База",uz:"Baza",en:"Base"})}: ${fmtCash(s.base_amount_uzs,"UZS")} • ${tr({ru:"Приход",uz:"Kirim",en:"Income"})}: ${fmtCash(s.income_total_uzs,"UZS")} • ${tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}: ${fmtCash(s.expense_total_uzs,"UZS")}`)
+      );
+    };
+    const fillObjects = async () => {
+      objectSel.innerHTML = "";
+      const rows = objectType === "project" ? (selectedClientData?.projects || []) : (selectedClientData?.course_leads || []);
+      objectSel.appendChild(el("option",{value:""}, tr({ru:"Выберите объект",uz:"Obyektni tanlang",en:"Select object"})));
+      rows.forEach(row => {
+        const label = objectType === "project"
+          ? `#${row.id} • ${row.service_name_uz || row.service_name_ru || row.service_name_en || ""} • ${row.amount != null ? fmtCash(row.amount, row.currency || "UZS") : "-"}`
+          : `#${row.id} • ${row.course_type_name || "-"} • ${row.status || "-"} • ${row.agreed_amount != null ? fmtCash(row.agreed_amount, row.currency || "UZS") : "-"}`;
+        objectSel.appendChild(el("option",{value:String(row.id)}, label));
+      });
+      objectSel.value = objectId ? String(objectId) : "";
+      await refreshSummary();
+    };
+    const syncMethod = () => {
+      const method = paymentMethodById.get(Number(methodSel.value || 0)) || null;
+      const mode = String(method?.currency_mode || "ANY").toUpperCase();
+      if (mode === "USD") currency = "USD";
+      if (mode === "UZS") currency = "UZS";
+      if (!(currency === "USD" || currency === "UZS")) currency = "UZS";
+      if (currency === "UZS") rateInp.value = "1";
+      else if (!rateInp.value) rateInp.value = "12135";
+      currencyBtn.textContent = currency;
+      currencyBtn.disabled = mode === "ANY" ? null : "disabled";
+    };
+
+    fillMovement();
+    fillCategories();
+    fillCounterpartyTabs();
+    fillClients();
+    methodSel.appendChild(el("option",{value:""}, tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"})));
+    paymentMethods.filter(x => Number(x.is_active)!==0).forEach(row => methodSel.appendChild(el("option",{value:String(row.id)}, row[`name_${App.state.lang}`] || row.name_uz || row.name_ru || row.name_en || `#${row.id}`)));
+    methodSel.value = paymentMethodId;
+    methodSel.value = paymentMethodId;
+
+    clientSearchInp.addEventListener("input", fillClients);
+    clientSel.addEventListener("change", async () => {
+      counterpartyId = clientSel.value ? Number(clientSel.value) : null;
+      objectType = null;
+      objectId = null;
+      selectedClientData = counterpartyId ? ((await API.clients.get(counterpartyId).catch(()=>null))?.data || null) : null;
+      fillObjectTabs();
+      await fillObjects();
+    });
+    objectSel.addEventListener("change", async () => { objectId = objectSel.value ? Number(objectSel.value) : null; await refreshSummary(); });
+    methodSel.addEventListener("change", () => { paymentMethodId = methodSel.value || ""; syncMethod(); });
+    currencyBtn.addEventListener("click", () => { const method = paymentMethodById.get(Number(methodSel.value || 0)); if (String(method?.currency_mode || "ANY").toUpperCase() !== "ANY") return; currency = currency === "USD" ? "UZS" : "USD"; syncMethod(); });
+
+    if (counterpartyId) {
+      selectedClientData = (await API.clients.get(counterpartyId).catch(()=>null))?.data || null;
+      fillObjectTabs();
+      await fillObjects();
+    } else {
+      fillObjectTabs();
+    }
+    syncMethod();
+
+    const body = el("div",{class:"vcol gap12"},
+      movementWrap,
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Статья",uz:"Modda",en:"Category"})), categorySel),
+        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"})), methodSel),
+      ),
+      el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Контрагент",uz:"Kontragent",en:"Counterparty"})), counterpartyTabs, clientSearchInp, clientSel),
+      el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Объект",uz:"Obyekt",en:"Object"})), objectTabs, objectSel),
+      summaryBox,
+      el("div",{class:"grid3"},
+        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), currencyBtn),
+        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Курс",uz:"Kurs",en:"Rate"})), rateInp),
+        el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Сумма",uz:"Summa",en:"Amount"})), amountInp),
+      ),
+      el("div",{class:"vcol gap8"}, el("div",{class:"muted2",style:"font-size:12px"}, t("comment") || "Comment"), commentInp),
+    );
+
+    Modal.open(item ? tr({ru:"Редактирование операции",uz:"Operatsiyani tahrirlash",en:"Edit operation"}) : tr({ru:"Создание операции",uz:"Operatsiya yaratish",en:"Create operation"}), body, [
+      {label:t("cancel"),kind:"ghost",onClick:()=>Modal.close()},
+      {label:t("save"),kind:"primary",onClick:async()=>{
+        try{
+          const payload = {
+            movement_type: movementType,
+            category_id: categorySel.value ? Number(categorySel.value) : null,
+            counterparty_client_id: counterpartyId || null,
+            object_type: objectType || null,
+            object_id: objectId || null,
+            payment_method_id: methodSel.value ? Number(methodSel.value) : null,
+            currency,
+            rate: rateInp.value ? Number(rateInp.value) : null,
+            amount: amountInp.value ? Number(amountInp.value) : null,
+            comment: (commentInp.value || "").trim() || null,
+          };
+          if (!payload.category_id || !payload.payment_method_id || !payload.amount) { Toast.show(tr({ru:"Заполните статью, способ оплаты и сумму.",uz:"Modda, to'lov usuli va summani to'ldiring.",en:"Fill category, payment method and amount."}),"bad"); return; }
+          if (item) await API.cash.update(item.id, payload); else await API.cash.create(payload);
+          Modal.close();
+          await load();
+          Toast.show(t("toast_saved"),"ok");
+        }catch(e){ Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad"); }
+      }}
+    ]);
+  };
+
+  const actionRow = (row) => el("div",{class:"hrow gap8",style:"flex-wrap:wrap"},
+    role === "admin" && row.status !== "confirmed" ? el("button",{class:"btn mini",type:"button",onClick:async()=>{ try{ await API.cash.confirm(row.id); await load(); Toast.show(t("toast_saved"),"ok"); }catch(e){ Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad"); } }}, tr({ru:"Подтвердить",uz:"Tasdiqlash",en:"Confirm"})) : null,
+    el("button",{class:"iconBtn miniIcon",type:"button",title:t("edit"),onClick:()=>openEditor(row)}, el("span",{class:"icoWrap",html:ICONS.edit})),
+    el("button",{class:"btn mini ghost",type:"button",onClick:async()=>{ try{ await API.cash.toggleCancel(row.id); await load(); Toast.show(t("toast_saved"),"ok"); }catch(e){ Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad"); } }}, row.status === "canceled" ? tr({ru:"В черновик",uz:"Qoralamaga",en:"To draft"}) : tr({ru:"Отменить",uz:"Bekor qilish",en:"Cancel"}))
+  );
+
+  function render() {
+    const q = String(state.q || "").trim().toLowerCase();
+    const rows = !q ? state.rows : state.rows.filter(row => searchText(row).includes(q));
+    listEl.innerHTML = "";
+    if (!rows.length) {
+      listEl.appendChild(el("div",{class:"card cardPad muted"}, t("no_data")));
+      return;
+    }
+    rows.forEach(row => listEl.appendChild(el("div",{class:"card cardPad vcol gap10"},
+      el("div",{style:"display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap"},
+        el("div",{class:"vcol gap6"},
+          el("div",{style:"font-weight:900;font-size:18px"}, fmtCash(row.amount, row.currency || "UZS")),
+          el("div",{class:"muted2"}, `${row.movement_type === "expense" ? "▼" : "▲"} ${row.movement_type === "expense" ? tr({ru:"Расход",uz:"Chiqim",en:"Expense"}) : tr({ru:"Приход",uz:"Kirim",en:"Income"})} • ${statusText(row)}`),
+          el("div",{class:"muted2",style:"font-size:12px"}, `#${row.id}`),
+        ),
+        actionRow(row)
+      ),
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap6"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Дата",uz:"Sana",en:"Date"})),
+          el("div",{}, rowDateText(row))
+        ),
+        role === "admin" ? el("div",{class:"vcol gap6"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Изменение",uz:"O'zgartirish",en:"Updated"})),
+          el("div",{}, rowChangedText(row))
+        ) : null
+      ),
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Контрагент",uz:"Kontragent",en:"Counterparty"})), el("div",{}, rowCounterparty(row))),
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Статья",uz:"Modda",en:"Category"})), el("div",{}, rowArticle(row))),
+      ),
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Объект",uz:"Obyekt",en:"Object"})), el("div",{}, rowObject(row))),
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"})), el("div",{}, rowPaymentMethod(row))),
+      ),
+      el("div",{class:"grid3"},
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})), el("div",{}, row.currency || "UZS")),
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Курс",uz:"Kurs",en:"Rate"})), el("div",{}, fmtCash(row.rate, row.currency === "USD" ? "UZS" : row.currency || "UZS"))),
+        el("div",{class:"vcol gap6"}, el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Автор",uz:"Muallif",en:"Author"})), el("div",{}, row.created_by_name || "-")),
+      ),
+      row.comment ? el("div",{class:"vcol gap6"},
+        el("div",{class:"muted2",style:"font-size:12px"}, t("comment") || "Comment"),
+        el("div",{style:"white-space:pre-wrap"}, row.comment)
+      ) : null
+    )));
+  }
+
+  async function load() {
+    try{
+      const r = await API.cash.list({
+        movement_type: state.movement === "all" ? "" : state.movement,
+        course_type_id: state.courseTypeId || "",
+        date_from: dateToSec(state.dateFrom,false),
+        date_to: dateToSec(state.dateTo,true),
+      });
+      if (App.state.routeId !== rid) return;
+      state.rows = Array.isArray(r?.data) ? r.data : [];
+      render();
+    }catch(e){
+      if (App.state.routeId !== rid) return;
+      host.innerHTML = "";
+      host.appendChild(el("div",{class:"card cardPad vcol gap10"},
+        el("div",{style:"font-weight:900"}, t("toast_error")),
+        el("div",{class:"muted"}, e.message || "Error")
+      ));
+    }
+  }
+
+  qInp.addEventListener("input",()=>{state.q=qInp.value||"";render();});
+  moveSel.addEventListener("change",()=>{state.movement=moveSel.value||"all";load();});
+  typeSel.addEventListener("change",()=>{state.courseTypeId=typeSel.value||"";load();});
+  fromInp.addEventListener("change",()=>{state.dateFrom=fromInp.value||"";load();});
+  toInp.addEventListener("change",()=>{state.dateTo=toInp.value||"";load();});
+  createBtn.onclick = () => openEditor(null);
+
+  await load();
 };
 
 function injectBotChatStyles() {
@@ -8956,6 +9530,7 @@ App.renderClients = async function(host, routeId){
     companies: [],
     refs: await loadDictCacheIfAny(),
   };
+  const tr = (o) => (o && (o[App.state.lang] || o.ru || o.uz || o.en)) || "";
 
   // refresh dict cache from backend
   const fresh = await refreshDictCache();
@@ -9213,8 +9788,10 @@ App.renderClients = async function(host, routeId){
               el("div",{class:"s"},
                 `#${p.id}`,
                 p.service_name_uz || p.service_name_ru || p.service_name_en || "",
-                `PM: ${p.pm_full_name || ""}`,
-                (p.deadline_at ? `DL: ${fmtDate(p.deadline_at)}` : "")
+                `PM: ${p.pm_name || p.pm_full_name || ""}`,
+                (p.deadline_at ? `DL: ${fmtDate(p.deadline_at)}` : ""),
+                (p.cash_net_total_uzs!=null ? `${tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })}: ${p.cash_net_total_uzs} UZS` : ""),
+                (p.cash_debt_uzs!=null ? `${tr({ ru: "Долг", uz: "Qarz", en: "Debt" })}: ${p.cash_debt_uzs} UZS` : "")
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
@@ -9231,21 +9808,20 @@ App.renderClients = async function(host, routeId){
         el("div",{style:"font-weight:900"}, t("clients_card_course_leads")),
         clList.length
           ? el("div",{class:"smallList"}, clList.map(x=>el("div",{class:"smallItem"},
-              el("div",{class:"t"}, x.lead_full_name || `#${x.id}`),
+              el("div",{class:"t"}, (x.course_type_name || `#${x.id}`)),
               el("div",{class:"s"},
                 `#${x.id}`,
-                `${x.course_type_name||""}`,
+                `${x.company_name || ""}`,
                 `${x.status||""}`,
-                (x.agreed_amount!=null ? `Agreed: ${x.agreed_amount}` : ""),
-                (x.paid_amount!=null ? `Paid: ${x.paid_amount}` : "")
+                (x.agreed_amount!=null ? `${tr({ ru: "Дог.", uz: "Kel.", en: "Agreed" })}: ${x.agreed_amount}` : ""),
+                (x.course_price!=null ? `${tr({ ru: "Цена", uz: "Narx", en: "Price" })}: ${x.course_price}` : ""),
+                (x.cash_net_total_uzs!=null ? `${tr({ ru: "Оплата", uz: "To'lov", en: "Paid" })}: ${x.cash_net_total_uzs} UZS` : ""),
+                (x.cash_debt_uzs!=null ? `${tr({ ru: "Долг", uz: "Qarz", en: "Debt" })}: ${x.cash_debt_uzs} UZS` : "")
               ),
               el("div",{style:"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"},
                 el("button",{class:"btn",type:"button",onClick:()=>{
                   Modal.close(); // закрыть карточку компании
-                  setHash("/courses", {
-                    open: String(x.id),           // открыть конкретный курс
-                    company_id: String(c.id || "")// (опционально) фильтр по компании
-                  });
+                  setHash("/courses", { open: String(x.id) });
                 }}, t("clients_open"))
               )
           )))
@@ -9253,7 +9829,8 @@ App.renderClients = async function(host, routeId){
       );
 
       const body = el("div",{class:"vcol gap12"}, head,
-        (c.type==="company" ? el("div",{class:"cliCardGrid"}, projectsBox, leadsBox) : null)
+        (c.type==="company" ? el("div",{class:"cliCardGrid"}, projectsBox, leadsBox) : null),
+        (c.type==="lead" ? leadsBox : null)
       );
 
       Modal.open(t("clients_open"), body, [

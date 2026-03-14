@@ -47,6 +47,10 @@ const GOOGLE_CALENDAR_ID_FALLBACK = "859cd788ddbe1d64654e924ec6ccc54a43ea7c9d899
 const CALL_PERIOD_DAYS = [7, 14, 30, 60, 90, 180, 365];
 const MZ_API_DOMAIN = "gekto.moizvonki.ru";
 const MZ_USER_NAME = "avazbekulugbekovi4@gmail.com";
+const CASH_MOVEMENT_TYPES = ["income", "expense"];
+const CASH_STATUSES = ["draft", "confirmed", "canceled"];
+const PAYMENT_METHOD_CURRENCY_MODES = ["ANY", "USD", "UZS"];
+const DEFAULT_USD_RATE = 12135;
 let _googleTokenCache = { accessToken: "", expAtSec: 0, source: "" };
 const CHAT_CALLS_LOOKBACK_DAYS = 3650; // show максимально полную историю звонков в чате
 
@@ -909,14 +913,28 @@ async function buildTelegramKursReport(env, courseOffset = 0) {
 }
 
 async function buildTelegramKursPayReport(env) {
+  await ensureCashSchema(env);
   const rows = await env.DB.prepare(
     `SELECT
        ct.id,
        ct.name,
-       COALESCE(SUM(CASE WHEN cl.is_active=1 AND COALESCE(cl.paid_amount, 0) > 100 THEN 1 ELSE 0 END), 0) AS paid_leads_count,
-       COALESCE(SUM(CASE WHEN cl.is_active=1 AND COALESCE(cl.paid_amount, 0) > 100 THEN COALESCE(cl.paid_amount, 0) ELSE 0 END), 0) AS total_paid_amount
+       COALESCE(SUM(CASE WHEN COALESCE(stats.net_total_uzs, 0) > 100 THEN 1 ELSE 0 END), 0) AS paid_leads_count,
+       COALESCE(SUM(COALESCE(stats.net_total_uzs, 0)), 0) AS total_paid_amount_uzs
      FROM course_types ct
-     LEFT JOIN course_leads cl ON cl.course_type_id = ct.id
+     LEFT JOIN (
+       SELECT
+         cl.id,
+         cl.course_type_id,
+         COALESCE(SUM(CASE WHEN txn.movement_type='income' THEN ${cashSqlAmountUzs("txn")} ELSE 0 END), 0) -
+         COALESCE(SUM(CASE WHEN txn.movement_type='expense' THEN ${cashSqlAmountUzs("txn")} ELSE 0 END), 0) AS net_total_uzs
+       FROM course_leads cl
+       LEFT JOIN cash_transactions txn
+         ON txn.status='confirmed'
+        AND txn.object_type='course'
+        AND txn.object_id=cl.id
+       WHERE cl.is_active=1
+       GROUP BY cl.id, cl.course_type_id
+     ) stats ON stats.course_type_id = ct.id
      WHERE ct.is_active=1
      GROUP BY ct.id, ct.name, COALESCE(ct.sort, 1000)
      ORDER BY COALESCE(ct.sort, 1000) ASC, ct.id ASC`
@@ -930,8 +948,8 @@ async function buildTelegramKursPayReport(env) {
   const lines = items.map((row) => {
     const name = String(row.name || `#${row.id}`);
     const count = Number(row.paid_leads_count || 0);
-    const total = formatTelegramMoney(row.total_paid_amount || 0);
-    return `${name} - ${count} - ${total}`;
+    const total = formatTelegramMoney(row.total_paid_amount_uzs || 0);
+    return `${name} - ${count} - ${total} UZS`;
   });
 
   return { text: lines.join("\n"), parseMode: null };
@@ -1648,6 +1666,348 @@ async function ensurePaidRequiredForCourseStatus(bodyStatus, paidAmount) {
   return null;
 }
 
+function normalizePaymentMethodCurrencyMode(v) {
+  const s = String(v || "ANY").trim().toUpperCase();
+  return PAYMENT_METHOD_CURRENCY_MODES.includes(s) ? s : "ANY";
+}
+
+function cashAmountToUzs(amount, currency, rate) {
+  const n = Number(amount || 0);
+  if (!Number.isFinite(n)) return 0;
+  const cur = String(currency || "UZS").trim().toUpperCase();
+  if (cur === "USD") {
+    const r = Number(rate || 0);
+    const safeRate = Number.isFinite(r) && r > 0 ? r : DEFAULT_USD_RATE;
+    return n * safeRate;
+  }
+  return n;
+}
+
+function cashSqlAmountUzs(alias = "ct") {
+  return `CASE
+    WHEN UPPER(COALESCE(${alias}.currency, 'UZS'))='USD'
+      THEN COALESCE(${alias}.amount, 0) * CASE WHEN COALESCE(${alias}.rate, 0) > 0 THEN ${alias}.rate ELSE ${DEFAULT_USD_RATE} END
+    ELSE COALESCE(${alias}.amount, 0)
+  END`;
+}
+
+function isCashRole(user) {
+  return !!user && (user.role === "admin" || user.role === "rop" || user.role === "sale");
+}
+
+function canViewCashByAuthor(user, authorId, authorRole) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (user.role === "rop") return authorRole === "rop" || authorRole === "sale" || Number(authorId) === Number(user.id);
+  if (user.role === "sale") return Number(authorId) === Number(user.id) || authorRole === "rop";
+  return false;
+}
+
+function canEditCashRow(user, row) {
+  if (!user || !row) return false;
+  if (user.role === "admin") return true;
+  if (!(user.role === "rop" || user.role === "sale")) return false;
+  if (Number(row.created_by) !== Number(user.id)) return false;
+  return String(row.status || "") !== "confirmed";
+}
+
+function canToggleCashRow(user, row) {
+  if (!user || !row) return false;
+  if (user.role === "admin") return true;
+  if (!(user.role === "rop" || user.role === "sale")) return false;
+  if (Number(row.created_by) !== Number(user.id)) return false;
+  return String(row.status || "") !== "confirmed";
+}
+
+let _cashSchemaReady = false;
+async function ensureCashSchema(env) {
+  if (_cashSchemaReady) return;
+  await env.DB.batch([
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS dict_cash_income_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name_ru TEXT NOT NULL,
+        name_uz TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        sort INTEGER NOT NULL DEFAULT 1000,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+        updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+      )`
+    ),
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS dict_cash_expense_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name_ru TEXT NOT NULL,
+        name_uz TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        sort INTEGER NOT NULL DEFAULT 1000,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+        updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+      )`
+    ),
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS dict_payment_methods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name_ru TEXT NOT NULL,
+        name_uz TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        currency_mode TEXT NOT NULL DEFAULT 'ANY' CHECK (currency_mode IN ('ANY','USD','UZS')),
+        sort INTEGER NOT NULL DEFAULT 1000,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+        updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER))
+      )`
+    ),
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS cash_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        movement_type TEXT NOT NULL CHECK (movement_type IN ('income','expense')),
+        category_id INTEGER,
+        counterparty_client_id INTEGER,
+        object_type TEXT CHECK (object_type IS NULL OR object_type IN ('course','project')),
+        object_id INTEGER,
+        payment_method_id INTEGER,
+        currency TEXT NOT NULL DEFAULT 'UZS',
+        rate REAL NOT NULL DEFAULT 1,
+        amount REAL NOT NULL DEFAULT 0,
+        comment TEXT,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','confirmed','canceled')),
+        created_by INTEGER NOT NULL,
+        confirmed_by INTEGER,
+        confirmed_at INTEGER,
+        canceled_by INTEGER,
+        canceled_at INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+        updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+        FOREIGN KEY (counterparty_client_id) REFERENCES clients(id),
+        FOREIGN KEY (payment_method_id) REFERENCES dict_payment_methods(id),
+        FOREIGN KEY (created_by) REFERENCES users(id),
+        FOREIGN KEY (confirmed_by) REFERENCES users(id),
+        FOREIGN KEY (canceled_by) REFERENCES users(id)
+      )`
+    ),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_created_at ON cash_transactions(created_at DESC, id DESC)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_status ON cash_transactions(status)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_movement ON cash_transactions(movement_type)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_counterparty ON cash_transactions(counterparty_client_id)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_object ON cash_transactions(object_type, object_id)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_author ON cash_transactions(created_by)`),
+    env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_dict_cash_income_categories_updated_at AFTER UPDATE ON dict_cash_income_categories BEGIN UPDATE dict_cash_income_categories SET updated_at = (CAST(strftime('%s','now') AS INTEGER)) WHERE id = NEW.id; END;`),
+    env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_dict_cash_expense_categories_updated_at AFTER UPDATE ON dict_cash_expense_categories BEGIN UPDATE dict_cash_expense_categories SET updated_at = (CAST(strftime('%s','now') AS INTEGER)) WHERE id = NEW.id; END;`),
+    env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_dict_payment_methods_updated_at AFTER UPDATE ON dict_payment_methods BEGIN UPDATE dict_payment_methods SET updated_at = (CAST(strftime('%s','now') AS INTEGER)) WHERE id = NEW.id; END;`),
+    env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_cash_transactions_updated_at AFTER UPDATE ON cash_transactions BEGIN UPDATE cash_transactions SET updated_at = (CAST(strftime('%s','now') AS INTEGER)) WHERE id = NEW.id; END;`),
+  ]);
+  _cashSchemaReady = true;
+}
+
+async function getLatestObjectUsdRate(env, objectType, objectId) {
+  await ensureCashSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT rate
+     FROM cash_transactions
+     WHERE status='confirmed'
+       AND object_type=?
+       AND object_id=?
+       AND UPPER(COALESCE(currency, 'UZS'))='USD'
+       AND COALESCE(rate, 0) > 0
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`
+  )
+    .bind(String(objectType || ""), Number(objectId || 0))
+    .first();
+  const rate = Number(row?.rate || 0);
+  return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_USD_RATE;
+}
+
+async function getCashObjectSummary(env, objectType, objectId) {
+  await ensureCashSchema(env);
+  const safeType = String(objectType || "");
+  const safeId = intId(objectId);
+  if (!safeId || (safeType !== "course" && safeType !== "project")) {
+    return {
+      object_type: safeType || null,
+      object_id: safeId || null,
+      base_amount: 0,
+      base_currency: "UZS",
+      base_rate: 1,
+      base_amount_uzs: 0,
+      income_total_uzs: 0,
+      expense_total_uzs: 0,
+      net_total_uzs: 0,
+      debt_uzs: 0,
+    };
+  }
+
+  let baseAmount = 0;
+  let baseCurrency = "UZS";
+  if (safeType === "course") {
+    const row = await env.DB.prepare(
+      `SELECT agreed_amount, course_price, currency
+       FROM course_leads
+       WHERE id=? AND is_active=1`
+    )
+      .bind(safeId)
+      .first();
+    const agreed = Number(row?.agreed_amount || 0);
+    const price = Number(row?.course_price || 0);
+    baseAmount = Number.isFinite(agreed) && agreed > 0 ? agreed : (Number.isFinite(price) ? price : 0);
+    baseCurrency = String(row?.currency || "UZS");
+  } else {
+    const row = await env.DB.prepare(
+      `SELECT amount, currency
+       FROM projects
+       WHERE id=? AND is_active=1`
+    )
+      .bind(safeId)
+      .first();
+    baseAmount = Number(row?.amount || 0);
+    baseCurrency = String(row?.currency || "UZS");
+  }
+
+  const baseRate = String(baseCurrency || "UZS").toUpperCase() === "USD"
+    ? await getLatestObjectUsdRate(env, safeType, safeId)
+    : 1;
+  const baseAmountUzs = cashAmountToUzs(baseAmount, baseCurrency, baseRate);
+
+  const totals = await env.DB.prepare(
+    `SELECT
+       COALESCE(SUM(CASE WHEN movement_type='income' THEN ${cashSqlAmountUzs("ct")} ELSE 0 END), 0) AS income_total_uzs,
+       COALESCE(SUM(CASE WHEN movement_type='expense' THEN ${cashSqlAmountUzs("ct")} ELSE 0 END), 0) AS expense_total_uzs
+     FROM cash_transactions ct
+     WHERE ct.status='confirmed'
+       AND ct.object_type=?
+       AND ct.object_id=?`
+  )
+    .bind(safeType, safeId)
+    .first();
+
+  const incomeTotalUzs = Number(totals?.income_total_uzs || 0);
+  const expenseTotalUzs = Number(totals?.expense_total_uzs || 0);
+  const netTotalUzs = incomeTotalUzs - expenseTotalUzs;
+
+  return {
+    object_type: safeType,
+    object_id: safeId,
+    base_amount: baseAmount,
+    base_currency: baseCurrency,
+    base_rate: baseRate,
+    base_amount_uzs: baseAmountUzs,
+    income_total_uzs: incomeTotalUzs,
+    expense_total_uzs: expenseTotalUzs,
+    net_total_uzs: netTotalUzs,
+    debt_uzs: baseAmountUzs - netTotalUzs,
+  };
+}
+
+function cashDetailSelectSql(whereSql = "") {
+  return `
+    SELECT
+      ct.*,
+      au.full_name AS created_by_name,
+      au.role AS created_by_role,
+      cu.full_name AS confirmed_by_name,
+      cc.full_name AS canceled_by_name,
+      clt.type AS counterparty_type,
+      clt.company_name AS counterparty_company_name,
+      clt.full_name AS counterparty_full_name,
+      pm.name_ru AS payment_method_name_ru,
+      pm.name_uz AS payment_method_name_uz,
+      pm.name_en AS payment_method_name_en,
+      pm.currency_mode AS payment_method_currency_mode,
+      ic.name_ru AS income_category_name_ru,
+      ic.name_uz AS income_category_name_uz,
+      ic.name_en AS income_category_name_en,
+      ec.name_ru AS expense_category_name_ru,
+      ec.name_uz AS expense_category_name_uz,
+      ec.name_en AS expense_category_name_en,
+      p.client_id AS project_client_id,
+      p.service_type_id AS project_service_type_id,
+      p.amount AS project_amount,
+      p.currency AS project_currency,
+      st.name_ru AS project_service_name_ru,
+      st.name_uz AS project_service_name_uz,
+      st.name_en AS project_service_name_en,
+      cl.id AS course_lead_id,
+      cl.lead_client_id AS course_lead_client_id,
+      cl.company_id AS course_company_id,
+      cl.course_type_id AS course_type_id,
+      cl.status AS course_status,
+      cl.agreed_amount AS course_agreed_amount,
+      cl.course_price AS course_price,
+      cl.currency AS course_currency,
+      ctype.name AS course_type_name
+    FROM cash_transactions ct
+    JOIN users au ON au.id = ct.created_by
+    LEFT JOIN users cu ON cu.id = ct.confirmed_by
+    LEFT JOIN users cc ON cc.id = ct.canceled_by
+    LEFT JOIN clients clt ON clt.id = ct.counterparty_client_id
+    LEFT JOIN dict_payment_methods pm ON pm.id = ct.payment_method_id
+    LEFT JOIN dict_cash_income_categories ic ON ic.id = ct.category_id AND ct.movement_type='income'
+    LEFT JOIN dict_cash_expense_categories ec ON ec.id = ct.category_id AND ct.movement_type='expense'
+    LEFT JOIN projects p ON ct.object_type='project' AND p.id = ct.object_id
+    LEFT JOIN service_types st ON st.id = p.service_type_id
+    LEFT JOIN course_leads cl ON ct.object_type='course' AND cl.id = ct.object_id
+    LEFT JOIN course_types ctype ON ctype.id = cl.course_type_id
+    ${whereSql}
+  `;
+}
+
+function cashObjectTotalUzsSql(objectType, idExpr, movementType = "") {
+  const moveSql = movementType ? ` AND ct.movement_type='${String(movementType)}'` : "";
+  return `(SELECT COALESCE(SUM(${cashSqlAmountUzs("ct")}), 0)
+    FROM cash_transactions ct
+    WHERE ct.status='confirmed'
+      AND ct.object_type='${String(objectType)}'
+      AND ct.object_id=${idExpr}${moveSql})`;
+}
+
+function courseBaseAmountSql(alias = "cl") {
+  return `CASE
+    WHEN COALESCE(${alias}.agreed_amount, 0) > 0 THEN COALESCE(${alias}.agreed_amount, 0)
+    ELSE COALESCE(${alias}.course_price, 0)
+  END`;
+}
+
+function courseBaseAmountUzsSql(alias = "cl") {
+  return `CASE
+    WHEN UPPER(COALESCE(${alias}.currency, 'UZS'))='USD'
+      THEN (${courseBaseAmountSql(alias)}) * COALESCE(
+        (SELECT ct.rate
+         FROM cash_transactions ct
+         WHERE ct.status='confirmed'
+           AND ct.object_type='course'
+           AND ct.object_id=${alias}.id
+           AND UPPER(COALESCE(ct.currency, 'UZS'))='USD'
+           AND COALESCE(ct.rate, 0) > 0
+         ORDER BY ct.created_at DESC, ct.id DESC
+         LIMIT 1),
+        ${DEFAULT_USD_RATE}
+      )
+    ELSE ${courseBaseAmountSql(alias)}
+  END`;
+}
+
+function projectBaseAmountUzsSql(alias = "p") {
+  return `CASE
+    WHEN UPPER(COALESCE(${alias}.currency, 'UZS'))='USD'
+      THEN COALESCE(${alias}.amount, 0) * COALESCE(
+        (SELECT ct.rate
+         FROM cash_transactions ct
+         WHERE ct.status='confirmed'
+           AND ct.object_type='project'
+           AND ct.object_id=${alias}.id
+           AND UPPER(COALESCE(ct.currency, 'UZS'))='USD'
+           AND COALESCE(ct.rate, 0) > 0
+         ORDER BY ct.created_at DESC, ct.id DESC
+         LIMIT 1),
+        ${DEFAULT_USD_RATE}
+      )
+    ELSE COALESCE(${alias}.amount, 0)
+  END`;
+}
+
 async function withCourseLeadsCheckCompat(env, fn) {
   let pragmaApplied = false;
   try {
@@ -2197,11 +2557,20 @@ async function queryTasksKanban(env, user, filters) {
 
 async function queryProjectsKanban(env, user, filters) {
   // filters: pm_user_id, service_type_id
+  await ensureCashSchema(env);
   const ts = nowSec();
+  const incomeSql = cashObjectTotalUzsSql("project", "p.id", "income");
+  const expenseSql = cashObjectTotalUzsSql("project", "p.id", "expense");
+  const netSql = `(${incomeSql} - ${expenseSql})`;
+  const debtSql = `(${projectBaseAmountUzsSql("p")} - ${netSql})`;
   let sql = `
     SELECT
       p.id, p.client_id, p.service_type_id, p.meeting_at, p.deadline_at,
       p.amount, p.currency, p.pm_user_id, p.status, p.review, p.comment, p.cancel_reason,
+      ${incomeSql} AS cash_income_total_uzs,
+      ${expenseSql} AS cash_expense_total_uzs,
+      ${netSql} AS cash_net_total_uzs,
+      ${debtSql} AS cash_debt_uzs,
       p.is_active, p.created_by, p.created_at, p.updated_at,
 
       c.company_name,
@@ -2286,12 +2655,22 @@ async function queryProjectsKanban(env, user, filters) {
 async function queryCourseLeadsKanban(env, user, filters) {
   // accessible for admin/rop/sale
   if (!(user.role === "admin" || user.role === "rop" || user.role === "sale")) return [];
+  await ensureCashSchema(env);
+
+  const incomeSql = cashObjectTotalUzsSql("course", "cl.id", "income");
+  const expenseSql = cashObjectTotalUzsSql("course", "cl.id", "expense");
+  const netSql = `(${incomeSql} - ${expenseSql})`;
+  const debtSql = `(${courseBaseAmountUzsSql("cl")} - ${netSql})`;
 
   let sql = `
     SELECT
       cl.id, cl.lead_client_id, cl.company_id, cl.course_type_id,
       cl.course_price, cl.course_start_date, cl.currency,
       cl.agreed_amount, cl.paid_amount, cl.status, cl.comment, cl.cancel_reason,
+      ${incomeSql} AS cash_income_total_uzs,
+      ${expenseSql} AS cash_expense_total_uzs,
+      ${netSql} AS cash_net_total_uzs,
+      ${debtSql} AS cash_debt_uzs,
       cl.is_active, cl.created_by, cl.created_at, cl.updated_at,
 
       lead.full_name AS lead_full_name,
@@ -2416,6 +2795,7 @@ async function queryClients(env, user, type, q) {
 
 async function getClientCard(env, user, clientId) {
   if (user.role === "fin") return null;
+  await ensureCashSchema(env);
 
   const client = await env.DB.prepare(
     `SELECT
@@ -2437,13 +2817,24 @@ async function getClientCard(env, user, clientId) {
 
   if (client.type === "company") {
     // lists inside company card: course leads + projects
+    const incomeSql = cashObjectTotalUzsSql("course", "cl.id", "income");
+    const expenseSql = cashObjectTotalUzsSql("course", "cl.id", "expense");
+    const netSql = `(${incomeSql} - ${expenseSql})`;
+    const debtSql = `(${courseBaseAmountUzsSql("cl")} - ${netSql})`;
     const courseLeads = await env.DB.prepare(
       `SELECT cl.id, cl.status, cl.agreed_amount, cl.paid_amount,
+              cl.course_type_id, cl.currency, cl.course_price,
+              ${incomeSql} AS cash_income_total_uzs,
+              ${expenseSql} AS cash_expense_total_uzs,
+              ${netSql} AS cash_net_total_uzs,
+              ${debtSql} AS cash_debt_uzs,
               ct.name AS course_type_name,
-              lead.full_name AS lead_full_name
+              lead.full_name AS lead_full_name,
+              comp.company_name AS company_name
        FROM course_leads cl
        JOIN course_types ct ON ct.id = cl.course_type_id
        JOIN clients lead ON lead.id = cl.lead_client_id
+       LEFT JOIN clients comp ON comp.id = cl.company_id
        WHERE cl.is_active=1 AND cl.company_id = ?
        ORDER BY cl.updated_at DESC LIMIT 200`
     )
@@ -2453,6 +2844,10 @@ async function getClientCard(env, user, clientId) {
     const projects = await env.DB.prepare(
       `SELECT p.id, p.status, p.pm_user_id, u.full_name AS pm_name,
               p.amount, p.currency,
+              ${cashObjectTotalUzsSql("project", "p.id", "income")} AS cash_income_total_uzs,
+              ${cashObjectTotalUzsSql("project", "p.id", "expense")} AS cash_expense_total_uzs,
+              (${cashObjectTotalUzsSql("project", "p.id", "income")} - ${cashObjectTotalUzsSql("project", "p.id", "expense")}) AS cash_net_total_uzs,
+              (${projectBaseAmountUzsSql("p")} - (${cashObjectTotalUzsSql("project", "p.id", "income")} - ${cashObjectTotalUzsSql("project", "p.id", "expense")})) AS cash_debt_uzs,
               st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en
        FROM projects p
        JOIN users u ON u.id = p.pm_user_id
@@ -2487,17 +2882,59 @@ async function getClientCard(env, user, clientId) {
     data.projects = projRows;
   }
 
+  if (client.type === "lead") {
+    const incomeSql = cashObjectTotalUzsSql("course", "cl.id", "income");
+    const expenseSql = cashObjectTotalUzsSql("course", "cl.id", "expense");
+    const netSql = `(${incomeSql} - ${expenseSql})`;
+    const debtSql = `(${courseBaseAmountUzsSql("cl")} - ${netSql})`;
+    const courseLeads = await env.DB.prepare(
+      `SELECT cl.id, cl.status, cl.agreed_amount, cl.paid_amount,
+              cl.course_type_id, cl.currency, cl.course_price,
+              ${incomeSql} AS cash_income_total_uzs,
+              ${expenseSql} AS cash_expense_total_uzs,
+              ${netSql} AS cash_net_total_uzs,
+              ${debtSql} AS cash_debt_uzs,
+              ct.name AS course_type_name,
+              comp.company_name AS company_name
+       FROM course_leads cl
+       JOIN course_types ct ON ct.id = cl.course_type_id
+       LEFT JOIN clients comp ON comp.id = cl.company_id
+       WHERE cl.is_active=1 AND cl.lead_client_id = ?
+       ORDER BY cl.updated_at DESC LIMIT 200`
+    )
+      .bind(clientId)
+      .all();
+
+    let clRows = courseLeads.results || [];
+    if (!courseAmountVisible(user)) {
+      clRows = clRows.map((r) => {
+        const copy = { ...r };
+        delete copy.agreed_amount;
+        delete copy.paid_amount;
+        delete copy.currency;
+        delete copy.course_price;
+        return copy;
+      });
+    }
+
+    data.course_leads = clRows;
+  }
+
   return data;
 }
 
 async function listSettingsAll(env) {
-  const [theme, cities, spheres, sources, courseTypes, serviceTypes] = await Promise.all([
+  await ensureCashSchema(env);
+  const [theme, cities, spheres, sources, courseTypes, serviceTypes, cashIncomeCategories, cashExpenseCategories, paymentMethods] = await Promise.all([
     env.DB.prepare(`SELECT key, value_json, updated_at FROM app_settings WHERE key='theme'`).first(),
     env.DB.prepare(`SELECT * FROM dict_cities WHERE is_active=1 ORDER BY sort, id DESC`).all(),
     env.DB.prepare(`SELECT * FROM dict_spheres WHERE is_active=1 ORDER BY sort, id DESC`).all(),
     env.DB.prepare(`SELECT * FROM dict_sources WHERE is_active=1 ORDER BY sort, id DESC`).all(),
     env.DB.prepare(`SELECT * FROM course_types WHERE is_active=1 ORDER BY sort, id DESC`).all(),
     env.DB.prepare(`SELECT * FROM service_types WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM dict_cash_income_categories WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM dict_cash_expense_categories WHERE is_active=1 ORDER BY sort, id DESC`).all(),
+    env.DB.prepare(`SELECT * FROM dict_payment_methods WHERE is_active=1 ORDER BY sort, id DESC`).all(),
   ]);
 
   return {
@@ -2507,6 +2944,9 @@ async function listSettingsAll(env) {
     dict_sources: sources.results || [],
     course_types: courseTypes.results || [],
     service_types: serviceTypes.results || [],
+    cash_income_categories: cashIncomeCategories.results || [],
+    cash_expense_categories: cashExpenseCategories.results || [],
+    payment_methods: paymentMethods.results || [],
   };
 }
 
@@ -2784,7 +3224,7 @@ async function handleSettings(env, user, request, origin, segments) {
   }
 
   // dict CRUD helper
-  async function dictCrud(table, is3lang) {
+  async function dictCrud(table, mode = "3lang") {
     if (method !== "GET" && !isAdmin) return forbidden("Only admin");
     const id = segments[3] ? intId(segments[3]) : null;
     const body = await readJson(request);
@@ -2796,7 +3236,7 @@ async function handleSettings(env, user, request, origin, segments) {
 
     if (method === "POST" && !id) {
       if (!body) return badRequest("Expected JSON");
-      if (is3lang) {
+      if (mode === "3lang") {
         const miss = requireFields(body, ["name_ru", "name_uz", "name_en"]);
         if (miss) return badRequest(`Missing: ${miss}`);
         const sort = body.sort == null ? 1000 : Number(body.sort);
@@ -2804,6 +3244,22 @@ async function handleSettings(env, user, request, origin, segments) {
           `INSERT INTO ${table}(name_ru,name_uz,name_en,sort,is_active) VALUES(?,?,?,?,1)`
         )
           .bind(String(body.name_ru).trim(), String(body.name_uz).trim(), String(body.name_en).trim(), sort)
+          .run();
+      } else if (mode === "payment_method") {
+        const miss = requireFields(body, ["name_ru", "name_uz", "name_en"]);
+        if (miss) return badRequest(`Missing: ${miss}`);
+        const sort = body.sort == null ? 1000 : Number(body.sort);
+        const currency_mode = normalizePaymentMethodCurrencyMode(body.currency_mode);
+        await env.DB.prepare(
+          `INSERT INTO ${table}(name_ru,name_uz,name_en,currency_mode,sort,is_active) VALUES(?,?,?,?,?,1)`
+        )
+          .bind(
+            String(body.name_ru).trim(),
+            String(body.name_uz).trim(),
+            String(body.name_en).trim(),
+            currency_mode,
+            sort
+          )
           .run();
       } else {
         // course_types: name, start_date, price, currency, sort
@@ -2827,7 +3283,7 @@ async function handleSettings(env, user, request, origin, segments) {
     if (method === "PUT") {
       if (!isAdmin) return forbidden("Only admin");
       if (!body) return badRequest("Expected JSON");
-      if (is3lang) {
+      if (mode === "3lang") {
         const allowed = pick(body, ["name_ru", "name_uz", "name_en", "sort", "is_active"]);
         const keys = Object.keys(allowed);
         if (!keys.length) return badRequest("No fields");
@@ -2835,6 +3291,23 @@ async function handleSettings(env, user, request, origin, segments) {
         const binds = keys.map((k) => {
           const v = allowed[k];
           if (k.startsWith("name_")) return v == null ? null : String(v).trim();
+          if (k === "sort") return v == null ? 1000 : Number(v);
+          if (k === "is_active") return Number(v) ? 1 : 0;
+          return v;
+        });
+        await env.DB.prepare(`UPDATE ${table} SET ${set} WHERE id=?`).bind(...binds, id).run();
+      } else if (mode === "payment_method") {
+        const allowed = pick(body, ["name_ru", "name_uz", "name_en", "currency_mode", "sort", "is_active"]);
+        if (allowed.currency_mode !== undefined) {
+          allowed.currency_mode = normalizePaymentMethodCurrencyMode(allowed.currency_mode);
+        }
+        const keys = Object.keys(allowed);
+        if (!keys.length) return badRequest("No fields");
+        const set = keys.map((k) => `${k}=?`).join(",");
+        const binds = keys.map((k) => {
+          const v = allowed[k];
+          if (k.startsWith("name_")) return v == null ? null : String(v).trim();
+          if (k === "currency_mode") return normalizePaymentMethodCurrencyMode(v);
           if (k === "sort") return v == null ? 1000 : Number(v);
           if (k === "is_active") return Number(v) ? 1 : 0;
           return v;
@@ -2874,11 +3347,23 @@ async function handleSettings(env, user, request, origin, segments) {
   // /api/settings/sources
   // /api/settings/service_types
   // /api/settings/course_types
-  if (segments[2] === "cities") return dictCrud("dict_cities", true);
-  if (segments[2] === "spheres") return dictCrud("dict_spheres", true);
-  if (segments[2] === "sources") return dictCrud("dict_sources", true);
-  if (segments[2] === "service_types") return dictCrud("service_types", true);
-  if (segments[2] === "course_types") return dictCrud("course_types", false);
+  if (segments[2] === "cities") return dictCrud("dict_cities", "3lang");
+  if (segments[2] === "spheres") return dictCrud("dict_spheres", "3lang");
+  if (segments[2] === "sources") return dictCrud("dict_sources", "3lang");
+  if (segments[2] === "service_types") return dictCrud("service_types", "3lang");
+  if (segments[2] === "course_types") return dictCrud("course_types", "course_type");
+  if (segments[2] === "cash_income_categories") {
+    await ensureCashSchema(env);
+    return dictCrud("dict_cash_income_categories", "3lang");
+  }
+  if (segments[2] === "cash_expense_categories") {
+    await ensureCashSchema(env);
+    return dictCrud("dict_cash_expense_categories", "3lang");
+  }
+  if (segments[2] === "payment_methods") {
+    await ensureCashSchema(env);
+    return dictCrud("dict_payment_methods", "payment_method");
+  }
 
   return notFound();
 }
@@ -3119,8 +3604,10 @@ async function handleTasks(env, user, request, origin, segments) {
 async function handleCourseLeadChat(env, user, request, origin, leadId, segments) {
   if (!isCourseChatRole(user)) return forbidden("No access");
 
-  const leadRow = await env.DB.prepare(`SELECT id FROM course_leads WHERE id=? AND is_active=1`).bind(leadId).first();
+  const leadRow = await env.DB.prepare(`SELECT id, lead_client_id FROM course_leads WHERE id=? AND is_active=1`).bind(leadId).first();
   if (!leadRow) return notFound("course_lead_not_found");
+  const leadClientId = Number(leadRow.lead_client_id || 0);
+  if (!(leadClientId > 0)) return notFound("lead_client_not_found");
 
   const method = request.method;
   const sub = segments[4] || "";
@@ -3144,10 +3631,16 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
 
     const totalRow = await env.DB.prepare(
       `SELECT
-         (SELECT COUNT(*) FROM lead_chat_messages m WHERE m.lead_id=? AND m.is_active=1) +
-         (SELECT COUNT(*) FROM lead_chat_task_links l WHERE l.lead_id=? AND l.is_active=1) AS total`
+         (SELECT COUNT(*)
+          FROM lead_chat_messages m
+          JOIN course_leads cl ON cl.id=m.lead_id
+          WHERE cl.is_active=1 AND cl.lead_client_id=? AND m.is_active=1) +
+         (SELECT COUNT(*)
+          FROM lead_chat_task_links l
+          JOIN course_leads cl ON cl.id=l.lead_id
+          WHERE cl.is_active=1 AND cl.lead_client_id=? AND l.is_active=1) AS total`
     )
-      .bind(leadId, leadId)
+      .bind(leadClientId, leadClientId)
       .first();
 
     const total = Number(totalRow?.total || 0);
@@ -3162,14 +3655,17 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
            'message' AS item_type,
            m.id AS item_id,
            m.created_at AS sort_at,
-           m.created_at,
-           m.user_id,
-           u.full_name AS user_name,
-           u.role AS user_role,
-           m.text,
-           NULL AS task_id,
-           NULL AS task_status,
-           NULL AS task_assignee_user_id,
+         m.created_at,
+         m.user_id,
+         u.full_name AS user_name,
+         u.role AS user_role,
+         m.text,
+         cl.id AS course_lead_id,
+         cl.course_type_id AS course_type_id,
+         ct.name AS course_type_name,
+         NULL AS task_id,
+         NULL AS task_status,
+         NULL AS task_assignee_user_id,
            NULL AS task_assignee_name,
            NULL AS task_deadline_at,
            NULL AS task_cancel_reason,
@@ -3177,7 +3673,9 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
            NULL AS task_description
          FROM lead_chat_messages m
          JOIN users u ON u.id=m.user_id
-         WHERE m.lead_id=? AND m.is_active=1
+         JOIN course_leads cl ON cl.id=m.lead_id AND cl.is_active=1
+         LEFT JOIN course_types ct ON ct.id=cl.course_type_id
+         WHERE cl.lead_client_id=? AND m.is_active=1
 
          UNION ALL
 
@@ -3185,14 +3683,17 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
            'task' AS item_type,
            l.id AS item_id,
            l.created_at AS sort_at,
-           l.created_at,
-           l.created_by AS user_id,
-           cu.full_name AS user_name,
-           cu.role AS user_role,
-           l.text,
-           l.task_id,
-           t.status AS task_status,
-           t.assignee_user_id AS task_assignee_user_id,
+         l.created_at,
+         l.created_by AS user_id,
+         cu.full_name AS user_name,
+         cu.role AS user_role,
+         l.text,
+         cl.id AS course_lead_id,
+         cl.course_type_id AS course_type_id,
+         ct.name AS course_type_name,
+         l.task_id,
+         t.status AS task_status,
+         t.assignee_user_id AS task_assignee_user_id,
            au.full_name AS task_assignee_name,
            t.deadline_at AS task_deadline_at,
            t.cancel_reason AS task_cancel_reason,
@@ -3202,12 +3703,14 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
          JOIN tasks t ON t.id=l.task_id AND t.is_active=1
          JOIN users cu ON cu.id=l.created_by
          JOIN users au ON au.id=t.assignee_user_id
-         WHERE l.lead_id=? AND l.is_active=1
+         JOIN course_leads cl ON cl.id=l.lead_id AND cl.is_active=1
+         LEFT JOIN course_types ct ON ct.id=cl.course_type_id
+         WHERE cl.lead_client_id=? AND l.is_active=1
        ) q
        ORDER BY q.sort_at DESC, q.item_id DESC
        LIMIT ? OFFSET ?`
     )
-      .bind(leadId, leadId, pageSize, offset)
+      .bind(leadClientId, leadClientId, pageSize, offset)
       .all();
 
     const pinnedRes = await env.DB.prepare(
@@ -3221,18 +3724,23 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
          t.cancel_reason AS task_cancel_reason,
          t.assignee_user_id AS task_assignee_user_id,
          au.full_name AS task_assignee_name,
+         cl.id AS course_lead_id,
+         cl.course_type_id AS course_type_id,
+         ct.name AS course_type_name,
          t.title AS task_title,
          t.description AS task_description
        FROM lead_chat_task_links l
        JOIN tasks t ON t.id=l.task_id AND t.is_active=1
        JOIN users au ON au.id=t.assignee_user_id
-       WHERE l.lead_id=? AND l.is_active=1 AND t.status NOT IN ('done','canceled')
+       JOIN course_leads cl ON cl.id=l.lead_id AND cl.is_active=1
+       LEFT JOIN course_types ct ON ct.id=cl.course_type_id
+       WHERE cl.lead_client_id=? AND l.is_active=1 AND t.status NOT IN ('done','canceled')
        ORDER BY
          CASE WHEN t.deadline_at IS NULL THEN 1 ELSE 0 END,
          t.deadline_at ASC,
          l.created_at DESC`
     )
-      .bind(leadId)
+      .bind(leadClientId)
       .all();
 
     let calls = [];
@@ -3241,9 +3749,11 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
         `SELECT lead.phone1, lead.phone2
          FROM course_leads cl
          JOIN clients lead ON lead.id = cl.lead_client_id
-         WHERE cl.id=? AND cl.is_active=1`
+         WHERE cl.lead_client_id=? AND cl.is_active=1
+         ORDER BY cl.id ASC
+         LIMIT 1`
       )
-        .bind(leadId)
+        .bind(leadClientId)
         .first();
 
       const p1 = digitsOnly(leadPhones?.phone1);
@@ -3352,6 +3862,289 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
   return notFound();
 }
 
+async function handleCash(env, user, request, origin, segments) {
+  if (!isCashRole(user)) return forbidden("No access");
+  await ensureCashSchema(env);
+
+  const method = String(request.method || "GET").toUpperCase();
+  const special = String(segments[2] || "");
+  const id = intId(segments[2]);
+
+  const normalizeCashPayload = async (body, existingRow = null) => {
+    const movement_type = body.movement_type !== undefined
+      ? String(body.movement_type || "").trim().toLowerCase()
+      : String(existingRow?.movement_type || "").trim().toLowerCase();
+    if (!CASH_MOVEMENT_TYPES.includes(movement_type)) return { error: "movement_type_invalid" };
+
+    const category_id = body.category_id !== undefined
+      ? intId(body.category_id)
+      : (existingRow?.category_id ? intId(existingRow.category_id) : null);
+    if (!category_id) return { error: "category_id_required" };
+
+    const categoryTable = movement_type === "income" ? "dict_cash_income_categories" : "dict_cash_expense_categories";
+    const categoryRow = await env.DB.prepare(`SELECT id FROM ${categoryTable} WHERE id=? AND is_active=1`)
+      .bind(category_id)
+      .first();
+    if (!categoryRow) return { error: "category_not_found" };
+
+    const counterparty_client_id = body.counterparty_client_id !== undefined
+      ? (body.counterparty_client_id ? intId(body.counterparty_client_id) : null)
+      : (existingRow?.counterparty_client_id ? intId(existingRow.counterparty_client_id) : null);
+    if (counterparty_client_id) {
+      const counterparty = await env.DB.prepare(`SELECT id, type FROM clients WHERE id=? AND is_active=1`)
+        .bind(counterparty_client_id)
+        .first();
+      if (!counterparty) return { error: "counterparty_not_found" };
+    }
+
+    let object_type = body.object_type !== undefined
+      ? (body.object_type ? String(body.object_type).trim().toLowerCase() : null)
+      : (existingRow?.object_type ? String(existingRow.object_type).trim().toLowerCase() : null);
+    let object_id = body.object_id !== undefined
+      ? (body.object_id ? intId(body.object_id) : null)
+      : (existingRow?.object_id ? intId(existingRow.object_id) : null);
+
+    if (object_type && object_type !== "course" && object_type !== "project") return { error: "object_type_invalid" };
+    if (!object_type) object_id = null;
+    if (object_type && !object_id) return { error: "object_id_required" };
+
+    if (object_type === "course") {
+      const course = await env.DB.prepare(
+        `SELECT id, lead_client_id, company_id
+         FROM course_leads
+         WHERE id=? AND is_active=1`
+      )
+        .bind(object_id)
+        .first();
+      if (!course) return { error: "course_not_found" };
+      if (counterparty_client_id) {
+        const linked = Number(course.lead_client_id) === Number(counterparty_client_id) || Number(course.company_id) === Number(counterparty_client_id);
+        if (!linked) return { error: "course_counterparty_mismatch" };
+      }
+    }
+    if (object_type === "project") {
+      const project = await env.DB.prepare(
+        `SELECT id, client_id
+         FROM projects
+         WHERE id=? AND is_active=1`
+      )
+        .bind(object_id)
+        .first();
+      if (!project) return { error: "project_not_found" };
+      if (counterparty_client_id && Number(project.client_id) !== Number(counterparty_client_id)) {
+        return { error: "project_counterparty_mismatch" };
+      }
+    }
+
+    const payment_method_id = body.payment_method_id !== undefined
+      ? (body.payment_method_id ? intId(body.payment_method_id) : null)
+      : (existingRow?.payment_method_id ? intId(existingRow.payment_method_id) : null);
+    if (!payment_method_id) return { error: "payment_method_id_required" };
+
+    const paymentMethod = await env.DB.prepare(
+      `SELECT id, currency_mode
+       FROM dict_payment_methods
+       WHERE id=? AND is_active=1`
+    )
+      .bind(payment_method_id)
+      .first();
+    if (!paymentMethod) return { error: "payment_method_not_found" };
+
+    let currency = body.currency !== undefined
+      ? String(body.currency || "UZS").trim().toUpperCase()
+      : String(existingRow?.currency || "UZS").trim().toUpperCase();
+    if (paymentMethod.currency_mode === "USD") currency = "USD";
+    if (paymentMethod.currency_mode === "UZS") currency = "UZS";
+    if (!(currency === "UZS" || currency === "USD")) currency = "UZS";
+
+    let rate = body.rate !== undefined ? Number(body.rate) : Number(existingRow?.rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      rate = currency === "USD" ? DEFAULT_USD_RATE : 1;
+    }
+    if (currency === "UZS") rate = 1;
+
+    const amount = body.amount !== undefined ? Number(body.amount) : Number(existingRow?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return { error: "amount_required" };
+
+    const comment = body.comment !== undefined
+      ? (body.comment ? String(body.comment).trim() : null)
+      : (existingRow?.comment ? String(existingRow.comment).trim() : null);
+
+    return {
+      movement_type,
+      category_id,
+      counterparty_client_id,
+      object_type,
+      object_id,
+      payment_method_id,
+      currency,
+      rate,
+      amount,
+      comment,
+    };
+  };
+
+  if (method === "GET" && special === "object_summary") {
+    const url = new URL(request.url);
+    const object_type = String(url.searchParams.get("object_type") || "");
+    const object_id = intId(url.searchParams.get("object_id"));
+    const data = await getCashObjectSummary(env, object_type, object_id);
+    return jsonResp({ ok: true, data }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "GET" && !id) {
+    const url = new URL(request.url);
+    const movement_type = String(url.searchParams.get("movement_type") || "").trim().toLowerCase();
+    const course_type_id = intId(url.searchParams.get("course_type_id"));
+    const date_from = url.searchParams.get("date_from") ? Number(url.searchParams.get("date_from")) : null;
+    const date_to = url.searchParams.get("date_to") ? Number(url.searchParams.get("date_to")) : null;
+
+    let sql = cashDetailSelectSql(`WHERE 1=1`);
+    const binds = [];
+    if (CASH_MOVEMENT_TYPES.includes(movement_type)) {
+      sql += ` AND ct.movement_type=?`;
+      binds.push(movement_type);
+    }
+    if (Number.isFinite(date_from)) {
+      sql += ` AND ct.created_at>=?`;
+      binds.push(Number(date_from));
+    }
+    if (Number.isFinite(date_to)) {
+      sql += ` AND ct.created_at<=?`;
+      binds.push(Number(date_to));
+    }
+    sql += ` ORDER BY ct.created_at DESC, ct.id DESC LIMIT 1500`;
+
+    const rowsRes = await env.DB.prepare(sql).bind(...binds).all();
+    let rows = rowsRes.results || [];
+    rows = rows.filter((row) => canViewCashByAuthor(user, row.created_by, row.created_by_role));
+    if (course_type_id) {
+      rows = rows.filter((row) => Number(row.course_type_id || 0) === Number(course_type_id));
+    }
+    return jsonResp({ ok: true, data: rows }, 200, corsHeaders(env, origin));
+  }
+
+  const body = await readJson(request);
+
+  if (method === "POST" && !id) {
+    if (!body) return badRequest("Expected JSON");
+    const normalized = await normalizeCashPayload(body, null);
+    if (normalized?.error) return badRequest(normalized.error);
+
+    const ts = nowSec();
+    const status = user.role === "admin" && String(body.status || "") === "confirmed" ? "confirmed" : "draft";
+    const confirmed_by = status === "confirmed" ? user.id : null;
+    const confirmed_at = status === "confirmed" ? ts : null;
+
+    const res = await env.DB.prepare(
+      `INSERT INTO cash_transactions(
+         movement_type, category_id, counterparty_client_id, object_type, object_id,
+         payment_method_id, currency, rate, amount, comment, status,
+         created_by, confirmed_by, confirmed_at, created_at, updated_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    )
+      .bind(
+        normalized.movement_type,
+        normalized.category_id,
+        normalized.counterparty_client_id,
+        normalized.object_type,
+        normalized.object_id,
+        normalized.payment_method_id,
+        normalized.currency,
+        normalized.rate,
+        normalized.amount,
+        normalized.comment,
+        status,
+        user.id,
+        confirmed_by,
+        confirmed_at,
+        ts,
+        ts
+      )
+      .run();
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  if (!id) return notFound();
+
+  const existing = await env.DB.prepare(cashDetailSelectSql(`WHERE ct.id=? LIMIT 1`)).bind(id).first();
+  if (!existing) return notFound();
+  if (!canViewCashByAuthor(user, existing.created_by, existing.created_by_role)) return forbidden();
+
+  if (method === "GET") {
+    return jsonResp({ ok: true, data: existing }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "PUT") {
+    if (!body) return badRequest("Expected JSON");
+    if (!canEditCashRow(user, existing)) return forbidden("Cannot edit");
+    const normalized = await normalizeCashPayload(body, existing);
+    if (normalized?.error) return badRequest(normalized.error);
+
+    await env.DB.prepare(
+      `UPDATE cash_transactions
+       SET movement_type=?, category_id=?, counterparty_client_id=?, object_type=?, object_id=?,
+           payment_method_id=?, currency=?, rate=?, amount=?, comment=?
+       WHERE id=?`
+    )
+      .bind(
+        normalized.movement_type,
+        normalized.category_id,
+        normalized.counterparty_client_id,
+        normalized.object_type,
+        normalized.object_id,
+        normalized.payment_method_id,
+        normalized.currency,
+        normalized.rate,
+        normalized.amount,
+        normalized.comment,
+        id
+      )
+      .run();
+
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "POST" && segments[3] === "confirm") {
+    if (user.role !== "admin") return forbidden("Only admin can confirm");
+    const ts = nowSec();
+    await env.DB.prepare(
+      `UPDATE cash_transactions
+       SET status='confirmed', confirmed_by=?, confirmed_at=?, canceled_by=NULL, canceled_at=NULL
+       WHERE id=?`
+    )
+      .bind(user.id, ts, id)
+      .run();
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  if (method === "POST" && segments[3] === "toggle_cancel") {
+    if (!canToggleCashRow(user, existing)) return forbidden("Cannot cancel");
+    const currentStatus = String(existing.status || "");
+    if (currentStatus === "canceled") {
+      await env.DB.prepare(
+        `UPDATE cash_transactions
+         SET status='draft', canceled_by=NULL, canceled_at=NULL, confirmed_by=NULL, confirmed_at=NULL
+         WHERE id=?`
+      )
+        .bind(id)
+        .run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE cash_transactions
+         SET status='canceled', canceled_by=?, canceled_at=?
+         WHERE id=?`
+      )
+        .bind(user.id, nowSec(), id)
+        .run();
+    }
+    return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
+  }
+
+  return notFound();
+}
+
 async function handleCalls(env, user, request, origin) {
   if (!requireRole(user, ["admin", "rop"])) return forbidden("Only admin/rop");
 
@@ -3403,6 +4196,7 @@ async function handleCalls(env, user, request, origin) {
 async function handleProjects(env, user, request, origin, segments) {
   const method = request.method;
   const id = segments[2] ? intId(segments[2]) : null;
+  await ensureCashSchema(env);
 
   // GET /api/projects?pm_user_id=&service_type_id=
   if (method === "GET" && !id) {
@@ -3467,9 +4261,17 @@ async function handleProjects(env, user, request, origin, segments) {
 
   // GET /api/projects/:id
   if (method === "GET") {
+    const incomeSql = cashObjectTotalUzsSql("project", "p.id", "income");
+    const expenseSql = cashObjectTotalUzsSql("project", "p.id", "expense");
+    const netSql = `(${incomeSql} - ${expenseSql})`;
+    const debtSql = `(${projectBaseAmountUzsSql("p")} - ${netSql})`;
     const row = await env.DB.prepare(
       `SELECT
         p.*,
+        ${incomeSql} AS cash_income_total_uzs,
+        ${expenseSql} AS cash_expense_total_uzs,
+        ${netSql} AS cash_net_total_uzs,
+        ${debtSql} AS cash_debt_uzs,
         c.company_name, c.full_name AS owner_full_name, c.phone1 AS owner_phone1, c.phone2 AS owner_phone2,
         st.name_ru AS service_name_ru, st.name_uz AS service_name_uz, st.name_en AS service_name_en,
         u.full_name AS pm_name,
@@ -3619,6 +4421,7 @@ async function handleProjects(env, user, request, origin, segments) {
 async function handleCourseLeads(env, user, request, origin, segments) {
   const method = request.method;
   const id = segments[2] ? intId(segments[2]) : null;
+  await ensureCashSchema(env);
 
   // only admin/rop/sale
   if (!(user.role === "admin" || user.role === "rop" || user.role === "sale")) {
@@ -3677,7 +4480,6 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     if (!ct) return badRequest("course_type_not_found");
 
     const agreed_amount = body.agreed_amount == null ? null : Number(body.agreed_amount);
-    const paid_amount = body.paid_amount == null ? null : Number(body.paid_amount);
     const comment = body.comment ? String(body.comment).trim() : null;
 
     // Create always status = new
@@ -3700,7 +4502,7 @@ async function handleCourseLeads(env, user, request, origin, segments) {
             ct.start_date == null ? null : Number(ct.start_date),
             String(ct.currency || "UZS"),
             agreed_amount,
-            paid_amount,
+            null,
             comment,
             user.id
           )
@@ -3717,9 +4519,17 @@ async function handleCourseLeads(env, user, request, origin, segments) {
 
   // GET /api/course_leads/:id
   if (method === "GET") {
+    const incomeSql = cashObjectTotalUzsSql("course", "cl.id", "income");
+    const expenseSql = cashObjectTotalUzsSql("course", "cl.id", "expense");
+    const netSql = `(${incomeSql} - ${expenseSql})`;
+    const debtSql = `(${courseBaseAmountUzsSql("cl")} - ${netSql})`;
     const row = await env.DB.prepare(
       `SELECT
         cl.*,
+        ${incomeSql} AS cash_income_total_uzs,
+        ${expenseSql} AS cash_expense_total_uzs,
+        ${netSql} AS cash_net_total_uzs,
+        ${debtSql} AS cash_debt_uzs,
         lead.full_name AS lead_full_name,
         lead.phone1 AS lead_phone1,
         lead.phone2 AS lead_phone2,
@@ -3767,11 +4577,10 @@ async function handleCourseLeads(env, user, request, origin, segments) {
       .first();
     if (!existing) return notFound();
 
-    const allowed = pick(body, ["company_id", "course_type_id", "agreed_amount", "paid_amount", "comment"]);
+    const allowed = pick(body, ["company_id", "course_type_id", "agreed_amount", "comment"]);
     if (allowed.company_id !== undefined) allowed.company_id = allowed.company_id ? intId(allowed.company_id) : null;
     if (allowed.course_type_id !== undefined) allowed.course_type_id = allowed.course_type_id ? intId(allowed.course_type_id) : null;
     if (allowed.agreed_amount !== undefined) allowed.agreed_amount = allowed.agreed_amount == null ? null : Number(allowed.agreed_amount);
-    if (allowed.paid_amount !== undefined) allowed.paid_amount = allowed.paid_amount == null ? null : Number(allowed.paid_amount);
     if (allowed.comment !== undefined) allowed.comment = allowed.comment ? String(allowed.comment).trim() : null;
 
     if (allowed.company_id) {
@@ -3822,7 +4631,69 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
   }
 
-  // POST /api/course_leads/:id/move { status, cancel_reason?, paid_amount? }
+  // POST /api/course_leads/:id/duplicate { course_type_id, agreed_amount?, company_id?, comment? }
+  if (method === "POST" && segments[3] === "duplicate") {
+    if (!body) return badRequest("Expected JSON");
+
+    const existing = await env.DB.prepare(
+      `SELECT id, lead_client_id, company_id, comment
+       FROM course_leads
+       WHERE id=? AND is_active=1`
+    )
+      .bind(id)
+      .first();
+    if (!existing) return notFound();
+
+    const course_type_id = intId(body.course_type_id);
+    if (!course_type_id) return badRequest("course_type_id_required");
+
+    const company_id = body.company_id === undefined
+      ? (existing.company_id ? intId(existing.company_id) : null)
+      : (body.company_id ? intId(body.company_id) : null);
+    const agreed_amount = body.agreed_amount == null ? null : Number(body.agreed_amount);
+    if (body.agreed_amount != null && !Number.isFinite(agreed_amount)) return badRequest("agreed_amount_invalid");
+    const comment = body.comment === undefined
+      ? (existing.comment ? String(existing.comment).trim() : null)
+      : (body.comment ? String(body.comment).trim() : null);
+
+    const ct = await env.DB.prepare(`SELECT id, start_date, price, currency FROM course_types WHERE id=? AND is_active=1`)
+      .bind(course_type_id)
+      .first();
+    if (!ct) return badRequest("course_type_not_found");
+
+    let res = null;
+    try {
+      res = await withCourseLeadsCheckCompat(env, async () =>
+        env.DB.prepare(
+          `INSERT INTO course_leads(
+            lead_client_id, company_id, course_type_id,
+            course_price, course_start_date, currency,
+            agreed_amount, paid_amount,
+            status, comment, is_active, created_by
+          ) VALUES(?,?,?,?,?,?,?,?, 'new', ?, 1, ?)`
+        )
+          .bind(
+            existing.lead_client_id,
+            company_id,
+            course_type_id,
+            Number(ct.price || 0),
+            ct.start_date == null ? null : Number(ct.start_date),
+            String(ct.currency || "UZS"),
+            agreed_amount,
+            null,
+            comment,
+            user.id
+          )
+          .run()
+      );
+    } catch (e) {
+      return badRequest(String(e?.message || "course_lead_duplicate_failed"), "course_lead_duplicate_failed");
+    }
+
+    return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
+  }
+
+  // POST /api/course_leads/:id/move { status, cancel_reason? }
   if (method === "POST" && segments[3] === "move") {
     if (!body) return badRequest("Expected JSON");
     const miss = requireFields(body, ["status"]);
@@ -3833,21 +4704,14 @@ async function handleCourseLeads(env, user, request, origin, segments) {
 
     const cancel_reason = body.cancel_reason ? String(body.cancel_reason).trim() : null;
     if (status === "canceled" && !cancel_reason) return badRequest("cancel_reason_required");
-
-    const paid_amount = body.paid_amount == null ? null : Number(body.paid_amount);
-
-    const paidReq = await ensurePaidRequiredForCourseStatus(status, paid_amount);
-    if (paidReq === "paid_amount_required") return badRequest("paid_amount_required");
-
-    // update status/cancel_reason and keep paid_amount unchanged when omitted
     try {
       await withCourseLeadsCheckCompat(env, async () =>
         env.DB.prepare(
           `UPDATE course_leads
-           SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount)
+           SET status=?, cancel_reason=?
            WHERE id=?`
         )
-          .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
+          .bind(status, status === "canceled" ? cancel_reason : null, id)
           .run()
       );
     } catch (e) {
@@ -4243,6 +5107,11 @@ export default {
     // botchat
     if (apiRoot === "botchat") {
       return withCors(await handleBotChat(env, user, request, origin, segments), env, origin);
+    }
+
+    // cash
+    if (apiRoot === "cash") {
+      return withCors(await handleCash(env, user, request, origin, segments), env, origin);
     }
 
     // calls

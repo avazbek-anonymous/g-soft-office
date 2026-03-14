@@ -34,6 +34,33 @@ BEGIN
   WHERE id = NEW.id;
 END;
 
+CREATE TRIGGER IF NOT EXISTS trg_dict_cash_income_categories_updated_at
+AFTER UPDATE ON dict_cash_income_categories
+WHEN NEW.updated_at = OLD.updated_at
+BEGIN
+  UPDATE dict_cash_income_categories
+  SET updated_at = (CAST(strftime('%s','now') AS INTEGER))
+  WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_dict_cash_expense_categories_updated_at
+AFTER UPDATE ON dict_cash_expense_categories
+WHEN NEW.updated_at = OLD.updated_at
+BEGIN
+  UPDATE dict_cash_expense_categories
+  SET updated_at = (CAST(strftime('%s','now') AS INTEGER))
+  WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_dict_payment_methods_updated_at
+AFTER UPDATE ON dict_payment_methods
+WHEN NEW.updated_at = OLD.updated_at
+BEGIN
+  UPDATE dict_payment_methods
+  SET updated_at = (CAST(strftime('%s','now') AS INTEGER))
+  WHERE id = NEW.id;
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_dict_cities_updated_at
 AFTER UPDATE ON dict_cities
 WHEN NEW.updated_at = OLD.updated_at
@@ -84,6 +111,15 @@ AFTER UPDATE ON tasks
 WHEN NEW.updated_at = OLD.updated_at
 BEGIN
   UPDATE tasks
+  SET updated_at = (CAST(strftime('%s','now') AS INTEGER))
+  WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_cash_transactions_updated_at
+AFTER UPDATE ON cash_transactions
+WHEN NEW.updated_at = OLD.updated_at
+BEGIN
+  UPDATE cash_transactions
   SET updated_at = (CAST(strftime('%s','now') AS INTEGER))
   WHERE id = NEW.id;
 END;

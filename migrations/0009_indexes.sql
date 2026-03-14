@@ -22,6 +22,24 @@ CREATE INDEX IF NOT EXISTS idx_course_leads_lead
 CREATE INDEX IF NOT EXISTS idx_course_leads_status
   ON course_leads(status);
 
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_created_at
+  ON cash_transactions(created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_status
+  ON cash_transactions(status);
+
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_movement
+  ON cash_transactions(movement_type);
+
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_counterparty
+  ON cash_transactions(counterparty_client_id);
+
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_object
+  ON cash_transactions(object_type, object_id);
+
+CREATE INDEX IF NOT EXISTS idx_cash_transactions_author
+  ON cash_transactions(created_by);
+
 CREATE INDEX IF NOT EXISTS idx_lcm_lead_active
   ON lead_chat_messages(lead_id, is_active);
 
