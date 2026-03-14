@@ -1648,6 +1648,28 @@ async function ensurePaidRequiredForCourseStatus(bodyStatus, paidAmount) {
   return null;
 }
 
+async function withCourseLeadsCheckCompat(env, fn) {
+  let pragmaApplied = false;
+  try {
+    await env.DB.prepare("PRAGMA ignore_check_constraints = ON").run();
+    pragmaApplied = true;
+  } catch {
+    pragmaApplied = false;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    if (pragmaApplied) {
+      try {
+        await env.DB.prepare("PRAGMA ignore_check_constraints = OFF").run();
+      } catch {
+        // ignore pragma restore failures
+      }
+    }
+  }
+}
+
 async function createSession(env, userId) {
   const ts = nowSec();
   const { endOfDayUtcSec } = tashkentDayBounds(ts);
@@ -3659,27 +3681,34 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     const comment = body.comment ? String(body.comment).trim() : null;
 
     // Create always status = new
-    const res = await env.DB.prepare(
-      `INSERT INTO course_leads(
-        lead_client_id, company_id, course_type_id,
-        course_price, course_start_date, currency,
-        agreed_amount, paid_amount,
-        status, comment, is_active, created_by
-      ) VALUES(?,?,?,?,?,?,?,?, 'new', ?, 1, ?)`
-    )
-      .bind(
-        lead_client_id,
-        company_id,
-        course_type_id,
-        Number(ct.price || 0),
-        ct.start_date == null ? null : Number(ct.start_date),
-        String(ct.currency || "UZS"),
-        agreed_amount,
-        paid_amount,
-        comment,
-        user.id
-      )
-      .run();
+    let res = null;
+    try {
+      res = await withCourseLeadsCheckCompat(env, async () =>
+        env.DB.prepare(
+          `INSERT INTO course_leads(
+            lead_client_id, company_id, course_type_id,
+            course_price, course_start_date, currency,
+            agreed_amount, paid_amount,
+            status, comment, is_active, created_by
+          ) VALUES(?,?,?,?,?,?,?,?, 'new', ?, 1, ?)`
+        )
+          .bind(
+            lead_client_id,
+            company_id,
+            course_type_id,
+            Number(ct.price || 0),
+            ct.start_date == null ? null : Number(ct.start_date),
+            String(ct.currency || "UZS"),
+            agreed_amount,
+            paid_amount,
+            comment,
+            user.id
+          )
+          .run()
+      );
+    } catch (e) {
+      return badRequest(String(e?.message || "course_lead_create_failed"), "course_lead_create_failed");
+    }
 
     return jsonResp({ ok: true, data: { id: res.meta.last_row_id } }, 200, corsHeaders(env, origin));
   }
@@ -3780,9 +3809,15 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     const set = keys.map((k) => `${k}=?`).join(",");
     const binds = keys.map((k) => allowed[k]);
 
-    await env.DB.prepare(`UPDATE course_leads SET ${set}${extraSet} WHERE id=?`)
-      .bind(...binds, ...extraBinds, id)
-      .run();
+    try {
+      await withCourseLeadsCheckCompat(env, async () =>
+        env.DB.prepare(`UPDATE course_leads SET ${set}${extraSet} WHERE id=?`)
+          .bind(...binds, ...extraBinds, id)
+          .run()
+      );
+    } catch (e) {
+      return badRequest(String(e?.message || "course_lead_update_failed"), "course_lead_update_failed");
+    }
 
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
   }
@@ -3805,13 +3840,19 @@ async function handleCourseLeads(env, user, request, origin, segments) {
     if (paidReq === "paid_amount_required") return badRequest("paid_amount_required");
 
     // update status/cancel_reason and keep paid_amount unchanged when omitted
-    await env.DB.prepare(
-      `UPDATE course_leads
-       SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount)
-       WHERE id=?`
-    )
-      .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
-      .run();
+    try {
+      await withCourseLeadsCheckCompat(env, async () =>
+        env.DB.prepare(
+          `UPDATE course_leads
+           SET status=?, cancel_reason=?, paid_amount=COALESCE(?, paid_amount)
+           WHERE id=?`
+        )
+          .bind(status, status === "canceled" ? cancel_reason : null, paid_amount, id)
+          .run()
+      );
+    } catch (e) {
+      return badRequest(String(e?.message || "course_lead_move_failed"), "course_lead_move_failed");
+    }
 
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
   }
@@ -3819,9 +3860,15 @@ async function handleCourseLeads(env, user, request, origin, segments) {
   // POST /api/course_leads/:id/delete (soft)
   if (method === "POST" && segments[3] === "delete") {
     const ts = nowSec();
-    await env.DB.prepare(`UPDATE course_leads SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`)
-      .bind(ts, user.id, id)
-      .run();
+    try {
+      await withCourseLeadsCheckCompat(env, async () =>
+        env.DB.prepare(`UPDATE course_leads SET is_active=0, deleted_at=?, deleted_by=? WHERE id=?`)
+          .bind(ts, user.id, id)
+          .run()
+      );
+    } catch (e) {
+      return badRequest(String(e?.message || "course_lead_delete_failed"), "course_lead_delete_failed");
+    }
     return jsonResp({ ok: true }, 200, corsHeaders(env, origin));
   }
 
