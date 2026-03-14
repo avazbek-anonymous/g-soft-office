@@ -1013,6 +1013,7 @@ async function buildTelegramDebtReport(env) {
     const key = String(row.course_type_id || 0);
     if (!groups.has(key)) {
       groups.set(key, {
+        courseTypeId: Number(row.course_type_id || 0),
         courseTypeName: String(row.course_type_name || `#${row.course_type_id}`),
         rows: [],
       });
@@ -1020,6 +1021,7 @@ async function buildTelegramDebtReport(env) {
     groups.get(key).rows.push(row);
   }
 
+  const separator = "----------------------------------";
   const lines = [];
   let used = 0;
   let truncated = false;
@@ -1031,23 +1033,27 @@ async function buildTelegramDebtReport(env) {
     return true;
   };
 
+  if (!pushLine(separator)) truncated = true;
+  if (!truncated && !pushLine("🤝 kelishuv")) truncated = true;
+  if (!truncated && !pushLine("💵 to'landi")) truncated = true;
+  if (!truncated && !pushLine("📝 qarz")) truncated = true;
+  if (!truncated && !pushLine(separator)) truncated = true;
+
   for (const group of groups.values()) {
-    if (!pushLine(`<b>${tgEscapeHtml(group.courseTypeName)}</b>`)) { truncated = true; break; }
+    if (!pushLine(`${group.courseTypeName} - ${group.courseTypeId}`)) { truncated = true; break; }
     for (const row of group.rows) {
-      const leadName = tgEscapeHtml(String(row.lead_full_name || "-"));
-      const phone = tgEscapeHtml(String(row.lead_phone1 || "-"));
+      const leadName = String(row.lead_full_name || "-");
+      const phone = String(row.lead_phone1 || "-");
       const agreed = formatTelegramMoney(row.agreed_amount_uzs || 0);
       const paid = formatTelegramMoney(row.paid_amount_uzs || 0);
       const debt = formatTelegramMoney(row.debt_amount_uzs || 0);
-      if (!pushLine(`${leadName} | ${phone} | ${agreed} | ${paid} | ${debt}`)) {
+      if (!pushLine(`${leadName} | ${phone} | 🤝 ${agreed} | 💵 ${paid} | 📝 ${debt}`)) {
         truncated = true;
         break;
       }
     }
     if (truncated) break;
-    if (lines.length && lines[lines.length - 1] !== "") {
-      if (!pushLine("")) { truncated = true; break; }
-    }
+    if (!pushLine(separator)) { truncated = true; break; }
   }
 
   if (truncated) {
@@ -1058,7 +1064,7 @@ async function buildTelegramDebtReport(env) {
     return { text: "Qarzdorlar topilmadi.", parseMode: null };
   }
 
-  return { text: lines.join("\n").trim(), parseMode: "HTML" };
+  return { text: lines.join("\n").trim(), parseMode: null };
 }
 
 function tgExtractMentionHintsSingle(msg) {

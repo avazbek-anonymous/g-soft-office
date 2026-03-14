@@ -8527,14 +8527,29 @@ App.renderCash = async function(host, routeId){
       .cashRangeTitle{font-weight:900}
       .cashWeekdays,.cashDays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
       .cashWeekdays div{font-size:11px;color:var(--muted2);text-align:center;padding:4px 0}
-      .cashDay{min-height:38px;border:1px solid var(--stroke);border-radius:12px;background:transparent;cursor:pointer;font-weight:700}
+      .cashDay{min-height:42px;border:1px solid var(--stroke);border-radius:12px;background:transparent;cursor:pointer;font-weight:700;user-select:none;-webkit-user-select:none;touch-action:none}
       .cashDay:hover{background:rgba(255,255,255,.06)}
       .cashDay.is-outside{opacity:.36}
       .cashDay.is-in-range{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
       .cashDay.is-edge{background:var(--acc);color:#111;border-color:var(--acc)}
+      .cashDay.is-dragging{box-shadow:0 0 0 2px rgba(255,208,90,.22) inset}
       .cashLegend{display:flex;flex-wrap:wrap;gap:10px;color:var(--muted2);font-size:12px}
       .cashLegendDot{display:inline-flex;width:10px;height:10px;border-radius:999px}
       .cashSummaryLine{font-size:12px;color:var(--muted2)}
+      .cashSearchSelect{position:relative}
+      .cashSearchMenu{margin-top:6px;max-height:280px;overflow:auto;border:1px solid rgba(255,208,90,.35);border-radius:14px;background:rgba(8,26,22,.98);box-shadow:var(--shadow)}
+      .cashSearchItem{display:block;width:100%;text-align:left;padding:11px 12px;background:transparent;border:0;border-bottom:1px solid var(--stroke);cursor:pointer;color:var(--text)}
+      .cashSearchItem:last-child{border-bottom:0}
+      .cashSearchItem:hover,.cashSearchItem.active{background:rgba(15,209,167,.12)}
+      .cashSearchPrimary{font-weight:800}
+      .cashSearchSecondary{margin-top:3px;font-size:12px;color:var(--muted2)}
+      .cashSearchHint{padding:11px 12px;font-size:12px;color:var(--muted2)}
+      .cashMoneyGrid{display:grid;grid-template-columns:minmax(110px,.45fr) minmax(260px,1.1fr) minmax(220px,.85fr);gap:12px;align-items:end}
+      .cashRateGroup{display:grid;grid-template-columns:minmax(110px,.52fr) minmax(180px,1fr);gap:12px;align-items:end}
+      .cashInlineCalc{border:1px solid var(--stroke);border-radius:12px;background:rgba(255,255,255,.04);padding:10px 12px;min-height:44px;display:flex;align-items:center;font-weight:800}
+      .cashSummaryValue{font-weight:900;font-size:20px;transition:transform .2s ease,color .2s ease}
+      .cashSummaryValue.pulse{transform:scale(1.03)}
+      .cashSummaryPreview{font-size:12px;color:var(--muted2)}
       @media (max-width: 1080px){
         .cashToolbarTop{grid-template-columns:1fr 1fr}
       }
@@ -8544,6 +8559,11 @@ App.renderCash = async function(host, routeId){
         .cashToolbarTop{grid-template-columns:1fr}
         .cashRangeModal{min-width:min(96vw,96vw)}
         .cashRangeGrid{grid-template-columns:1fr}
+        .cashRangePicker{padding:10px}
+        .cashDay{min-height:44px}
+        .cashMoneyGrid{grid-template-columns:1fr}
+        .cashRateGroup{grid-template-columns:1fr}
+        .cashSearchMenu{max-height:240px}
       }
     `.trim();
     document.head.appendChild(st);
@@ -8585,10 +8605,101 @@ App.renderCash = async function(host, routeId){
     if (from && to) return `${formatDateOnly(from)} - ${formatDateOnly(to)}`;
     return from ? formatDateOnly(from) : formatDateOnly(to);
   };
+  const formatCashNumber = (v, minFraction = 2, maxFraction = 2) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "-";
+    return n.toLocaleString("ru-RU", { minimumFractionDigits: minFraction, maximumFractionDigits: maxFraction });
+  };
   const fmtCash = (v, cur="UZS") => {
     const n = Number(v);
     if (!Number.isFinite(n)) return "-";
-    return `${n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2})} ${cur}`;
+    return `${formatCashNumber(n, 2, 2)} ${cur}`;
+  };
+  const localCurrencyLabel = (cur = "UZS") => {
+    const code = String(cur || "UZS").toUpperCase();
+    if (code === "USD") return "USD";
+    return tr({ ru: "сум", uz: "sum", en: "sum" });
+  };
+  const parseCashInputNumber = (value) => {
+    const raw = String(value == null ? "" : value).replace(/\s+/g, "").replace(/-/g, "").replace(/,/g, ".");
+    if (!raw) return null;
+    const num = Number(raw.replace(/[^\d.]/g, ""));
+    return Number.isFinite(num) ? num : null;
+  };
+  const formatCashMaskedInput = (value, { maxFraction = 2, fixed = false } = {}) => {
+    let raw = String(value == null ? "" : value).replace(/\s+/g, "").replace(/-/g, "").replace(/[^\d,.\u066B\u066C]/g, "");
+    if (!raw) return "";
+    raw = raw.replace(/[\u066B.]/g, ",").replace(/\u066C/g, "");
+    const commaIndex = raw.indexOf(",");
+    let intPart = commaIndex >= 0 ? raw.slice(0, commaIndex) : raw;
+    let fracPart = commaIndex >= 0 ? raw.slice(commaIndex + 1).replace(/,/g, "") : "";
+    intPart = intPart.replace(/\D/g, "");
+    fracPart = fracPart.replace(/\D/g, "").slice(0, maxFraction);
+    const hadSeparator = commaIndex >= 0;
+    if (!intPart && !fracPart) return "";
+    const safeInt = intPart.replace(/^0+(?=\d)/, "") || "0";
+    let out = safeInt.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    if (fixed) {
+      out += `,${fracPart.padEnd(maxFraction, "0")}`;
+    } else if (hadSeparator || fracPart.length) {
+      out += `,${fracPart}`;
+    }
+    return out;
+  };
+  const bindCashMaskedInput = (input, opts = {}) => {
+    const maxFraction = Number.isFinite(opts.maxFraction) ? opts.maxFraction : 2;
+    const emit = () => {
+      if (typeof opts.onValue === "function") opts.onValue(parseCashInputNumber(input.value));
+    };
+    const moveCaretToEnd = () => {
+      try {
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      } catch {}
+    };
+    const sync = (fixed = false) => {
+      input.value = formatCashMaskedInput(input.value, { maxFraction, fixed });
+      emit();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "-" || e.key === "Subtract") e.preventDefault();
+    });
+    input.addEventListener("input", () => {
+      sync(false);
+      requestAnimationFrame(moveCaretToEnd);
+    });
+    input.addEventListener("blur", () => sync(opts.fixedOnBlur !== false));
+    sync(!!opts.initialFixed);
+    return {
+      getValue: () => parseCashInputNumber(input.value),
+      setValue: (value, fixed = true) => {
+        input.value = formatCashMaskedInput(value, { maxFraction, fixed });
+        emit();
+      },
+    };
+  };
+  const projectCashStatusLabel = (status) => {
+    const s = String(status || "");
+    if (s === "new") return tr({ ru: "Новый", uz: "Yangi", en: "New" });
+    if (s === "tz_given") return tr({ ru: "ТЗ выдано", uz: "Tz berildi", en: "TZ given" });
+    if (s === "offer_given") return tr({ ru: "Предложение", uz: "Taklif berildi", en: "Offer given" });
+    if (s === "in_progress") return tr({ ru: "В процессе", uz: "Jarayonda", en: "In progress" });
+    if (s === "later") return tr({ ru: "Позже", uz: "Keyinroq", en: "Later" });
+    if (s === "done") return tr({ ru: "Завершено", uz: "Bajarildi", en: "Done" });
+    if (s === "review") return tr({ ru: "Отзыв", uz: "Tasurot", en: "Review" });
+    if (s === "canceled") return tr({ ru: "Отмена", uz: "Otmen", en: "Canceled" });
+    return s || "-";
+  };
+  const courseCashStatusLabel = (status) => {
+    const s = String(status || "");
+    if (s === "new") return tr({ ru: "Новый", uz: "Yangi", en: "New" });
+    if (s === "need_call") return tr({ ru: "Нужно звонить", uz: "Qo'ng'iroq kerak", en: "Need call" });
+    if (s === "thinking") return tr({ ru: "Думает", uz: "O'ylab ko'rmoqda", en: "Thinking" });
+    if (s === "waiting_pay") return tr({ ru: "Оплата ожидается", uz: "To'lov kutilmoqda", en: "Waiting for pay" });
+    if (s === "enrolled") return tr({ ru: "Записан", uz: "Kursga yozildi", en: "Enrolled" });
+    if (s === "studying") return tr({ ru: "Успешно", uz: "Muvaffaqiyatli", en: "Success" });
+    if (s === "canceled") return tr({ ru: "Отмена", uz: "Bekor", en: "Canceled" });
+    return s || "-";
   };
   const dateToSec = (value, end=false) => {
     if (!value) return null;
@@ -8597,16 +8708,17 @@ App.renderCash = async function(host, routeId){
     if (end) d.setHours(23,59,59,999);
     return Math.floor(d.getTime()/1000);
   };
+  const localizedCashField = (row, base) => row?.[`${base}_${App.state.lang}`] || row?.[`${base}_ru`] || row?.[`${base}_uz`] || row?.[`${base}_en`] || "-";
   const rowArticle = (row) => row.movement_type === "expense"
-    ? (row.expense_category_name_uz || row.expense_category_name_ru || row.expense_category_name_en || "-")
-    : (row.income_category_name_uz || row.income_category_name_ru || row.income_category_name_en || "-");
+    ? localizedCashField(row, "expense_category_name")
+    : localizedCashField(row, "income_category_name");
   const rowCounterparty = (row) => row.counterparty_company_name || row.counterparty_full_name || tr({ru:"Без контрагента",uz:"Kontragentsiz",en:"No counterparty"});
   const rowObject = (row) => {
-    if (row.object_type === "project") return `#${row.object_id} ${row.project_service_name_uz || row.project_service_name_ru || row.project_service_name_en || ""}`.trim();
+    if (row.object_type === "project") return `#${row.object_id} ${localizedCashField(row, "project_service_name")}`.trim();
     if (row.object_type === "course") return `#${row.object_id} ${row.course_type_name || "-"}`.trim();
     return "-";
   };
-  const rowPaymentMethod = (row) => row.payment_method_name_uz || row.payment_method_name_ru || row.payment_method_name_en || "-";
+  const rowPaymentMethod = (row) => localizedCashField(row, "payment_method_name");
   const searchText = (row) => [
     row.id, row.created_by_name, row.comment, rowArticle(row), rowCounterparty(row), rowObject(row), rowPaymentMethod(row), row.course_type_name
   ].filter(Boolean).join(" ").toLowerCase();
@@ -8701,6 +8813,13 @@ App.renderCash = async function(host, routeId){
     let draftTo = state.dateTo || draftFrom;
     let hoverIso = "";
     let monthCursor = startOfMonth(parseDateInput(draftFrom) || today);
+    let suppressClickUntil = 0;
+    const dragState = {
+      active: false,
+      moved: false,
+      anchorIso: "",
+      pointerId: null,
+    };
 
     const titleFmt = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" });
     const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
@@ -8718,6 +8837,10 @@ App.renderCash = async function(host, routeId){
       draftFrom = from;
       draftTo = to;
       hoverIso = "";
+      dragState.active = false;
+      dragState.moved = false;
+      dragState.anchorIso = "";
+      dragState.pointerId = null;
       monthCursor = startOfMonth(parseDateInput(from) || today);
       renderPicker();
     };
@@ -8751,6 +8874,50 @@ App.renderCash = async function(host, routeId){
       normalizeDraftRange();
       renderPicker();
     };
+    const applyDragRange = (anchorIso, targetIso) => {
+      if (!anchorIso || !targetIso) return;
+      if (compareIso(anchorIso, targetIso) <= 0) {
+        draftFrom = anchorIso;
+        draftTo = targetIso;
+      } else {
+        draftFrom = targetIso;
+        draftTo = anchorIso;
+      }
+      hoverIso = "";
+      normalizeDraftRange();
+      renderPicker();
+    };
+    const startDragSelection = (iso, e) => {
+      dragState.active = true;
+      dragState.moved = false;
+      dragState.anchorIso = iso;
+      dragState.pointerId = e?.pointerId ?? null;
+      hoverIso = iso;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    };
+    const updateDragSelection = (e) => {
+      if (!dragState.active || (dragState.pointerId != null && e.pointerId !== dragState.pointerId)) return;
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const dayBtn = target && target.closest ? target.closest(".cashDay") : null;
+      const iso = dayBtn?.dataset?.iso || "";
+      if (!iso) return;
+      if (iso !== dragState.anchorIso) dragState.moved = true;
+      applyDragRange(dragState.anchorIso, iso);
+      e.preventDefault();
+    };
+    const finishDragSelection = (e) => {
+      if (!dragState.active || (dragState.pointerId != null && e?.pointerId != null && e.pointerId !== dragState.pointerId)) return;
+      try { e?.currentTarget?.releasePointerCapture?.(e.pointerId); } catch {}
+      if (dragState.moved) {
+        suppressClickUntil = Date.now() + 160;
+      }
+      dragState.active = false;
+      dragState.moved = false;
+      dragState.anchorIso = "";
+      dragState.pointerId = null;
+      hoverIso = "";
+      renderPicker();
+    };
     const buildMonth = (monthDate) => {
       const monthStartDate = startOfMonth(monthDate);
       const viewStart = startOfWeek(monthStartDate);
@@ -8769,10 +8936,15 @@ App.renderCash = async function(host, routeId){
             const outside = day.getMonth() !== monthStartDate.getMonth();
             const isEdge = iso === draftFrom || iso === draftTo;
             return el("button",{
-              class:`cashDay${outside ? " is-outside" : ""}${isInRange(iso) ? " is-in-range" : ""}${isEdge ? " is-edge" : ""}`,
+              class:`cashDay${outside ? " is-outside" : ""}${isInRange(iso) ? " is-in-range" : ""}${isEdge ? " is-edge" : ""}${dragState.active && (iso === draftFrom || iso === draftTo || isInRange(iso)) ? " is-dragging" : ""}`,
               type:"button",
-              onClick:()=>pickDay(iso),
-              onmouseenter:()=>{ if (draftFrom && !draftTo) { hoverIso = iso; renderPicker(); } }
+              "data-iso": iso,
+              onClick:(e)=>{ if (Date.now() < suppressClickUntil) { e.preventDefault(); return; } pickDay(iso); },
+              onmouseenter:()=>{ if (draftFrom && !draftTo && !dragState.active) { hoverIso = iso; renderPicker(); } },
+              onpointerdown:(e)=>startDragSelection(iso, e),
+              onpointermove:updateDragSelection,
+              onpointerup:finishDragSelection,
+              onpointercancel:finishDragSelection,
             }, String(day.getDate()));
           })
         )
@@ -8793,7 +8965,11 @@ App.renderCash = async function(host, routeId){
       body.append(
         el("div",{class:"vcol gap8"},
           el("div",{class:"cashRangeMain"}, rangeLabel(draftFrom, draftTo || hoverIso || draftFrom)),
-          el("div",{class:"cashSummaryLine"}, tr({ru:"Первый клик задает начало, второй клик завершает диапазон.",uz:"Birinchi bosish boshlanishni, ikkinchisi davr oxirini belgilaydi.",en:"First click sets the start, second click finishes the range."}))
+          el("div",{class:"cashSummaryLine"}, tr({
+            ru:"1 клик/тап задает начало, 2 клик/тап завершает диапазон. Можно также зажать и протянуть по датам.",
+            uz:"1 marta bosish boshlanishni, 2 marta bosish esa davrni tugatadi. Sana bo'ylab bosib ushlab sudrash ham mumkin.",
+            en:"First tap sets the start, second tap finishes the range. You can also press and drag across dates."
+          }))
         ),
         presets,
         calendars,
@@ -8836,7 +9012,7 @@ App.renderCash = async function(host, routeId){
   host.append(toolbar, listEl);
   syncRangeButton();
 
-  const openEditor = async (item = null) => {
+  const openEditorOld = async (item = null) => {
     let movementType = item?.movement_type || "income";
     let categoryId = item?.category_id ? String(item.category_id) : "";
     let counterpartyKind = item?.counterparty_type || "company";
@@ -8845,25 +9021,244 @@ App.renderCash = async function(host, routeId){
     let objectId = item?.object_id ? Number(item.object_id) : null;
     let paymentMethodId = item?.payment_method_id ? String(item.payment_method_id) : "";
     let currency = item?.currency || "UZS";
-    let rate = item?.rate != null ? String(item.rate) : "1";
     let selectedClientData = null;
+    let objectSummary = null;
 
     const movementWrap = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
     const categorySel = el("select",{class:"sel"});
     const counterpartyTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
-    const clientSearchInp = el("input",{class:"input",placeholder:tr({ru:"Поиск контрагента",uz:"Kontragent qidirish",en:"Search counterparty"})});
-    const clientSel = el("select",{class:"sel"});
     const objectTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
-    const objectSel = el("select",{class:"sel"});
     const summaryBox = el("div",{class:"card cardPad vcol gap6",style:"display:none"});
+    const summaryTitleEl = el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Долг",uz:"Qarz",en:"Debt"}));
+    const summaryValueEl = el("div",{class:"cashSummaryValue"}, `0,00 UZS`);
+    const summaryMetaEl = el("div",{class:"muted2",style:"font-size:12px"});
+    const summaryPreviewEl = el("div",{class:"cashSummaryPreview"});
+    summaryBox.append(summaryTitleEl, summaryValueEl, summaryMetaEl, summaryPreviewEl);
     const methodSel = el("select",{class:"sel"});
     const currencyBtn = el("button",{class:"btn ghost",type:"button"});
-    const rateInp = el("input",{class:"input",type:"number",step:"0.01",value:rate});
-    const amountInp = el("input",{class:"input",type:"number",step:"0.01",value:item?.amount == null ? "" : String(item.amount)});
+    const rateInp = el("input",{class:"input",type:"text",inputmode:"decimal",autocomplete:"off",placeholder:"1,00"});
+    const amountInp = el("input",{class:"input",type:"text",inputmode:"decimal",autocomplete:"off",placeholder:"0,00"});
+    const convertedWrap = el("div",{class:"vcol gap8",style:"display:none"});
+    const convertedValEl = el("div",{class:"cashInlineCalc"}, `0,00 ${localCurrencyLabel("UZS")}`);
     const commentInp = el("textarea",{class:"input",rows:4}, item?.comment || "");
 
     const clientOptions = () => (counterpartyKind === "lead" ? leads : companies).filter(x => Number(x.is_active)!==0);
-    const clientName = (row) => !row ? "-" : (counterpartyKind === "lead" ? `${row.full_name || `#${row.id}`}${row.phone1 ? ` • ${row.phone1}` : ""}` : `${row.company_name || row.full_name || `#${row.id}`}${row.phone1 ? ` • ${row.phone1}` : ""}`);
+    const animateValue = (node, nextValue, formatter) => {
+      const target = Number(nextValue || 0);
+      const prev = Number(node.dataset.value || target);
+      if (!Number.isFinite(prev) || Math.abs(prev - target) < 0.005) {
+        node.textContent = formatter(target);
+        node.dataset.value = String(target);
+        return;
+      }
+      if (node._cashAnimFrame) cancelAnimationFrame(node._cashAnimFrame);
+      const startedAt = performance.now();
+      const duration = 220;
+      node.classList.remove("pulse");
+      void node.offsetWidth;
+      node.classList.add("pulse");
+      const tick = (ts) => {
+        const p = Math.min(1, (ts - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        const val = prev + (target - prev) * eased;
+        node.textContent = formatter(val);
+        if (p < 1) {
+          node._cashAnimFrame = requestAnimationFrame(tick);
+        } else {
+          node.dataset.value = String(target);
+          setTimeout(() => node.classList.remove("pulse"), 60);
+        }
+      };
+      node._cashAnimFrame = requestAnimationFrame(tick);
+    };
+    const getClientView = (row) => {
+      if (!row) return { primary: "-", secondary: "" };
+      if (counterpartyKind === "lead") {
+        return {
+          primary: row.full_name || `#${row.id}`,
+          secondary: [row.phone1, row.phone2].filter(Boolean).join(" • "),
+        };
+      }
+      return {
+        primary: row.company_name || row.full_name || `#${row.id}`,
+        secondary: [row.full_name, row.phone1, row.phone2].filter(Boolean).join(" • "),
+      };
+    };
+    const getClientDisplayValue = (row) => {
+      const view = getClientView(row);
+      return [view.primary, view.secondary].filter(Boolean).join(" • ");
+    };
+    const getObjectRows = () => (objectType === "project" ? (selectedClientData?.projects || []) : (selectedClientData?.course_leads || []));
+    const getObjectView = (row) => {
+      if (!row) return { primary: "-", secondary: "" };
+      if (objectType === "project") {
+        return {
+          primary: `#${row.id} • ${localizedCashField(row, "project_service_name")}`,
+          secondary: `${projectCashStatusLabel(row.status)}${row.amount != null ? ` • ${fmtCash(row.amount, row.currency || "UZS")}` : ""}`,
+        };
+      }
+      const amount = row.agreed_amount != null ? row.agreed_amount : row.course_price;
+      return {
+        primary: `#${row.id} • ${row.course_type_name || "-"}`,
+        secondary: `${courseCashStatusLabel(row.status)}${amount != null ? ` • ${fmtCash(amount, row.currency || "UZS")}` : ""}`,
+      };
+    };
+    const getObjectDisplayValue = (row) => {
+      const view = getObjectView(row);
+      return [view.primary, view.secondary].filter(Boolean).join(" • ");
+    };
+    const createSearchPicker = ({ placeholder, browseHint, emptyHint, getRows, getSelectedId, getView, getSearchText, onPick, onClear }) => {
+      const input = el("input",{class:"input",type:"text",autocomplete:"off",placeholder});
+      const menu = el("div",{class:"cashSearchMenu",style:"display:none"});
+      const wrap = el("div",{class:"cashSearchSelect"}, input, menu);
+      let browseMode = true;
+      let blurTimer = null;
+      const selectedRow = () => {
+        const selectedId = getSelectedId();
+        return (getRows() || []).find((row) => String(row.id) === String(selectedId || ""));
+      };
+      const syncInput = () => {
+        const row = selectedRow();
+        input.value = row ? [getView(row).primary, getView(row).secondary].filter(Boolean).join(" • ") : "";
+      };
+      const filteredRows = () => {
+        const rows = (getRows() || []).slice();
+        const query = String(input.value || "").trim().toLowerCase();
+        if (browseMode || !query || query.length < 3) return rows;
+        return rows.filter((row) => getSearchText(row).includes(query));
+      };
+      const renderMenu = () => {
+        const rows = filteredRows();
+        menu.innerHTML = "";
+        if (!rows.length) {
+          menu.appendChild(el("div",{class:"cashSearchHint"}, browseMode ? browseHint : emptyHint));
+          menu.style.display = "";
+          return;
+        }
+        rows.slice(0, 200).forEach((row) => {
+          const view = getView(row);
+          menu.appendChild(
+            el("button",{
+              class:"cashSearchItem",
+              type:"button",
+              onmousedown:(e)=>e.preventDefault(),
+              onClick:async()=>{
+                browseMode = true;
+                await onPick(row);
+                syncInput();
+                menu.style.display = "none";
+              }
+            },
+              el("div",{class:"cashSearchPrimary"}, view.primary),
+              view.secondary ? el("div",{class:"cashSearchSecondary"}, view.secondary) : null
+            )
+          );
+        });
+        menu.style.display = "";
+      };
+      input.addEventListener("focus", () => {
+        browseMode = true;
+        clearTimeout(blurTimer);
+        renderMenu();
+      });
+      input.addEventListener("click", () => {
+        browseMode = true;
+        renderMenu();
+      });
+      input.addEventListener("input", () => {
+        browseMode = false;
+        onClear?.(input.value || "");
+        renderMenu();
+      });
+      input.addEventListener("blur", () => {
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(() => {
+          menu.style.display = "none";
+          syncInput();
+        }, 120);
+      });
+      return {
+        wrap,
+        input,
+        menu,
+        renderMenu,
+        syncInput,
+        setDisabled: (disabled, nextPlaceholder = "") => {
+          input.disabled = !!disabled;
+          if (nextPlaceholder) input.placeholder = nextPlaceholder;
+          if (disabled) menu.style.display = "none";
+        },
+      };
+    };
+    const readRateValue = () => {
+      const n = parseCashInputNumber(rateInp.value);
+      return currency === "USD" ? (Number.isFinite(n) && n > 0 ? n : 0) : 1;
+    };
+    const readAmountValue = () => {
+      const n = parseCashInputNumber(amountInp.value);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const currentAmountUzs = () => {
+      const amount = readAmountValue();
+      if (!amount) return 0;
+      return currency === "USD" ? amount * readRateValue() : amount;
+    };
+    const syncConvertedPreview = () => {
+      const isUsd = currency === "USD";
+      convertedWrap.style.display = isUsd ? "" : "none";
+      if (!isUsd) return;
+      const totalUzs = currentAmountUzs();
+      convertedValEl.textContent = `${formatCashNumber(totalUzs || 0, 2, 2)} ${localCurrencyLabel("UZS")}`;
+    };
+    const syncSummaryPreview = (animated = true) => {
+      if (!objectSummary) {
+        summaryBox.style.display = objectType && objectId ? "" : "none";
+        if (objectType && objectId) {
+          summaryValueEl.textContent = t("loading");
+          summaryMetaEl.textContent = "";
+          summaryPreviewEl.textContent = "";
+        }
+        return;
+      }
+      const baseDebt = Number(objectSummary.debt_uzs || 0);
+      const delta = currentAmountUzs();
+      const projectedDebt = movementType === "expense"
+        ? baseDebt + delta
+        : Math.max(0, baseDebt - delta);
+      summaryBox.style.display = "";
+      if (animated) {
+        animateValue(summaryValueEl, projectedDebt, (value) => `${formatCashNumber(value, 2, 2)} UZS`);
+      } else {
+        summaryValueEl.textContent = `${formatCashNumber(projectedDebt, 2, 2)} UZS`;
+        summaryValueEl.dataset.value = String(projectedDebt);
+      }
+      summaryMetaEl.textContent = `${tr({ru:"База",uz:"Baza",en:"Base"})}: ${fmtCash(objectSummary.base_amount_uzs,"UZS")} • ${tr({ru:"Приход",uz:"Kirim",en:"Income"})}: ${fmtCash(objectSummary.income_total_uzs,"UZS")} • ${tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}: ${fmtCash(objectSummary.expense_total_uzs,"UZS")}`;
+      if (delta > 0) {
+        summaryPreviewEl.textContent = movementType === "expense"
+          ? `${tr({ru:"После расхода",uz:"Chiqimdan keyin",en:"After expense"})}: ${formatCashNumber(projectedDebt, 2, 2)} UZS`
+          : `${tr({ru:"После оплаты",uz:"To'lovdan keyin",en:"After payment"})}: ${formatCashNumber(projectedDebt, 2, 2)} UZS`;
+      } else {
+        summaryPreviewEl.textContent = "";
+      }
+    };
+    const fillMovementLegacy = () => {
+      movementWrap.innerHTML = "";
+      ["income","expense"].forEach((kind) => {
+        const active = movementType === kind;
+        movementWrap.appendChild(
+          el("button",{
+            class:`btn ${active ? "primary" : "ghost"}`,
+            type:"button",
+            onClick:()=>{
+              movementType = kind;
+              fillMovement();
+              fillCategories();
+              syncSummaryPreview(true);
+            }
+          }, `${active ? (kind === "income" ? "▲ " : "▼ ") : ""}${kind === "income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}`)
+        );
+      });
+    };
     const fillMovement = () => {
       movementWrap.innerHTML = "";
       ["income","expense"].forEach(kind => movementWrap.appendChild(el("button",{class:`btn ${movementType===kind?"primary":"ghost"}`,type:"button",onClick:()=>{movementType=kind;fillMovement();fillCategories();}}, movementType===kind ? `${movementType===kind && kind==="income" ? "▲ " : movementType===kind && kind==="expense" ? "▼ " : ""}${kind==="income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}` : (kind==="income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})))));
@@ -9008,6 +9403,653 @@ App.renderCash = async function(host, routeId){
         }catch(e){ Toast.show(`${t("toast_error")}: ${e.message||"error"}`,"bad"); }
       }}
     ]);
+  };
+
+  const openEditor = async (item = null) => {
+    let movementType = item?.movement_type || "income";
+    let categoryId = item?.category_id ? String(item.category_id) : "";
+    let counterpartyKind = item?.counterparty_type === "lead" ? "lead" : "company";
+    let counterpartyId = item?.counterparty_client_id ? Number(item.counterparty_client_id) : null;
+    let objectType = item?.object_type || null;
+    let objectId = item?.object_id ? Number(item.object_id) : null;
+    let paymentMethodId = item?.payment_method_id ? String(item.payment_method_id) : "";
+    let currency = String(item?.currency || "UZS").toUpperCase() === "USD" ? "USD" : "UZS";
+    let usdRateDraft = Number(item?.currency === "USD" ? item?.rate : 12135) || 12135;
+    let selectedClientData = null;
+    let objectSummary = null;
+    let summaryReqId = 0;
+
+    const movementWrap = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const categorySel = el("select",{class:"sel"});
+    const methodSel = el("select",{class:"sel"});
+    const counterpartyTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const objectTabs = el("div",{class:"hrow gap8",style:"flex-wrap:wrap"});
+    const summaryBox = el("div",{class:"card cardPad vcol gap6",style:"display:none"});
+    const summaryTitleEl = el("div",{class:"muted2",style:"font-size:12px"}, "Debt / Qarz / Debt");
+    const summaryValueEl = el("div",{class:"cashSummaryValue"}, "0,00 UZS");
+    const summaryMetaEl = el("div",{class:"muted2",style:"font-size:12px"});
+    const summaryPreviewEl = el("div",{class:"cashSummaryPreview"});
+    summaryBox.append(summaryTitleEl, summaryValueEl, summaryMetaEl, summaryPreviewEl);
+
+    const currencyBtn = el("button",{class:"btn ghost",type:"button"});
+    const rateInp = el("input",{class:"input",type:"text",inputmode:"decimal",autocomplete:"off",placeholder:"12 200,00"});
+    const amountInp = el("input",{class:"input",type:"text",inputmode:"decimal",autocomplete:"off",placeholder:"0,00"});
+    const convertedValEl = el("div",{class:"cashInlineCalc"}, `0,00 ${localCurrencyLabel("UZS")}`);
+    const convertedWrap = el("div",{class:"vcol gap8",style:"display:none"},
+      el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Сумма × Курс",uz:"Summa × Kurs",en:"Amount × Rate"})),
+      convertedValEl
+    );
+    const commentInp = el("textarea",{class:"input",rows:4,placeholder:t("comment") || "Comment"}, item?.comment || "");
+    let rateController = null;
+    let amountController = null;
+
+    function animateValue(node, nextValue, formatter) {
+      const target = Number(nextValue || 0);
+      const prev = Number(node.dataset.value || target);
+      if (!Number.isFinite(prev) || Math.abs(prev - target) < 0.005) {
+        node.textContent = formatter(target);
+        node.dataset.value = String(target);
+        return;
+      }
+      if (node._cashAnimFrame) cancelAnimationFrame(node._cashAnimFrame);
+      const startedAt = performance.now();
+      const duration = 220;
+      node.classList.remove("pulse");
+      void node.offsetWidth;
+      node.classList.add("pulse");
+      const tick = (ts) => {
+        const p = Math.min(1, (ts - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        const value = prev + (target - prev) * eased;
+        node.textContent = formatter(value);
+        if (p < 1) node._cashAnimFrame = requestAnimationFrame(tick);
+        else {
+          node.dataset.value = String(target);
+          setTimeout(() => node.classList.remove("pulse"), 60);
+        }
+      };
+      node._cashAnimFrame = requestAnimationFrame(tick);
+    }
+
+    function clientOptions() {
+      return (counterpartyKind === "lead" ? leads : companies).filter((row) => Number(row.is_active) !== 0);
+    }
+
+    function getClientView(row) {
+      if (!row) return { primary: "-", secondary: "" };
+      if (counterpartyKind === "lead") {
+        return {
+          primary: row.full_name || `#${row.id}`,
+          secondary: [row.phone1, row.phone2, row.comment].filter(Boolean).join(" • "),
+        };
+      }
+      return {
+        primary: row.company_name || row.full_name || `#${row.id}`,
+        secondary: [row.full_name, row.phone1, row.phone2, row.comment].filter(Boolean).join(" • "),
+      };
+    }
+
+    function getClientSearchText(row) {
+      return [
+        row.id,
+        row.company_name,
+        row.full_name,
+        row.phone1,
+        row.phone2,
+        row.comment,
+        row.tg_group_link,
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function getObjectRows() {
+      if (!selectedClientData) return [];
+      return objectType === "project" ? (selectedClientData.projects || []) : (selectedClientData.course_leads || []);
+    }
+
+    function getObjectView(row) {
+      if (!row) return { primary: "-", secondary: "" };
+      if (objectType === "project") {
+        return {
+          primary: `#${row.id} • ${row.service_name_uz || row.service_name_ru || row.service_name_en || "-"}`,
+          secondary: `${projectCashStatusLabel(row.status)}${row.amount != null ? ` • ${fmtCash(row.amount, row.currency || "UZS")}` : ""}`,
+        };
+      }
+      const amount = row.agreed_amount != null ? row.agreed_amount : row.course_price;
+      return {
+        primary: `#${row.id} • ${row.course_type_name || "-"}`,
+        secondary: `${courseCashStatusLabel(row.status)}${amount != null ? ` • ${fmtCash(amount, row.currency || "UZS")}` : ""}`,
+      };
+    }
+
+    function getObjectSearchText(row) {
+      return [
+        row.id,
+        row.service_name_ru,
+        row.service_name_uz,
+        row.service_name_en,
+        row.course_type_name,
+        row.status,
+        projectCashStatusLabel(row.status),
+        courseCashStatusLabel(row.status),
+        row.amount,
+        row.agreed_amount,
+        row.course_price,
+        row.currency,
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function counterpartyPlaceholder() {
+      return tr({
+        ru:"Нажмите или введите 3+ символа",
+        uz:"Bosing yoki 3+ belgi kiriting",
+        en:"Click or type 3+ chars"
+      });
+    }
+
+    function objectPlaceholder() {
+      if (!counterpartyId) {
+        return tr({
+          ru:"Сначала выберите контрагента",
+          uz:"Avval kontragentni tanlang",
+          en:"Select counterparty first"
+        });
+      }
+      if (!getObjectRows().length) {
+        return tr({
+          ru:"Нет доступных объектов",
+          uz:"Mavjud obyekt yo'q",
+          en:"No objects available"
+        });
+      }
+      return tr({
+        ru:"Нажмите или введите 3+ символа",
+        uz:"Bosing yoki 3+ belgi kiriting",
+        en:"Click or type 3+ chars"
+      });
+    }
+
+    function createSearchPicker({ getRows, getSelectedId, getView, getSearchText, onPick, onInputClear, placeholder, emptyHint }) {
+      const input = el("input",{class:"input",type:"text",autocomplete:"off",placeholder});
+      const menu = el("div",{class:"cashSearchMenu",style:"display:none"});
+      const wrap = el("div",{class:"cashSearchSelect"}, input, menu);
+      let browseMode = true;
+      let blurTimer = null;
+      let disabled = false;
+
+      function selectedRow() {
+        const selectedId = getSelectedId();
+        return (getRows() || []).find((row) => String(row.id) === String(selectedId || ""));
+      }
+
+      function syncInput() {
+        const row = selectedRow();
+        input.value = row ? [getView(row).primary, getView(row).secondary].filter(Boolean).join(" • ") : "";
+      }
+
+      function renderMenu() {
+        if (disabled) {
+          menu.style.display = "none";
+          return;
+        }
+        const rows = (getRows() || []).slice();
+        const query = String(input.value || "").trim().toLowerCase();
+        const filtered = !browseMode && query && query.length >= 3
+          ? rows.filter((row) => getSearchText(row).includes(query))
+          : rows;
+        menu.innerHTML = "";
+        if (!filtered.length) {
+          menu.appendChild(el("div",{class:"cashSearchHint"}, !browseMode && query.length >= 3 ? emptyHint : tr({ru:"Список пуст",uz:"Ro'yxat bo'sh",en:"List is empty"})));
+          menu.style.display = "";
+          return;
+        }
+        filtered.slice(0, 200).forEach((row) => {
+          const view = getView(row);
+          const active = String(row.id) === String(getSelectedId() || "");
+          menu.appendChild(
+            el("button",{
+              class:`cashSearchItem${active ? " active" : ""}`,
+              type:"button",
+              onmousedown:(e)=>e.preventDefault(),
+              onClick:()=>{
+                browseMode = true;
+                Promise.resolve(onPick(row)).finally(() => {
+                  syncInput();
+                  menu.style.display = "none";
+                });
+              }
+            },
+              el("div",{class:"cashSearchPrimary"}, view.primary),
+              view.secondary ? el("div",{class:"cashSearchSecondary"}, view.secondary) : null
+            )
+          );
+        });
+        menu.style.display = "";
+      }
+
+      input.addEventListener("focus", () => {
+        clearTimeout(blurTimer);
+        browseMode = true;
+        if (selectedRow()) {
+          try { input.select(); } catch {}
+        }
+        renderMenu();
+      });
+      input.addEventListener("click", () => {
+        clearTimeout(blurTimer);
+        browseMode = true;
+        renderMenu();
+      });
+      input.addEventListener("input", () => {
+        browseMode = false;
+        onInputClear?.();
+        renderMenu();
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") menu.style.display = "none";
+      });
+      input.addEventListener("blur", () => {
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(() => {
+          menu.style.display = "none";
+          syncInput();
+        }, 120);
+      });
+
+      return {
+        wrap,
+        syncInput,
+        refresh(open = false) {
+          syncInput();
+          if (open) renderMenu();
+        },
+        setDisabled(flag, nextPlaceholder = "") {
+          disabled = !!flag;
+          input.disabled = disabled;
+          if (nextPlaceholder) input.placeholder = nextPlaceholder;
+          if (disabled && !getSelectedId()) input.value = "";
+          if (disabled) menu.style.display = "none";
+        },
+      };
+    }
+
+    function normalizeObjectType() {
+      const projectRows = selectedClientData?.projects || [];
+      const courseRows = selectedClientData?.course_leads || [];
+      const hasProjects = projectRows.length > 0;
+      const hasCourses = courseRows.length > 0;
+      if (objectType === "project" && !hasProjects) objectType = hasCourses ? "course" : null;
+      if (objectType === "course" && !hasCourses) objectType = hasProjects ? "project" : null;
+      if (!objectType) objectType = hasProjects ? "project" : hasCourses ? "course" : null;
+      const rows = getObjectRows();
+      if (!rows.some((row) => Number(row.id) === Number(objectId || 0))) objectId = null;
+    }
+
+    function readRateValue() {
+      const value = rateController?.getValue ? rateController.getValue() : parseCashInputNumber(rateInp.value);
+      return currency === "USD" ? (Number.isFinite(value) && value > 0 ? value : 0) : 1;
+    }
+
+    function readAmountValue() {
+      const value = amountController?.getValue ? amountController.getValue() : parseCashInputNumber(amountInp.value);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function currentAmountUzs() {
+      const amount = readAmountValue();
+      if (!amount) return 0;
+      return currency === "USD" ? amount * readRateValue() : amount;
+    }
+
+    function syncConvertedPreview() {
+      convertedWrap.style.display = currency === "USD" ? "" : "none";
+      convertedValEl.textContent = `${formatCashNumber(currentAmountUzs() || 0, 2, 2)} ${localCurrencyLabel("UZS")}`;
+    }
+
+    function syncSummaryPreview(animated = true) {
+      if (!objectType || !objectId) {
+        summaryBox.style.display = "none";
+        summaryMetaEl.textContent = "";
+        summaryPreviewEl.textContent = "";
+        return;
+      }
+      summaryBox.style.display = "";
+      if (!objectSummary) {
+        summaryValueEl.textContent = t("loading");
+        summaryMetaEl.textContent = "";
+        summaryPreviewEl.textContent = "";
+        delete summaryValueEl.dataset.value;
+        return;
+      }
+      const baseDebt = Number(objectSummary.debt_uzs || 0);
+      const delta = currentAmountUzs();
+      const nextDebt = movementType === "expense" ? baseDebt + delta : Math.max(0, baseDebt - delta);
+      if (animated) {
+        animateValue(summaryValueEl, nextDebt, (value) => `${formatCashNumber(value, 2, 2)} UZS`);
+      } else {
+        summaryValueEl.textContent = `${formatCashNumber(nextDebt, 2, 2)} UZS`;
+        summaryValueEl.dataset.value = String(nextDebt);
+      }
+      summaryMetaEl.textContent = `${tr({ru:"База",uz:"Baza",en:"Base"})}: ${fmtCash(objectSummary.base_amount_uzs,"UZS")} • ${tr({ru:"Приход",uz:"Kirim",en:"Income"})}: ${fmtCash(objectSummary.income_total_uzs,"UZS")} • ${tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}: ${fmtCash(objectSummary.expense_total_uzs,"UZS")}`;
+      summaryPreviewEl.textContent = delta > 0
+        ? `${movementType === "expense" ? tr({ru:"После расхода",uz:"Chiqimdan keyin",en:"After expense"}) : tr({ru:"После оплаты",uz:"To'lovdan keyin",en:"After payment"})}: ${formatCashNumber(nextDebt, 2, 2)} UZS`
+        : "";
+    }
+
+    async function refreshObjectSummary(animated = false) {
+      const requestId = ++summaryReqId;
+      objectSummary = null;
+      syncSummaryPreview(false);
+      if (!objectType || !objectId) return;
+      const res = await API.cash.objectSummary(objectType, objectId).catch(() => null);
+      if (requestId !== summaryReqId) return;
+      objectSummary = res?.data || null;
+      syncSummaryPreview(animated);
+    }
+
+    function fillMovement() {
+      movementWrap.innerHTML = "";
+      ["income","expense"].forEach((kind) => {
+        const active = movementType === kind;
+        movementWrap.appendChild(
+          el("button",{
+            class:`btn ${active ? "primary" : "ghost"}`,
+            type:"button",
+            onClick:()=>{
+              movementType = kind;
+              fillMovement();
+              fillCategories();
+              syncSummaryPreview(true);
+            }
+          }, `${active ? (kind === "income" ? "▲ " : "▼ ") : ""}${kind === "income" ? tr({ru:"Приход",uz:"Kirim",en:"Income"}) : tr({ru:"Расход",uz:"Chiqim",en:"Expense"})}`)
+        );
+      });
+    }
+
+    function fillCategories() {
+      const src = movementType === "expense" ? expenseCategories : incomeCategories;
+      if (!src.some((row) => String(row.id) === String(categoryId || ""))) categoryId = "";
+      categorySel.innerHTML = "";
+      categorySel.appendChild(el("option",{value:""}, tr({ru:"Выберите статью",uz:"Moddani tanlang",en:"Select category"})));
+      src.forEach((row) => categorySel.appendChild(el("option",{value:String(row.id)}, row[`name_${App.state.lang}`] || row.name_uz || row.name_ru || row.name_en || `#${row.id}`)));
+      categorySel.value = categoryId;
+    }
+
+    function fillCounterpartyTabs() {
+      counterpartyTabs.innerHTML = "";
+      ["company","lead"].forEach((kind) => {
+        counterpartyTabs.appendChild(
+          el("button",{
+            class:`btn ${counterpartyKind === kind ? "primary" : "ghost"}`,
+            type:"button",
+            onClick:()=>{
+              counterpartyKind = kind;
+              counterpartyId = null;
+              selectedClientData = null;
+              objectType = null;
+              objectId = null;
+              objectSummary = null;
+              fillCounterpartyTabs();
+              fillObjectTabs();
+              counterpartyPicker.setDisabled(false, counterpartyPlaceholder());
+              counterpartyPicker.refresh(false);
+              objectPicker.setDisabled(true, objectPlaceholder());
+              objectPicker.refresh(false);
+              syncSummaryPreview(false);
+            }
+          }, kind === "company" ? tr({ru:"Компания",uz:"Kompaniya",en:"Company"}) : tr({ru:"Лид",uz:"Lead",en:"Lead"}))
+        );
+      });
+    }
+
+    function fillObjectTabs() {
+      normalizeObjectType();
+      const kinds = [];
+      if ((selectedClientData?.projects || []).length) kinds.push("project");
+      if ((selectedClientData?.course_leads || []).length) kinds.push("course");
+      objectTabs.innerHTML = "";
+      kinds.forEach((kind) => {
+        objectTabs.appendChild(
+          el("button",{
+            class:`btn ${objectType === kind ? "primary" : "ghost"}`,
+            type:"button",
+            onClick:async()=>{
+              objectType = kind;
+              objectId = null;
+              objectSummary = null;
+              fillObjectTabs();
+              objectPicker.setDisabled(!getObjectRows().length, objectPlaceholder());
+              objectPicker.refresh(false);
+              await refreshObjectSummary(false);
+            }
+          }, kind === "project" ? tr({ru:"Проект",uz:"Loyiha",en:"Project"}) : tr({ru:"Курс",uz:"Kurs",en:"Course"}))
+        );
+      });
+    }
+
+    async function loadSelectedClientData() {
+      if (!counterpartyId) {
+        selectedClientData = null;
+        return;
+      }
+      selectedClientData = (await API.clients.get(counterpartyId).catch(() => null))?.data || null;
+      if (!selectedClientData) {
+        counterpartyId = null;
+        objectType = null;
+        objectId = null;
+      }
+    }
+
+    function applyCurrency(nextCurrency) {
+      if (currency === "USD") {
+        const currentRate = rateController.getValue();
+        if (Number.isFinite(currentRate) && currentRate > 0) usdRateDraft = currentRate;
+      }
+      currency = nextCurrency === "USD" ? "USD" : "UZS";
+      currencyBtn.textContent = currency;
+      rateInp.disabled = currency !== "USD";
+      if (currency === "USD") {
+        const currentRate = rateController.getValue();
+        if (!(Number.isFinite(currentRate) && currentRate > 0)) rateController.setValue(usdRateDraft || 12135, true);
+      } else {
+        rateController.setValue(1, true);
+      }
+      syncConvertedPreview();
+      syncSummaryPreview(false);
+    }
+
+    function syncMethod() {
+      const method = paymentMethodById.get(Number(paymentMethodId || 0)) || null;
+      const mode = String(method?.currency_mode || "ANY").toUpperCase();
+      currencyBtn.disabled = mode !== "ANY";
+      if (mode === "USD") applyCurrency("USD");
+      else if (mode === "UZS") applyCurrency("UZS");
+      else applyCurrency(currency);
+    }
+
+    rateController = bindCashMaskedInput(rateInp, {
+      initialFixed: true,
+      onValue: (value) => {
+        if (currency === "USD" && Number.isFinite(value) && value > 0) usdRateDraft = value;
+        syncConvertedPreview();
+        syncSummaryPreview(true);
+      },
+    });
+    amountController = bindCashMaskedInput(amountInp, {
+      initialFixed: true,
+      onValue: () => {
+        syncConvertedPreview();
+        syncSummaryPreview(true);
+      },
+    });
+
+    const counterpartyPicker = createSearchPicker({
+      getRows: () => clientOptions(),
+      getSelectedId: () => counterpartyId,
+      getView: getClientView,
+      getSearchText: getClientSearchText,
+      placeholder: counterpartyPlaceholder(),
+      emptyHint: tr({ru:"Контрагент не найден",uz:"Kontragent topilmadi",en:"Counterparty not found"}),
+      onInputClear: () => {
+        counterpartyId = null;
+        selectedClientData = null;
+        objectType = null;
+        objectId = null;
+        objectSummary = null;
+        fillObjectTabs();
+        objectPicker.setDisabled(true, objectPlaceholder());
+        objectPicker.refresh(false);
+        syncSummaryPreview(false);
+      },
+      onPick: async (row) => {
+        counterpartyId = Number(row.id);
+        await loadSelectedClientData();
+        fillObjectTabs();
+        counterpartyPicker.syncInput();
+        objectPicker.setDisabled(!getObjectRows().length, objectPlaceholder());
+        objectPicker.refresh(false);
+        await refreshObjectSummary(false);
+      },
+    });
+
+    const objectPicker = createSearchPicker({
+      getRows: () => getObjectRows(),
+      getSelectedId: () => objectId,
+      getView: getObjectView,
+      getSearchText: getObjectSearchText,
+      placeholder: objectPlaceholder(),
+      emptyHint: tr({ru:"Объект не найден",uz:"Obyekt topilmadi",en:"Object not found"}),
+      onInputClear: () => {
+        objectId = null;
+        objectSummary = null;
+        syncSummaryPreview(false);
+      },
+      onPick: async (row) => {
+        objectId = Number(row.id);
+        await refreshObjectSummary(false);
+      },
+    });
+
+    methodSel.appendChild(el("option",{value:""}, tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"})));
+    paymentMethods.filter((row) => Number(row.is_active) !== 0).forEach((row) => {
+      methodSel.appendChild(el("option",{value:String(row.id)}, row[`name_${App.state.lang}`] || row.name_uz || row.name_ru || row.name_en || `#${row.id}`));
+    });
+
+    fillMovement();
+    fillCategories();
+    fillCounterpartyTabs();
+    methodSel.value = paymentMethodId;
+
+    if (counterpartyId) await loadSelectedClientData();
+    fillObjectTabs();
+
+    amountController.setValue(item?.amount || "", true);
+    if (currency === "USD") rateController.setValue(item?.rate || usdRateDraft, true);
+    else rateController.setValue(1, true);
+
+    counterpartyPicker.setDisabled(false, counterpartyPlaceholder());
+    counterpartyPicker.refresh(false);
+    objectPicker.setDisabled(!counterpartyId || !getObjectRows().length, objectPlaceholder());
+    objectPicker.refresh(false);
+    syncMethod();
+    await refreshObjectSummary(false);
+
+    categorySel.addEventListener("change", () => { categoryId = categorySel.value || ""; });
+    methodSel.addEventListener("change", () => {
+      paymentMethodId = methodSel.value || "";
+      syncMethod();
+    });
+    currencyBtn.addEventListener("click", () => {
+      const method = paymentMethodById.get(Number(paymentMethodId || 0));
+      if (String(method?.currency_mode || "ANY").toUpperCase() !== "ANY") return;
+      applyCurrency(currency === "USD" ? "UZS" : "USD");
+    });
+
+    const body = el("div",{class:"vcol gap12"},
+      movementWrap,
+      el("div",{class:"grid2"},
+        el("div",{class:"vcol gap8"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Статья",uz:"Modda",en:"Category"})),
+          categorySel
+        ),
+        el("div",{class:"vcol gap8"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Способ оплаты",uz:"To'lov usuli",en:"Payment method"})),
+          methodSel
+        ),
+      ),
+      el("div",{class:"vcol gap8"},
+        el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Контрагент",uz:"Kontragent",en:"Counterparty"})),
+        counterpartyTabs,
+        counterpartyPicker.wrap
+      ),
+      el("div",{class:"vcol gap8"},
+        el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Объект",uz:"Obyekt",en:"Object"})),
+        objectTabs,
+        objectPicker.wrap
+      ),
+      summaryBox,
+      el("div",{class:"cashMoneyGrid"},
+        el("div",{class:"vcol gap8"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Валюта",uz:"Valyuta",en:"Currency"})),
+          currencyBtn
+        ),
+        el("div",{class:"cashRateGroup"},
+          el("div",{class:"vcol gap8"},
+            el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Курс",uz:"Kurs",en:"Rate"})),
+            rateInp
+          ),
+          convertedWrap
+        ),
+        el("div",{class:"vcol gap8"},
+          el("div",{class:"muted2",style:"font-size:12px"}, tr({ru:"Сумма",uz:"Summa",en:"Amount"})),
+          amountInp
+        )
+      ),
+      el("div",{class:"vcol gap8"},
+        el("div",{class:"muted2",style:"font-size:12px"}, t("comment") || "Comment"),
+        commentInp
+      )
+    );
+
+    Modal.open(
+      item ? tr({ru:"Редактирование операции",uz:"Operatsiyani tahrirlash",en:"Edit operation"}) : tr({ru:"Создание операции",uz:"Operatsiya yaratish",en:"Create operation"}),
+      body,
+      [
+        { label:t("cancel"), kind:"ghost", onClick:()=>Modal.close() },
+        { label:t("save"), kind:"primary", onClick:async()=>{
+          try {
+            const amount = readAmountValue();
+            const rate = currency === "USD" ? readRateValue() : 1;
+            const payload = {
+              movement_type: movementType,
+              category_id: categorySel.value ? Number(categorySel.value) : null,
+              counterparty_client_id: counterpartyId || null,
+              object_type: objectType || null,
+              object_id: objectId || null,
+              payment_method_id: methodSel.value ? Number(methodSel.value) : null,
+              currency,
+              rate,
+              amount,
+              comment: (commentInp.value || "").trim() || null,
+            };
+            if (!payload.category_id || !payload.payment_method_id || !(payload.amount > 0)) {
+              Toast.show(tr({ru:"Заполните статью, способ оплаты и сумму.",uz:"Modda, to'lov usuli va summani to'ldiring.",en:"Fill category, payment method and amount."}), "bad");
+              return;
+            }
+            if (payload.currency === "USD" && !(payload.rate > 0)) {
+              Toast.show(tr({ru:"Укажите корректный курс USD.",uz:"USD kursini to'g'ri kiriting.",en:"Enter a valid USD rate."}), "bad");
+              return;
+            }
+            if (item) await API.cash.update(item.id, payload);
+            else await API.cash.create(payload);
+            Modal.close();
+            await load();
+            Toast.show(t("toast_saved"), "ok");
+          } catch (e) {
+            Toast.show(`${t("toast_error")}: ${e.message || "error"}`, "bad");
+          }
+        } }
+      ]
+    );
   };
 
   const actionRow = (row) => el("div",{class:"hrow gap8",style:"flex-wrap:wrap"},
