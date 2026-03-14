@@ -1305,9 +1305,18 @@ moizvonki_email: "MZ Email",
       const sp = new URLSearchParams();
       if (q.page) sp.set("page", String(q.page));
       if (q.page_size) sp.set("page_size", String(q.page_size));
+      if (q.before_ts) sp.set("before_ts", String(q.before_ts));
+      if (q.recent_days) sp.set("recent_days", String(q.recent_days));
       if (q.calls_days) sp.set("calls_days", String(q.calls_days));
+      if (q.include_calls != null) sp.set("include_calls", q.include_calls ? "1" : "0");
       const s = sp.toString();
       return apiFetch(`/api/course_leads/${leadId}/chat${s ? "?" + s : ""}`);
+    },
+    calls: (leadId, q = {}) => {
+      const sp = new URLSearchParams();
+      if (q.days) sp.set("days", String(q.days));
+      const s = sp.toString();
+      return apiFetch(`/api/course_leads/${leadId}/chat/calls${s ? "?" + s : ""}`);
     },
     assignees: (leadId) => apiFetch(`/api/course_leads/${leadId}/chat/assignees`),
     sendMessage: (leadId, text) =>
@@ -6200,6 +6209,8 @@ App.renderCourses = async function (host, routeId) {
       .chatFeed::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:999px}
       .chatDaySep{display:flex;justify-content:center;margin:4px 0}
       .chatDaySep span{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;color:#d5e5ff}
+      .chatInlineInfo{font-size:12px;color:var(--muted2);text-align:center;padding:4px 0}
+      .chatPending{opacity:.68}
       .chatMsg{display:flex;flex-direction:column;gap:4px;max-width:88%}
       .chatMsg.me{margin-left:auto}
       .chatMsgName{font-size:12px;font-weight:700;color:#ff7272}
@@ -6785,14 +6796,26 @@ App.renderCourses = async function (host, routeId) {
     const leadId = Number(id);
     if (!leadId) return;
     let assignees = [];
-    let page = 1;
-    let pageSize = 50;
-    let totalPages = 1;
+    let pinnedRows = [];
+    let callRows = [];
+    let loadingCalls = false;
+    let sendingMessage = false;
+    let creatingTask = false;
+    const feedState = {
+      items: [],
+      hasMore: false,
+      oldestTs: null,
+      loadingInitial: false,
+      loadingOlder: false,
+      initialLoaded: false
+    };
 
     const feedEl = el("div", { class: "chatFeed" });
     const pinnedEl = el("div", { class: "vcol" });
     const callsEl = el("div", { class: "vcol" });
     const pagerEl = el("div", { class: "chatPager" });
+    feedEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Загружаем последние 3 дня...", uz: "Oxirgi 3 kun yuklanmoqda...", en: "Loading the last 3 days..." })));
+    callsEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Загружаем звонки...", uz: "Qo'ng'iroqlar yuklanmoqda...", en: "Loading calls..." })));
 
     const taskAssigneeSel = el("select", { class: "sel" }, el("option", { value: "" }, tr({ ru: "Исполнитель", uz: "Mas'ul", en: "Assignee" })));
     const taskDeadlineInp = el("input", { class: "input", type: "datetime-local" });
@@ -6814,45 +6837,51 @@ App.renderCourses = async function (host, routeId) {
       title: tr({ ru: "Отправить", uz: "Yuborish", en: "Send" })
     }, el("span", { class: "icoWrap", html: ICONS.send }));
 
+    const itemKey = (row) => `${row?.item_type || "message"}:${row?.item_id ?? row?.task_id ?? row?.db_call_id ?? row?.created_at ?? Math.random()}`;
+    const normalizeFeedItems = (rows) => {
+      const map = new Map();
+      for (const row of rows || []) {
+        if (!row) continue;
+        const key = itemKey(row);
+        const prev = map.get(key);
+        if (!prev || (prev._pending && !row._pending)) map.set(key, row);
+      }
+      return Array.from(map.values()).sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
+    };
+    const sortPinnedRows = (rows) =>
+      (rows || []).slice().sort((a, b) => {
+        const aNoDeadline = a?.task_deadline_at == null ? 1 : 0;
+        const bNoDeadline = b?.task_deadline_at == null ? 1 : 0;
+        if (aNoDeadline !== bNoDeadline) return aNoDeadline - bNoDeadline;
+        const byDeadline = Number(a?.task_deadline_at || 0) - Number(b?.task_deadline_at || 0);
+        if (byDeadline !== 0) return byDeadline;
+        return Number(b?.created_at || 0) - Number(a?.created_at || 0);
+      });
+    const buildLocalTaskTitle = (text) => {
+      const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+      return words.length ? words.slice(0, 3).join(" ") : tr({ ru: "Задача", uz: "Vazifa", en: "Task" });
+    };
+    const syncActionButtons = () => {
+      msgSendBtn.disabled = !!sendingMessage;
+      taskCreateBtn.disabled = !!creatingTask;
+    };
     const renderPager = () => {
       pagerEl.innerHTML = "";
-      if (totalPages <= 1) return;
-      const prevBtn = el("button", {
-        class: "btn ghost",
-        type: "button",
-        disabled: page <= 1 ? "disabled" : null,
-        onClick: async () => {
-          if (page <= 1) return;
-          page -= 1;
-          await loadFeed();
-        }
-      }, "<");
-      pagerEl.appendChild(prevBtn);
-
-      const from = Math.max(1, page - 2);
-      const to = Math.min(totalPages, page + 2);
-      for (let p = from; p <= to; p++) {
-        pagerEl.appendChild(el("button", {
-          class: `btn ghost ${p === page ? "active" : ""}`,
-          type: "button",
-          onClick: async () => {
-            page = p;
-            await loadFeed();
-          }
-        }, String(p)));
+      if (!feedState.initialLoaded && feedState.loadingInitial) {
+        pagerEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Загружаем последние 3 дня...", uz: "Oxirgi 3 kun yuklanmoqda...", en: "Loading the last 3 days..." })));
+        return;
       }
-
-      const nextBtn = el("button", {
-        class: "btn ghost",
-        type: "button",
-        disabled: page >= totalPages ? "disabled" : null,
-        onClick: async () => {
-          if (page >= totalPages) return;
-          page += 1;
-          await loadFeed();
-        }
-      }, ">");
-      pagerEl.appendChild(nextBtn);
+      if (feedState.loadingOlder) {
+        pagerEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Подгружаем более ранние сообщения...", uz: "Avvalgi xabarlar yuklanmoqda...", en: "Loading older messages..." })));
+        return;
+      }
+      if (feedState.hasMore) {
+        pagerEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Сейчас показаны последние 3 дня. Прокрутите вверх для истории.", uz: "Hozir oxirgi 3 kun ko'rsatilgan. Tarix uchun tepaga skroll qiling.", en: "Showing the last 3 days. Scroll up for older history." })));
+        return;
+      }
+      if (feedState.initialLoaded && feedState.items.length) {
+        pagerEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Начало истории", uz: "Tarix boshi", en: "Start of history" })));
+      }
     };
 
     const renderPinned = (rows) => {
@@ -6865,7 +6894,7 @@ App.renderCourses = async function (host, routeId) {
         const st = taskStatusVisual(row.task_status);
         const courseLabel = chatCourseLabel(row);
         pinnedEl.appendChild(
-          el("div", { class: "chatPinnedItem" },
+          el("div", { class: `chatPinnedItem${row._pending ? " chatPending" : ""}` },
             courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em" }, courseLabel) : null,
             el("div", { style: "font-weight:800" }, `#${row.task_id} ${row.task_title || ""}`),
             el("div", { class: "muted2", style: "font-size:12px" }, row.text || row.task_description || ""),
@@ -6890,6 +6919,10 @@ App.renderCourses = async function (host, routeId) {
 
     const renderCalls = (rows) => {
       callsEl.innerHTML = "";
+      if (loadingCalls && (!rows || !rows.length)) {
+        callsEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Загружаем звонки...", uz: "Qo'ng'iroqlar yuklanmoqda...", en: "Loading calls..." })));
+        return;
+      }
       if (!rows || !rows.length) {
         callsEl.appendChild(el("div", { class: "muted2", style: "font-size:12px" }, tr({ ru: "Звонков нет", uz: "Qo'ng'iroqlar yo'q", en: "No calls" })));
         return;
@@ -6914,6 +6947,10 @@ App.renderCourses = async function (host, routeId) {
 
     const renderFeed = (rows) => {
       feedEl.innerHTML = "";
+      if (feedState.loadingInitial && !feedState.initialLoaded) {
+        feedEl.appendChild(el("div", { class: "chatInlineInfo" }, tr({ ru: "Загружаем последние 3 дня...", uz: "Oxirgi 3 kun yuklanmoqda...", en: "Loading the last 3 days..." })));
+        return;
+      }
       if (!rows || !rows.length) {
         feedEl.appendChild(el("div", { class: "muted2" }, tr({ ru: "Пока нет сообщений", uz: "Hozircha xabarlar yo'q", en: "No messages yet" })));
         return;
@@ -6930,7 +6967,7 @@ App.renderCourses = async function (host, routeId) {
           const st = taskStatusVisual(row.task_status);
           const courseLabel = chatCourseLabel(row);
           feedEl.appendChild(
-            el("div", { class: "chatTaskRow" },
+            el("div", { class: `chatTaskRow${row._pending ? " chatPending" : ""}` },
               courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px" }, courseLabel) : null,
               el("div", { class: "hrow gap8", style: "justify-content:space-between;align-items:center" },
                 el("div", { style: "font-weight:800" }, `${tr({ ru: "Задача", uz: "Vazifa", en: "Task" })} #${row.task_id}`),
@@ -6970,13 +7007,25 @@ App.renderCourses = async function (host, routeId) {
         const mine = Number(row.user_id) === Number(App.state.user?.id);
         const courseLabel = chatCourseLabel(row);
         feedEl.appendChild(
-          el("div", { class: `chatMsg ${mine ? "me" : ""}` },
+          el("div", { class: `chatMsg ${mine ? "me" : ""}${row._pending ? " chatPending" : ""}` },
             courseLabel ? el("div", { class: "muted2", style: "font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px" }, courseLabel) : null,
             el("div", { class: "chatMsgName" }, `${row.user_name || "-"} ${chatRoleLabel(row.user_role) ? `(${chatRoleLabel(row.user_role)})` : ""}`),
             el("div", { class: "chatBubble" }, row.text || ""),
             el("div", { class: "chatMsgTime" }, chatTimeLabel(row.created_at))
           )
         );
+      }
+    };
+
+    const refreshView = (stickBottom = false) => {
+      renderPinned(sortPinnedRows(pinnedRows));
+      renderCalls(callRows);
+      renderFeed(normalizeFeedItems([...(feedState.items || []), ...(callRows || [])]));
+      renderPager();
+      if (stickBottom) {
+        requestAnimationFrame(() => {
+          feedEl.scrollTop = feedEl.scrollHeight;
+        });
       }
     };
 
@@ -6994,25 +7043,82 @@ App.renderCourses = async function (host, routeId) {
       }
     };
 
-    const loadFeed = async () => {
-      const r = await API.courseChat.feed(leadId, { page, page_size: pageSize });
-      const data = r?.data || {};
-      const pager = data.pagination || {};
-      page = Number(pager.page || page || 1);
-      pageSize = Number(pager.page_size || pageSize || 50);
-      totalPages = Number(pager.pages || 1);
-      renderPinned(Array.isArray(data.pinned_tasks) ? data.pinned_tasks : []);
-      const callItems = Array.isArray(data.calls) ? data.calls.slice() : [];
-      renderCalls(callItems);
-      const chatItems = Array.isArray(data.items) ? data.items.slice() : [];
-      const merged = chatItems.concat(callItems);
-      merged.sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
-      const feedItems = merged;
-      renderFeed(feedItems);
+    const loadInitialFeed = async () => {
+      if (feedState.loadingInitial) return;
+      feedState.loadingInitial = true;
       renderPager();
+      try {
+        const r = await API.courseChat.feed(leadId, {
+          page_size: 40,
+          recent_days: 3,
+          include_calls: 0
+        });
+        const data = r?.data || {};
+        const pendingFeed = (feedState.items || []).filter((x) => x && x._pending);
+        const pendingPinned = (pinnedRows || []).filter((x) => x && x._pending);
+        feedState.items = normalizeFeedItems([...(Array.isArray(data.items) ? data.items : []), ...pendingFeed]);
+        pinnedRows = sortPinnedRows([...(Array.isArray(data.pinned_tasks) ? data.pinned_tasks : []), ...pendingPinned]);
+        feedState.hasMore = !!data.has_more;
+        feedState.oldestTs = Number(data.next_before_ts || (feedState.items[0]?.created_at || 0)) || null;
+        feedState.initialLoaded = true;
+        refreshView(true);
+      } catch (e) {
+        feedEl.innerHTML = "";
+        feedEl.appendChild(el("div", { class: "chatInlineInfo" }, `${t("toast_error") || "Error"}: ${e.message || "error"}`));
+        renderPager();
+      } finally {
+        feedState.loadingInitial = false;
+        renderPager();
+      }
+    };
+
+    const loadRecentCalls = async () => {
+      if (loadingCalls) return;
+      loadingCalls = true;
+      refreshView(false);
+      try {
+        const r = await API.courseChat.calls(leadId, { days: 3 });
+        callRows = Array.isArray(r?.data) ? r.data.slice() : [];
+      } catch {
+        callRows = [];
+      } finally {
+        loadingCalls = false;
+        refreshView(false);
+      }
+    };
+
+    const loadOlderFeed = async () => {
+      if (!feedState.hasMore || feedState.loadingOlder || !feedState.oldestTs) return;
+      feedState.loadingOlder = true;
+      renderPager();
+      const prevHeight = feedEl.scrollHeight;
+      const prevTop = feedEl.scrollTop;
+      try {
+        const r = await API.courseChat.feed(leadId, {
+          page_size: 40,
+          before_ts: feedState.oldestTs,
+          recent_days: 3,
+          include_calls: 0
+        });
+        const data = r?.data || {};
+        const olderItems = Array.isArray(data.items) ? data.items : [];
+        feedState.items = normalizeFeedItems([...olderItems, ...(feedState.items || [])]);
+        feedState.hasMore = !!data.has_more;
+        feedState.oldestTs = Number(data.next_before_ts || (feedState.items[0]?.created_at || 0)) || null;
+        refreshView(false);
+        requestAnimationFrame(() => {
+          feedEl.scrollTop = Math.max(0, feedEl.scrollHeight - prevHeight + prevTop);
+        });
+      } catch (e) {
+        Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      } finally {
+        feedState.loadingOlder = false;
+        renderPager();
+      }
     };
 
     taskCreateBtn.onclick = async () => {
+      if (creatingTask) return;
       try {
         const assignee_user_id = taskAssigneeSel.value ? Number(taskAssigneeSel.value) : null;
         if (!assignee_user_id) {
@@ -7033,27 +7139,113 @@ App.renderCourses = async function (host, routeId) {
           Toast.show(tr({ ru: "Неверный дедлайн", uz: "Muddat noto'g'ri", en: "Invalid deadline" }), "bad");
           return;
         }
-        await API.courseChat.createTask(leadId, { assignee_user_id, description: txt, deadline_at });
+        const assignee = assignees.find((x) => Number(x.id) === Number(assignee_user_id)) || null;
+        const tempId = `tmp_task_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+        const createdAt = Math.floor(Date.now() / 1000);
+        const optimisticTask = {
+          item_type: "task",
+          item_id: tempId,
+          created_at: createdAt,
+          user_id: Number(App.state.user?.id || 0),
+          user_name: App.state.user?.full_name || App.state.user?.login || "-",
+          user_role: App.state.user?.role || "",
+          text: txt,
+          task_id: tempId,
+          task_status: "new",
+          task_assignee_user_id: assignee_user_id,
+          task_assignee_name: assignee?.full_name || `#${assignee_user_id}`,
+          task_deadline_at: deadline_at,
+          task_title: buildLocalTaskTitle(txt),
+          task_description: txt,
+          _pending: true
+        };
+        const optimisticPinned = {
+          link_id: tempId,
+          task_id: tempId,
+          text: txt,
+          created_at: createdAt,
+          task_status: "new",
+          task_assignee_user_id: assignee_user_id,
+          task_assignee_name: assignee?.full_name || `#${assignee_user_id}`,
+          task_deadline_at: deadline_at,
+          task_title: optimisticTask.task_title,
+          task_description: txt,
+          _pending: true
+        };
+
         taskTextInp.value = "";
-        await loadFeed();
+        creatingTask = true;
+        syncActionButtons();
+        feedState.items = normalizeFeedItems([...(feedState.items || []), optimisticTask]);
+        pinnedRows = sortPinnedRows([...(pinnedRows || []), optimisticPinned]);
+        refreshView(true);
+
+        const res = await API.courseChat.createTask(leadId, { assignee_user_id, description: txt, deadline_at });
+        const taskId = res?.data?.task_id;
+        const chatTaskId = res?.data?.chat_task_id;
+        feedState.items = normalizeFeedItems((feedState.items || []).map((row) => row.item_id === tempId
+          ? { ...row, item_id: chatTaskId || row.item_id, task_id: taskId || row.task_id, _pending: false }
+          : row));
+        pinnedRows = sortPinnedRows((pinnedRows || []).map((row) => row.link_id === tempId
+          ? { ...row, link_id: chatTaskId || row.link_id, task_id: taskId || row.task_id, _pending: false }
+          : row));
+        refreshView(true);
         Toast.show(t("toast_saved") || "Saved", "ok");
       } catch (e) {
+        pinnedRows = (pinnedRows || []).filter((row) => !row._pending);
+        feedState.items = (feedState.items || []).filter((row) => !row._pending || row.item_type !== "task");
+        refreshView(false);
         Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      } finally {
+        creatingTask = false;
+        syncActionButtons();
       }
     };
 
     msgSendBtn.onclick = async () => {
+      if (sendingMessage) return;
       try {
         const txt = (msgInp.value || "").trim();
         if (!txt) return;
-        await API.courseChat.sendMessage(leadId, txt);
+        const tempId = `tmp_msg_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+        const createdAt = Math.floor(Date.now() / 1000);
+        const optimisticMsg = {
+          item_type: "message",
+          item_id: tempId,
+          created_at: createdAt,
+          user_id: Number(App.state.user?.id || 0),
+          user_name: App.state.user?.full_name || App.state.user?.login || "-",
+          user_role: App.state.user?.role || "",
+          text: txt,
+          _pending: true
+        };
         msgInp.value = "";
-        page = 1;
-        await loadFeed();
+        sendingMessage = true;
+        syncActionButtons();
+        feedState.items = normalizeFeedItems([...(feedState.items || []), optimisticMsg]);
+        refreshView(true);
+
+        const res = await API.courseChat.sendMessage(leadId, txt);
+        const messageId = res?.data?.id;
+        feedState.items = normalizeFeedItems((feedState.items || []).map((row) => row.item_id === tempId
+          ? { ...row, item_id: messageId || row.item_id, _pending: false }
+          : row));
+        refreshView(true);
       } catch (e) {
+        feedState.items = (feedState.items || []).filter((row) => !row._pending || row.item_type !== "message");
+        refreshView(true);
         Toast.show(`${t("toast_error") || "Error"}: ${e.message || "error"}`, "bad");
+      } finally {
+        sendingMessage = false;
+        syncActionButtons();
       }
     };
+
+    feedEl.addEventListener("scroll", async () => {
+      if (!feedState.initialLoaded || feedState.loadingOlder || !feedState.hasMore) return;
+      if (feedEl.scrollTop > 80) return;
+      await loadOlderFeed();
+    });
 
     const sideEl = el("div", { class: "chatSide" },
       el("div", { class: "chatTaskBox vcol gap8" },
@@ -7096,8 +7288,12 @@ App.renderCourses = async function (host, routeId) {
       )
     );
 
-    await Promise.all([loadAssignees(), loadFeed()]);
     Modal.open(tr({ ru: "Чат курса", uz: "Kurs chati", en: "Course chat" }), body, [], { cardClass: "chatModalCard" });
+    renderPager();
+    syncActionButtons();
+    loadAssignees();
+    loadInitialFeed();
+    loadRecentCalls();
   }
 
   const cardFor = (x) => {

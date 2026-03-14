@@ -52,8 +52,11 @@ const CASH_STATUSES = ["draft", "confirmed", "canceled"];
 const PAYMENT_METHOD_CURRENCY_MODES = ["ANY", "USD", "UZS"];
 const DEFAULT_USD_RATE = 12135;
 const TG_DEBT_MIN_UZS = 10000;
+const COURSE_CHAT_INITIAL_DAYS = 3;
+const COURSE_CHAT_CALLS_DAYS_DEFAULT = 3;
+const COURSE_CHAT_PAGE_SIZE_DEFAULT = 40;
+const COURSE_CHAT_PAGE_SIZE_MAX = 60;
 let _googleTokenCache = { accessToken: "", expAtSec: 0, source: "" };
-const CHAT_CALLS_LOOKBACK_DAYS = 3650; // show максимально полную историю звонков в чате
 
 function nowSec() {
   return Math.floor(Date.now() / 1000);
@@ -240,6 +243,18 @@ function normalizeCallDays(v) {
   if (!Number.isFinite(n)) return 7;
   const int = Math.floor(n);
   return CALL_PERIOD_DAYS.includes(int) ? int : 7;
+}
+
+function normalizeCourseChatDays(v, fallback = COURSE_CHAT_INITIAL_DAYS) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(1, Math.min(30, Math.floor(n)));
+}
+
+function normalizeCourseChatPageSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return COURSE_CHAT_PAGE_SIZE_DEFAULT;
+  return Math.max(10, Math.min(COURSE_CHAT_PAGE_SIZE_MAX, Math.floor(n)));
 }
 
 function pick(obj, keys) {
@@ -981,6 +996,7 @@ async function buildTelegramDebtReport(env) {
      JOIN course_types ct ON ct.id=cl.course_type_id
      JOIN clients lead ON lead.id=cl.lead_client_id
      WHERE cl.is_active=1
+       AND cl.status IN ('enrolled', 'studying')
        AND (${debtSql}) >= ?
      ORDER BY COALESCE(ct.sort, 1000) ASC, ct.id ASC, (${debtSql}) DESC, lead.full_name COLLATE NOCASE ASC`
   )
@@ -2357,6 +2373,40 @@ function botChatDisplayName(row) {
   return String(row?.chat_id || "Unknown");
 }
 
+async function listCourseLeadChatCalls(env, leadClientId, days = COURSE_CHAT_CALLS_DAYS_DEFAULT) {
+  const safeLeadClientId = Number(leadClientId || 0);
+  if (!(safeLeadClientId > 0)) return [];
+
+  const leadPhones = await env.DB.prepare(
+    `SELECT lead.phone1, lead.phone2
+     FROM course_leads cl
+     JOIN clients lead ON lead.id = cl.lead_client_id
+     WHERE cl.lead_client_id=? AND cl.is_active=1
+     ORDER BY cl.id ASC
+     LIMIT 1`
+  )
+    .bind(safeLeadClientId)
+    .first();
+
+  const p1 = digitsOnly(leadPhones?.phone1);
+  const p2 = digitsOnly(leadPhones?.phone2);
+  if (!(p1 || p2)) return [];
+
+  const safeDays = normalizeCourseChatDays(days, COURSE_CHAT_CALLS_DAYS_DEFAULT);
+  const toTs = nowSec();
+  const fromTs = Math.max(0, toTs - safeDays * 24 * 60 * 60);
+  const mapped = await listMappedCalls(env, fromTs, toTs, 400);
+
+  return mapped
+    .filter((x) => (p1 && phonesLikelyMatch(x.client_number_digits, p1)) || (p2 && phonesLikelyMatch(x.client_number_digits, p2)))
+    .map((x) => ({
+      ...x,
+      item_type: "call",
+      item_id: Number(x.db_call_id || 0),
+      created_at: Number(x.end_time || x.start_time || 0),
+    }));
+}
+
 async function handleBotChat(env, user, request, origin, segments) {
   if (!isBotChatRole(user)) return forbidden("No access");
   await ensureBotChatSchema(env);
@@ -3725,96 +3775,149 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
     return jsonResp({ ok: true, data: rows.results || [] }, 200, corsHeaders(env, origin));
   }
 
+  if (method === "GET" && sub === "calls") {
+    const url = new URL(request.url);
+    const callsDays = normalizeCourseChatDays(url.searchParams.get("days"), COURSE_CHAT_CALLS_DAYS_DEFAULT);
+    try {
+      const calls = await listCourseLeadChatCalls(env, leadClientId, callsDays);
+      return jsonResp({ ok: true, data: calls }, 200, corsHeaders(env, origin));
+    } catch {
+      return jsonResp({ ok: true, data: [] }, 200, corsHeaders(env, origin));
+    }
+  }
+
   if (method === "GET" && !sub) {
     const url = new URL(request.url);
-    const rawPage = Number(url.searchParams.get("page") || 1);
-    const rawSize = Number(url.searchParams.get("page_size") || 50);
-    const pageSize = Math.max(10, Math.min(50, Number.isFinite(rawSize) ? Math.floor(rawSize) : 50));
-    const page = Math.max(1, Number.isFinite(rawPage) ? Math.floor(rawPage) : 1);
+    const pageSize = normalizeCourseChatPageSize(url.searchParams.get("page_size"));
+    const beforeTsRaw = Number(url.searchParams.get("before_ts") || 0);
+    const beforeTs = Number.isFinite(beforeTsRaw) && beforeTsRaw > 0 ? Math.floor(beforeTsRaw) : null;
+    const recentDays = normalizeCourseChatDays(url.searchParams.get("recent_days"), COURSE_CHAT_INITIAL_DAYS);
+    const callsDays = normalizeCourseChatDays(url.searchParams.get("calls_days"), COURSE_CHAT_CALLS_DAYS_DEFAULT);
+    const includeCallsParam = String(url.searchParams.get("include_calls") || "1").trim().toLowerCase();
+    const includeCalls = !(includeCallsParam === "0" || includeCallsParam === "false" || includeCallsParam === "no");
+    const recentFromTs = Math.max(0, nowSec() - recentDays * 24 * 60 * 60);
 
-    const totalRow = await env.DB.prepare(
-      `SELECT
-         (SELECT COUNT(*)
-          FROM lead_chat_messages m
-          JOIN course_leads cl ON cl.id=m.lead_id
-          WHERE cl.is_active=1 AND cl.lead_client_id=? AND m.is_active=1) +
-         (SELECT COUNT(*)
-          FROM lead_chat_task_links l
-          JOIN course_leads cl ON cl.id=l.lead_id
-          WHERE cl.is_active=1 AND cl.lead_client_id=? AND l.is_active=1) AS total`
-    )
-      .bind(leadClientId, leadClientId)
-      .first();
+    const queryFeedItems = async (mode = "recent") => {
+      let messageWhere = "";
+      let taskWhere = "";
+      const binds = [leadClientId];
 
-    const total = Number(totalRow?.total || 0);
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(page, pages);
-    const offset = (safePage - 1) * pageSize;
+      if (mode === "recent") {
+        messageWhere = " AND m.created_at >= ?";
+        taskWhere = " AND l.created_at >= ?";
+        binds.push(recentFromTs);
+      } else if (mode === "older" && beforeTs) {
+        messageWhere = " AND m.created_at < ?";
+        taskWhere = " AND l.created_at < ?";
+        binds.push(beforeTs);
+      }
 
-    const feedRes = await env.DB.prepare(
-      `SELECT *
-       FROM (
-         SELECT
-           'message' AS item_type,
-           m.id AS item_id,
-           m.created_at AS sort_at,
-         m.created_at,
-         m.user_id,
-         u.full_name AS user_name,
-         u.role AS user_role,
-         m.text,
-         cl.id AS course_lead_id,
-         cl.course_type_id AS course_type_id,
-         ct.name AS course_type_name,
-         NULL AS task_id,
-         NULL AS task_status,
-         NULL AS task_assignee_user_id,
-           NULL AS task_assignee_name,
-           NULL AS task_deadline_at,
-           NULL AS task_cancel_reason,
-           NULL AS task_title,
-           NULL AS task_description
-         FROM lead_chat_messages m
-         JOIN users u ON u.id=m.user_id
-         JOIN course_leads cl ON cl.id=m.lead_id AND cl.is_active=1
-         LEFT JOIN course_types ct ON ct.id=cl.course_type_id
-         WHERE cl.lead_client_id=? AND m.is_active=1
+      binds.push(leadClientId);
+      if (mode === "recent") binds.push(recentFromTs);
+      else if (mode === "older" && beforeTs) binds.push(beforeTs);
+      binds.push(pageSize + 1);
 
-         UNION ALL
+      const res = await env.DB.prepare(
+        `SELECT *
+         FROM (
+           SELECT
+             'message' AS item_type,
+             m.id AS item_id,
+             m.created_at AS sort_at,
+             m.created_at,
+             m.user_id,
+             u.full_name AS user_name,
+             u.role AS user_role,
+             m.text,
+             cl.id AS course_lead_id,
+             cl.course_type_id AS course_type_id,
+             ct.name AS course_type_name,
+             NULL AS task_id,
+             NULL AS task_status,
+             NULL AS task_assignee_user_id,
+             NULL AS task_assignee_name,
+             NULL AS task_deadline_at,
+             NULL AS task_cancel_reason,
+             NULL AS task_title,
+             NULL AS task_description
+           FROM lead_chat_messages m
+           JOIN users u ON u.id=m.user_id
+           JOIN course_leads cl ON cl.id=m.lead_id AND cl.is_active=1
+           LEFT JOIN course_types ct ON ct.id=cl.course_type_id
+           WHERE cl.lead_client_id=? AND m.is_active=1${messageWhere}
 
-         SELECT
-           'task' AS item_type,
-           l.id AS item_id,
-           l.created_at AS sort_at,
-         l.created_at,
-         l.created_by AS user_id,
-         cu.full_name AS user_name,
-         cu.role AS user_role,
-         l.text,
-         cl.id AS course_lead_id,
-         cl.course_type_id AS course_type_id,
-         ct.name AS course_type_name,
-         l.task_id,
-         t.status AS task_status,
-         t.assignee_user_id AS task_assignee_user_id,
-           au.full_name AS task_assignee_name,
-           t.deadline_at AS task_deadline_at,
-           t.cancel_reason AS task_cancel_reason,
-           t.title AS task_title,
-           t.description AS task_description
-         FROM lead_chat_task_links l
-         JOIN tasks t ON t.id=l.task_id AND t.is_active=1
-         JOIN users cu ON cu.id=l.created_by
-         JOIN users au ON au.id=t.assignee_user_id
-         JOIN course_leads cl ON cl.id=l.lead_id AND cl.is_active=1
-         LEFT JOIN course_types ct ON ct.id=cl.course_type_id
-         WHERE cl.lead_client_id=? AND l.is_active=1
-       ) q
-       ORDER BY q.sort_at DESC, q.item_id DESC
-       LIMIT ? OFFSET ?`
-    )
-      .bind(leadClientId, leadClientId, pageSize, offset)
-      .all();
+           UNION ALL
+
+           SELECT
+             'task' AS item_type,
+             l.id AS item_id,
+             l.created_at AS sort_at,
+             l.created_at,
+             l.created_by AS user_id,
+             cu.full_name AS user_name,
+             cu.role AS user_role,
+             l.text,
+             cl.id AS course_lead_id,
+             cl.course_type_id AS course_type_id,
+             ct.name AS course_type_name,
+             l.task_id,
+             t.status AS task_status,
+             t.assignee_user_id AS task_assignee_user_id,
+             au.full_name AS task_assignee_name,
+             t.deadline_at AS task_deadline_at,
+             t.cancel_reason AS task_cancel_reason,
+             t.title AS task_title,
+             t.description AS task_description
+           FROM lead_chat_task_links l
+           JOIN tasks t ON t.id=l.task_id AND t.is_active=1
+           JOIN users cu ON cu.id=l.created_by
+           JOIN users au ON au.id=t.assignee_user_id
+           JOIN course_leads cl ON cl.id=l.lead_id AND cl.is_active=1
+           LEFT JOIN course_types ct ON ct.id=cl.course_type_id
+           WHERE cl.lead_client_id=? AND l.is_active=1${taskWhere}
+         ) q
+         ORDER BY q.sort_at DESC, q.item_id DESC
+         LIMIT ?`
+      )
+        .bind(...binds)
+        .all();
+      return res.results || [];
+    };
+
+    let rawItems = await queryFeedItems(beforeTs ? "older" : "recent");
+    let usedRecentWindow = !beforeTs;
+
+    if (!beforeTs && !rawItems.length) {
+      rawItems = await queryFeedItems("all");
+      usedRecentWindow = false;
+    }
+
+    let hasMore = rawItems.length > pageSize;
+    let items = rawItems.slice(0, pageSize).reverse();
+
+    if (!beforeTs && usedRecentWindow && !hasMore) {
+      const [olderMsg, olderTask] = await Promise.all([
+        env.DB.prepare(
+          `SELECT 1
+           FROM lead_chat_messages m
+           JOIN course_leads cl ON cl.id=m.lead_id AND cl.is_active=1
+           WHERE cl.lead_client_id=? AND m.is_active=1 AND m.created_at < ?
+           LIMIT 1`
+        )
+          .bind(leadClientId, recentFromTs)
+          .first(),
+        env.DB.prepare(
+          `SELECT 1
+           FROM lead_chat_task_links l
+           JOIN course_leads cl ON cl.id=l.lead_id AND cl.is_active=1
+           WHERE cl.lead_client_id=? AND l.is_active=1 AND l.created_at < ?
+           LIMIT 1`
+        )
+          .bind(leadClientId, recentFromTs)
+          .first(),
+      ]);
+      hasMore = !!(olderMsg || olderTask);
+    }
 
     const pinnedRes = await env.DB.prepare(
       `SELECT
@@ -3847,36 +3950,11 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
       .all();
 
     let calls = [];
-    if (safePage === 1) {
-      const leadPhones = await env.DB.prepare(
-        `SELECT lead.phone1, lead.phone2
-         FROM course_leads cl
-         JOIN clients lead ON lead.id = cl.lead_client_id
-         WHERE cl.lead_client_id=? AND cl.is_active=1
-         ORDER BY cl.id ASC
-         LIMIT 1`
-      )
-        .bind(leadClientId)
-        .first();
-
-      const p1 = digitsOnly(leadPhones?.phone1);
-      const p2 = digitsOnly(leadPhones?.phone2);
-      const hasLeadPhone = !!(p1 || p2);
-      if (hasLeadPhone) {
-        const toTs = nowSec();
-        const fromTs = toTs - CHAT_CALLS_LOOKBACK_DAYS * 24 * 60 * 60;
-        try {
-          const mapped = await listMappedCalls(env, fromTs, toTs, 4000);
-          calls = mapped
-            .filter((x) => (p1 && phonesLikelyMatch(x.client_number_digits, p1)) || (p2 && phonesLikelyMatch(x.client_number_digits, p2)))
-            .map((x) => ({
-              ...x,
-              item_type: "call",
-              created_at: Number(x.end_time || x.start_time || 0),
-            }));
-        } catch {
-          calls = [];
-        }
+    if (includeCalls) {
+      try {
+        calls = await listCourseLeadChatCalls(env, leadClientId, callsDays);
+      } catch {
+        calls = [];
       }
     }
 
@@ -3884,15 +3962,14 @@ async function handleCourseLeadChat(env, user, request, origin, leadId, segments
       {
         ok: true,
         data: {
-          items: feedRes.results || [],
+          items,
           pinned_tasks: pinnedRes.results || [],
           calls,
-          pagination: {
-            page: safePage,
-            page_size: pageSize,
-            total,
-            pages,
-          },
+          has_more: hasMore,
+          next_before_ts: items.length ? Number(items[0].created_at || 0) : null,
+          page_size: pageSize,
+          recent_days: usedRecentWindow ? recentDays : null,
+          calls_days: callsDays,
         },
       },
       200,
